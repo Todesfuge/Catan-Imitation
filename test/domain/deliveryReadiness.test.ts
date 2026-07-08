@@ -22,6 +22,9 @@ describe("delivery readiness", () => {
     expect(ci).toContain("pnpm test");
     expect(ci).toContain("pnpm build");
     expect(ci).toContain("pnpm smoke:ui");
+    expect(pages).toContain("actions/configure-pages@v6");
+    expect(pages).toContain("actions/upload-pages-artifact@v4");
+    expect(pages).toContain("actions/deploy-pages@v5");
     expect(pages).toContain("deploy-pages");
     expect(pages).toContain("upload-pages-artifact");
     expect(pages).toContain("pnpm build:pages");
