@@ -468,6 +468,9 @@ function CommercePanel({
             </button>
           </div>
         ) : null}
+        {state.guild.gathering.lastAuctionSummary ? (
+          <p className="auction-result">{state.guild.gathering.lastAuctionSummary}</p>
+        ) : null}
         <button
           onClick={() => activePlayer && dispatch({ type: "REDEEM_PRIZE", playerId: activePlayer.id })}
           type="button"

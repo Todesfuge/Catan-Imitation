@@ -6,3 +6,4 @@
 | 2026-07-08 18:55 | updates/2026-07-08-1855-ordered-update-backlog.md | U001-U024 | Artifact consistency scan | ready for review | Implement U001 next |
 | 2026-07-08 19:08 | updates/2026-07-08-1908-core-rules-u001-u006.md | U001-U006 | `pnpm test`, `pnpm build`, `git diff --check` | pushed | Continue with U007 |
 | 2026-07-08 19:41 | updates/2026-07-08-1941-classic-systems-u007-u010.md | U007-U010 | `pnpm test -- test/domain/classicSystems.test.ts`, `pnpm build` | ready for review | Continue with U011 |
+| 2026-07-08 20:00 | updates/2026-07-08-2000-commerce-guild-polish-u011-u014.md | U011-U014 | `pnpm test`, `pnpm build` | ready for review | Continue with U015 |

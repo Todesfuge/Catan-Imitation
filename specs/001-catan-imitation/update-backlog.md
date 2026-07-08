@@ -61,22 +61,22 @@ This backlog records all known unfinished or improvable work after the MVP. Item
 
 ## Priority 3: Commerce Guild Polish
 
-- [ ] U011 Auto-trigger Commerce Guild gatherings by interval.
+- [x] U011 Auto-trigger Commerce Guild gatherings by interval.
   - Current state: gathering is manually triggered.
   - Target: default trigger every 6 completed rounds, with manual trigger retained for demos.
   - Acceptance: tests cover no trigger before interval and trigger at interval boundary.
 
-- [ ] U012 Improve auction validation and result display.
+- [x] U012 Improve auction validation and result display.
   - Current state: auction resolves, but UI feedback is compact.
   - Target: show invalid bid reasons, current round status, winner, payment, and blind-box result.
   - Acceptance: manual smoke confirms invalid bids are visible and successful auction result is clear.
 
-- [ ] U013 Integrate Commerce Guild development-card rewards with the real card deck.
+- [x] U013 Integrate Commerce Guild development-card rewards with the real card deck.
   - Current state: blind boxes can create a simplified development card string.
   - Target: blind-box card reward draws from the same deck as normal development purchases.
   - Acceptance: tests cover reward draw and empty deck handling.
 
-- [ ] U014 Improve token transfer UX and log naming.
+- [x] U014 Improve token transfer UX and log naming.
   - Current state: transfers work, but logs may show internal player ids.
   - Target: logs and controls consistently use player display names.
   - Acceptance: manual smoke confirms transfer logs use names and reject impossible transfers clearly.

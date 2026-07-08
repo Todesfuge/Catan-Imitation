@@ -9,7 +9,7 @@ import {
   type Resource,
   type ResourceMap
 } from "../types";
-import { createGuildDevelopmentCard } from "../rules/developmentCards";
+import { awardDevelopmentCardFromDeck } from "../rules/developmentCards";
 
 export type ResourceCost = Partial<Record<Resource, number>>;
 
@@ -31,12 +31,14 @@ export interface GatheringState {
   redemptions: Record<PlayerId, number>;
   auctionRound: number;
   auctionResults: BlindBoxOutcome[];
+  lastAuctionSummary?: string;
 }
 
 export interface CommerceGuildState {
   tradeSlots: TradeSlot[];
   usedTradePlayerIds: PlayerId[];
   gathering: GatheringState;
+  lastAutoGatheringRound?: number;
 }
 
 export interface GuildResult {
@@ -48,6 +50,7 @@ export interface AuctionResult extends GuildResult {
   winnerId: PlayerId;
   winningBid: number;
   outcome: BlindBoxOutcome;
+  summary: string;
 }
 
 const defaultTradeSlots: TradeSlot[] = [
@@ -164,6 +167,10 @@ export function transferGuildTokens(
   toPlayerId: PlayerId,
   amount: number
 ): GameState {
+  if (fromPlayerId === toPlayerId) {
+    throw new Error("Token transfer requires two different players.");
+  }
+
   if (amount <= 0) {
     throw new Error("Token transfer amount must be positive.");
   }
@@ -197,6 +204,26 @@ export function startGuildGathering(guild: CommerceGuildState): CommerceGuildSta
       auctionRound: 1,
       auctionResults: []
     }
+  };
+}
+
+export function maybeStartGuildGathering(
+  game: GameState,
+  guild: CommerceGuildState,
+  intervalRounds = 6
+): CommerceGuildState {
+  const isIntervalBoundary = game.round > 1 && (game.round - 1) % intervalRounds === 0;
+  if (
+    guild.gathering.phase !== "idle" ||
+    !isIntervalBoundary ||
+    guild.lastAutoGatheringRound === game.round
+  ) {
+    return guild;
+  }
+
+  return {
+    ...startGuildGathering(guild),
+    lastAutoGatheringRound: game.round
   };
 }
 
@@ -273,6 +300,12 @@ function pickAuctionWinner(
   const turnOrder = turnOrderFromActive(game);
   const validBids = Object.entries(bids).filter(([playerId, bid]) => {
     const player = getPlayer(game, playerId);
+    if (bid < 0) {
+      throw new Error(`${player.name} bid cannot be negative.`);
+    }
+    if (bid > player.guildTokens) {
+      throw new Error(`${player.name} bid exceeds available guild tokens.`);
+    }
     return bid > 0 && player.guildTokens >= bid;
   });
 
@@ -325,14 +358,44 @@ function applyBlindBoxOutcome(game: GameState, playerId: PlayerId, outcome: Blin
     if (outcome.kind === "voucher") {
       return { ...player, vouchers: player.vouchers + 1 };
     }
-    return {
-      ...player,
-      developmentCards: [
-        ...player.developmentCards,
-        createGuildDevelopmentCard(outcome.card, game, player)
-      ]
-    };
+    return player;
   });
+}
+
+function resolveBlindBoxOutcome(
+  game: GameState,
+  playerId: PlayerId,
+  random: () => number
+): { game: GameState; outcome: BlindBoxOutcome } {
+  const provisionalOutcome = openBlindBox(random);
+  if (provisionalOutcome.kind !== "developmentCard") {
+    return {
+      game: applyBlindBoxOutcome(game, playerId, provisionalOutcome),
+      outcome: provisionalOutcome
+    };
+  }
+
+  const reward = awardDevelopmentCardFromDeck(game, playerId);
+  return {
+    game: reward.game,
+    outcome: {
+      kind: "developmentCard",
+      card: reward.card.kind
+    }
+  };
+}
+
+export function describeBlindBoxOutcome(outcome: BlindBoxOutcome): string {
+  if (outcome.kind === "voucher") {
+    return "voucher";
+  }
+  if (outcome.kind === "developmentCard") {
+    return `${outcome.card} development card`;
+  }
+  return `resources: ${resources
+    .filter((resource) => outcome.resources[resource] > 0)
+    .map((resource) => `${resource} ${outcome.resources[resource]}`)
+    .join(", ")}`;
 }
 
 export function resolveAuctionRound(
@@ -346,13 +409,16 @@ export function resolveAuctionRound(
   }
 
   const { winnerId, winningBid } = pickAuctionWinner(game, bids);
-  const outcome = openBlindBox(random);
   const paidGame = updatePlayer(game, winnerId, (player) => ({
     ...player,
     guildTokens: player.guildTokens - winningBid
   }));
-  const rewardedGame = applyBlindBoxOutcome(paidGame, winnerId, outcome);
+  const resolvedOutcome = resolveBlindBoxOutcome(paidGame, winnerId, random);
+  const outcome = resolvedOutcome.outcome;
+  const rewardedGame = resolvedOutcome.game;
   const nextRound = guild.gathering.auctionRound + 1;
+  const winnerName = getPlayer(game, winnerId).name;
+  const summary = `${winnerName} won auction round ${guild.gathering.auctionRound} with ${winningBid} token(s): ${describeBlindBoxOutcome(outcome)}.`;
 
   return {
     game: rewardedGame,
@@ -362,12 +428,14 @@ export function resolveAuctionRound(
         ...guild.gathering,
         auctionRound: nextRound,
         phase: nextRound > 3 ? "complete" : "auction",
-        auctionResults: [...guild.gathering.auctionResults, outcome]
+        auctionResults: [...guild.gathering.auctionResults, outcome],
+        lastAuctionSummary: summary
       }
     },
     winnerId,
     winningBid,
-    outcome
+    outcome,
+    summary
   };
 }
 

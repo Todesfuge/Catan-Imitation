@@ -1,7 +1,7 @@
 # Handoff: Catan Imitation MVP
 
 Date: 2026-07-08
-Scope: MVP implementation through T001-T026, plus U001-U010 core and classic-system updates
+Scope: MVP implementation through T001-T026, plus U001-U014 core, classic-system, and Commerce Guild updates
 
 ## Overview
 
@@ -34,7 +34,10 @@ Catan Imitation is now a local hot-seat TypeScript browser prototype. It recreat
   - once-per-turn trade limit
   - token transfer
   - gathering resource redemption capped at 4 per player
+  - automatic gathering trigger every six completed rounds
+  - auction validation with player-name errors and visible result summaries
   - auction round resolution with blind-box outcomes
+  - development-card rewards drawn from the shared deck
   - voucher-to-prize redemption
 
 ## Verification
@@ -48,8 +51,8 @@ pnpm build
 
 Latest results:
 
-- 6 test files passed.
-- 22 tests passed.
+- 7 test files passed.
+- 26 tests passed.
 - Production build completed with Vite.
 
 Browser smoke checks:
@@ -61,11 +64,11 @@ Browser smoke checks:
 
 - Multiplayer is local hot-seat only.
 - Board geometry is fixed and demo-oriented; follow-up work is still needed for true shared intersections across neighboring hexes.
-- Commerce Guild development-card rewards are now structured cards, but they do not yet draw from the shared deck.
+- Commerce Guild UI controls are functional but still compact; guided prompts and stronger visual feedback remain product-polish work.
 - AI players remain out of scope.
 - Visual assets are original CSS shapes and labels rather than polished production art.
 
 ## Next Steps
 
 - Follow the ordered backlog in [update-backlog.md](update-backlog.md).
-- Continue with U011-U014 for Commerce Guild polish, U015-U019 for product polish, and U020-U024 for delivery automation.
+- Continue with U015-U019 for product polish and U020-U024 for delivery automation.

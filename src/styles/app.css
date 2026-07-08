@@ -561,6 +561,15 @@ th {
   width: 100%;
 }
 
+.auction-result {
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+  background: #fff8ea;
+  color: var(--muted-ink);
+  font-size: 0.78rem;
+}
+
 .action-bar {
   grid-column: 1 / -1;
   grid-row: 3;

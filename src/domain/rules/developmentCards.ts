@@ -91,6 +91,33 @@ export function buyDevelopmentCard(
   };
 }
 
+export function awardDevelopmentCardFromDeck(
+  game: GameState,
+  playerId: PlayerId
+): { game: GameState; card: DevelopmentCard } {
+  if (game.developmentDeck.length === 0) {
+    throw new Error("Development card deck is empty.");
+  }
+
+  const [drawn, ...remainingDeck] = game.developmentDeck;
+  const card = {
+    ...drawn,
+    purchasedTurn: game.turn,
+    revealed: false
+  };
+
+  return {
+    card,
+    game: {
+      ...updatePlayer(game, playerId, (candidate) => ({
+        ...candidate,
+        developmentCards: [...candidate.developmentCards, card]
+      })),
+      developmentDeck: remainingDeck
+    }
+  };
+}
+
 export function updateLargestArmyAward(game: GameState, candidatePlayerId: PlayerId): GameState {
   const candidate = getPlayer(game, candidatePlayerId);
   if (candidate.knightsPlayed < 3) {

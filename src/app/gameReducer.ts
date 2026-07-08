@@ -1,6 +1,7 @@
 import {
   completeTradeSlot,
   createCommerceGuild,
+  maybeStartGuildGathering,
   openGuildAuction,
   redeemGatheringResources,
   redeemPrizeCards,
@@ -114,6 +115,10 @@ function withWinnerState(game: GameState, playerId = game.activePlayerId): GameS
   };
 }
 
+function getPlayerName(game: GameState, playerId: PlayerId): string {
+  return game.players.find((player) => player.id === playerId)?.name ?? playerId;
+}
+
 export function createInitialAppState(): AppState {
   const game = createDemoGame();
   return {
@@ -161,14 +166,30 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
     }
     case "END_TURN":
       assertCanUseNormalAction(state.game);
-      return {
-        ...state,
-        game: advanceTurn(state.game),
-        guild: {
+      {
+        const nextGame = advanceTurn(state.game);
+        const resetGuild = {
           ...state.guild,
           usedTradePlayerIds: []
-        }
-      };
+        };
+        const nextGuild =
+          nextGame.round > state.game.round
+            ? maybeStartGuildGathering(nextGame, resetGuild)
+            : resetGuild;
+        const gatheringStarted =
+          resetGuild.gathering.phase === "idle" && nextGuild.gathering.phase === "redemption";
+
+        return {
+          ...state,
+          game: {
+            ...nextGame,
+            log: gatheringStarted
+              ? [log("The Commerce Guild gathering has started automatically."), ...nextGame.log]
+              : nextGame.log
+          },
+          guild: nextGuild
+        };
+      }
     case "BUILD_ROAD":
       assertCanUseNormalAction(state.game);
       return {
@@ -266,7 +287,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
           ),
           log: [
             log(
-              `${command.fromPlayerId} transferred ${command.amount} guild token(s) to ${command.toPlayerId}.`
+              `${getPlayerName(state.game, command.fromPlayerId)} transferred ${command.amount} guild token(s) to ${getPlayerName(state.game, command.toPlayerId)}.`
             ),
             ...state.game.log
           ]
@@ -313,7 +334,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
           ...result.game,
           log: [
             log(
-              `${result.winnerId} won auction round ${state.guild.gathering.auctionRound} with ${result.winningBid} token(s).`
+              result.summary
             ),
             ...result.game.log
           ]

@@ -44,10 +44,10 @@ Status: Draft for implementation
 - [x] U008 Implement knight cards and Largest Army.
 - [x] U009 Implement Longest Road.
 - [x] U010 Implement maritime trade and port benefits.
-- [ ] U011 Auto-trigger Commerce Guild gatherings by interval.
-- [ ] U012 Improve auction validation and result display.
-- [ ] U013 Integrate Commerce Guild development-card rewards with the real card deck.
-- [ ] U014 Improve token transfer UX and log naming.
+- [x] U011 Auto-trigger Commerce Guild gatherings by interval.
+- [x] U012 Improve auction validation and result display.
+- [x] U013 Integrate Commerce Guild development-card rewards with the real card deck.
+- [x] U014 Improve token transfer UX and log naming.
 - [ ] U015 Connect left utility rail actions.
 - [ ] U016 Add guided phase prompts and error recovery.
 - [ ] U017 Improve board visual fidelity and inspectability.
