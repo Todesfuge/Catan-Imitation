@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import App from "../../src/App";
+import { createDemoGame } from "../../src/domain/setup";
 
 describe("product polish UI", () => {
   it("renders connected utility actions, phase guidance, and activity instead of fake chat", () => {
@@ -25,6 +26,15 @@ describe("product polish UI", () => {
     expect(html).toContain("dice-pips");
     expect(html).toContain("Forest");
     expect(html).toContain("Mountain");
+  });
+
+  it("shows actual built roads without drawing every possible edge", () => {
+    const game = createDemoGame();
+    const html = renderToString(createElement(App));
+
+    expect(game.roads.length).toBeGreaterThan(0);
+    expect(html).toContain("road-marker");
+    expect(html).not.toContain("edge-guide");
   });
 
   it("includes responsive layout safeguards for mobile controls and panels", () => {

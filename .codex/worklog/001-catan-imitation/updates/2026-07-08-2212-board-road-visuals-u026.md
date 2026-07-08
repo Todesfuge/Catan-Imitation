@@ -11,14 +11,16 @@ Fix the board presentation issue where terrain hexes visually overlapped and roa
 
 ## Scope
 
-Adjusted the React board renderer and CSS only. The domain topology from U025 remains the source for shared edges; this update renders those shared edges as visual road positions and renders owned roads as player-colored markers.
+Adjusted the React board renderer, demo setup, and CSS. The domain topology from U025 remains the source for shared edges; this update renders only actual owned roads as player-colored markers so the board is not covered by candidate-edge guides.
 
 ## Code Changes
 
-- `src/App.tsx`: added shared edge geometry helpers and a `RoadMarker` renderer; `BoardView` now renders every board edge as an `edge-guide` and built roads as `road-marker`.
+- `src/App.tsx`: added shared edge geometry helpers and a `RoadMarker` renderer; `BoardView` now renders actual built roads only.
 - `src/App.tsx`: increased board axial spacing so hex rows no longer visually collapse.
-- `src/styles/app.css`: added road layer, edge guide, road marker, z-index, and clearer clipped-hex boundary styling.
-- `scripts/smoke-ui.mjs`: added smoke assertions for edge guides, road markers, and visible separated hex borders.
+- `src/domain/setup.ts`: seeds demo roads connected to the initial demo buildings so roads are visible on first render.
+- `src/styles/app.css`: added road layer, road marker, z-index, and clearer clipped-hex boundary styling.
+- `scripts/smoke-ui.mjs`: added smoke assertions for road markers, absence of all-edge guide rendering, and visible separated hex borders.
+- `test/domain/productPolish.test.ts`: added regression coverage that demo roads exist and the server-rendered board does not include `edge-guide`.
 
 ## Spec / Task Changes
 
@@ -29,10 +31,10 @@ Adjusted the React board renderer and CSS only. The domain topology from U025 re
 
 ## Decisions
 
-- Decision: render all shared edges as subtle road-position guides, and render owned roads with a stronger player-colored marker.
-- Reason: the current demo may start with no built roads, so showing only owned roads would still leave users unable to inspect road positions.
-- Alternatives: seed demo roads, or hide road positions until roads are built.
-- Reversibility: the renderer can switch to owned-road-only by removing the `edge-guide` branch.
+- Decision: render only actual roads, not every possible edge.
+- Reason: showing every shared edge as a guide visually overwhelms the board and creates long crossing strokes in the current percent-position renderer.
+- Alternatives: render subtle candidate edges only on hover/build mode, or migrate the board to SVG before showing the full edge network.
+- Reversibility: a future build-mode overlay can add candidate edges back behind an explicit interaction state.
 
 - Decision: keep the board in CSS/React percent positioning rather than adding SVG geometry.
 - Reason: this is the smallest change consistent with the existing board implementation and current timeline.
@@ -47,7 +49,7 @@ Adjusted the React board renderer and CSS only. The domain topology from U025 re
 
 - Command: `pnpm test`
 - Result: passed.
-- Evidence: 9 test files passed, 33 tests passed.
+- Evidence: 9 test files passed, 34 tests passed.
 
 - Command: `pnpm build:pages`
 - Result: passed.
@@ -55,7 +57,7 @@ Adjusted the React board renderer and CSS only. The domain topology from U025 re
 
 - Command: `pnpm smoke:ui`
 - Result: passed after red-green smoke update.
-- Evidence: built preview exposes board, panels, activity, responsive CSS, edge guides, road markers, and separated hex border styling.
+- Evidence: built preview exposes board, panels, activity, responsive CSS, road markers, no all-edge guide rendering, and separated hex border styling.
 
 ## Risks / Follow-ups
 
@@ -64,4 +66,4 @@ Adjusted the React board renderer and CSS only. The domain topology from U025 re
 
 ## Handoff
 
-After push, inspect the deployed board visually. Expected outcome: terrain tiles are separated enough to read individually, shared edges appear as road positions, and any built road appears as a stronger colored segment.
+After push, inspect the deployed board visually. Expected outcome: terrain tiles are separated enough to read individually, and built roads appear as short colored segments without a full-board edge overlay.

@@ -141,6 +141,6 @@ This backlog records all known unfinished or improvable work after the MVP. Item
   - Acceptance: production tests cover 54/72 topology counts and multi-hex production from one settlement vertex; full test/build/smoke verification passes.
 
 - [x] U026 Separate board hexes visually and render road edges.
-  - Current state: the board now uses wider axial spacing, visible hex drop-shadow boundaries, edge guide markers, and player-colored road markers for built roads.
-  - Target: neighboring hexes have clear visual boundaries and shared edges can be inspected as road positions.
-  - Acceptance: UI smoke checks road and edge marker classes, visible hex border styling, board panels, and responsive CSS.
+  - Current state: the board now uses wider axial spacing, visible hex drop-shadow boundaries, and player-colored road markers for actual built roads.
+  - Target: neighboring hexes have clear visual boundaries and existing roads are readable without covering the board in candidate-edge guides.
+  - Acceptance: product-polish and UI smoke checks cover actual road markers, absence of all-edge guide rendering, visible hex border styling, board panels, and responsive CSS.

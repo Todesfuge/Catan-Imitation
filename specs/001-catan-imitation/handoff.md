@@ -69,7 +69,7 @@ pnpm smoke:ui
 Latest results:
 
 - 9 test files passed.
-- 33 tests passed.
+- 34 tests passed.
 - Production build completed with Vite.
 - UI smoke command completed against the built Vite preview.
 
@@ -84,7 +84,7 @@ Browser smoke checks:
 
 - Multiplayer is local hot-seat only.
 - Board geometry is fixed and demo-oriented, but neighboring hexes now share canonical vertices and edges for settlement, road, production, and port rules.
-- The board now renders visible edge guides and player-colored road markers, with larger axial spacing to keep terrain hexes separated.
+- The board now renders player-colored markers for actual built roads, with larger axial spacing and stronger hex boundaries to keep terrain tiles separated.
 - Commerce Guild UI controls are functional but still compact; deeper visual polish and browser-level click-flow automation remain follow-up work.
 - AI players remain out of scope.
 - Visual assets are original CSS shapes and labels rather than polished production art.

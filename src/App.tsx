@@ -26,8 +26,7 @@ import {
   type BoardEdge,
   type BoardHex,
   type Building,
-  type ResourceMap,
-  type Road
+  type ResourceMap
 } from "./domain/types";
 import type { ResourceCost } from "./domain/expansion/commerceGuild";
 
@@ -117,7 +116,6 @@ function edgePosition(hexes: BoardHex[], edge: BoardEdge) {
   return {
     x: (from.x + to.x) / 2,
     y: (from.y + to.y) / 2,
-    length: Math.hypot(deltaX, deltaY),
     angle: (Math.atan2(deltaY, deltaX) * 180) / Math.PI
   };
 }
@@ -125,25 +123,22 @@ function edgePosition(hexes: BoardHex[], edge: BoardEdge) {
 function RoadMarker({
   edge,
   hexes,
-  road,
   ownerColor
 }: {
   edge: BoardEdge;
   hexes: BoardHex[];
-  road?: Road;
   ownerColor?: string;
 }) {
   const position = edgePosition(hexes, edge);
   return (
     <span
       aria-hidden="true"
-      className={road ? "road-marker" : "edge-guide"}
+      className="road-marker"
       style={{
         left: `${position.x}%`,
         top: `${position.y}%`,
-        width: `${position.length}%`,
         transform: `translate(-50%, -50%) rotate(${position.angle}deg)`,
-        backgroundColor: road ? ownerColor : undefined
+        backgroundColor: ownerColor
       }}
     />
   );
@@ -160,7 +155,6 @@ function BoardView({
   onUtilityOpen: (panel: Exclude<UtilityPanel, null>) => void;
   onFullscreen: () => void;
 }) {
-  const roadsByEdgeId = new Map(state.game.roads.map((road) => [road.edgeId, road]));
   const playerColorById = new Map(state.game.players.map((player) => [player.id, player.color]));
 
   return (
@@ -181,15 +175,17 @@ function BoardView({
       </div>
       <div className="island">
         <div className="road-layer" aria-hidden="true">
-          {state.game.edges.map((edge) => {
-            const road = roadsByEdgeId.get(edge.id);
+          {state.game.roads.map((road) => {
+            const edge = state.game.edges.find((candidate) => candidate.id === road.edgeId);
+            if (!edge) {
+              return null;
+            }
             return (
               <RoadMarker
                 edge={edge}
                 hexes={state.game.board}
-                key={edge.id}
-                ownerColor={road ? playerColorById.get(road.ownerId) : undefined}
-                road={road}
+                key={road.id}
+                ownerColor={playerColorById.get(road.ownerId)}
               />
             );
           })}

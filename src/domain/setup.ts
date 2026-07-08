@@ -1,6 +1,6 @@
 import { createStandardBoardData } from "./board";
 import { createDevelopmentDeck } from "./rules/developmentCards";
-import { emptyResources, type BoardHex, type GameState, type Player } from "./types";
+import { emptyResources, type BoardEdge, type BoardHex, type GameState, type Player } from "./types";
 
 function createPlayer(id: string, name: string, color: string): Player {
   return {
@@ -45,10 +45,22 @@ function getHex(board: BoardHex[], hexId: string): BoardHex {
   return hex;
 }
 
+function getEdgeTouchingVertex(edges: BoardEdge[], vertexId: string): BoardEdge {
+  const edge = edges.find((candidate) => candidate.vertexIds.includes(vertexId));
+  if (!edge) {
+    throw new Error(`Unknown setup edge for vertex: ${vertexId}`);
+  }
+  return edge;
+}
+
 export function createDemoGame(): GameState {
   const { board, edges } = createStandardBoardData();
   const pastureEight = getHex(board, "pasture-8");
   const mountainEight = getHex(board, "mountain-8");
+  const p1VertexId = pastureEight.vertexIds[0];
+  const p2VertexId = mountainEight.vertexIds[0];
+  const p1RoadEdge = getEdgeTouchingVertex(edges, p1VertexId);
+  const p2RoadEdge = getEdgeTouchingVertex(edges, p2VertexId);
 
   return {
     phase: "playing",
@@ -64,17 +76,28 @@ export function createDemoGame(): GameState {
       {
         id: "b-p1-city-pasture-8",
         ownerId: "p1",
-        vertexId: pastureEight.vertexIds[0],
+        vertexId: p1VertexId,
         kind: "city"
       },
       {
         id: "b-p2-settlement-mountain-8",
         ownerId: "p2",
-        vertexId: mountainEight.vertexIds[0],
+        vertexId: p2VertexId,
         kind: "settlement"
       }
     ],
-    roads: [],
+    roads: [
+      {
+        id: `demo-road-p1-${p1RoadEdge.id}`,
+        ownerId: "p1",
+        edgeId: p1RoadEdge.id
+      },
+      {
+        id: `demo-road-p2-${p2RoadEdge.id}`,
+        ownerId: "p2",
+        edgeId: p2RoadEdge.id
+      }
+    ],
     robberHexId: "desert",
     bank: createBank(),
     developmentDeck: createDevelopmentDeck(),

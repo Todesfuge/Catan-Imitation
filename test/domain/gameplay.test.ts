@@ -18,8 +18,9 @@ describe("core gameplay rules", () => {
       )
     };
     const p1City = richGame.buildings.find((building) => building.ownerId === "p1");
-    const connectedEdge = richGame.edges.find((edge) =>
-      edge.vertexIds.includes(p1City?.vertexId ?? "")
+    const occupiedEdgeIds = new Set(richGame.roads.map((road) => road.edgeId));
+    const connectedEdge = richGame.edges.find(
+      (edge) => edge.vertexIds.includes(p1City?.vertexId ?? "") && !occupiedEdgeIds.has(edge.id)
     );
     const forest = richGame.board.find((hex) => hex.id === "forest-4");
     const settlementVertexId = forest?.vertexIds[0] ?? "";
