@@ -10,9 +10,12 @@ describe("delivery readiness", () => {
     const packageJson = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
     const ci = read(".github/workflows/ci.yml");
     const pages = read(".github/workflows/pages.yml");
+    const workspace = read("pnpm-workspace.yaml");
 
     expect(packageJson.scripts["smoke:ui"]).toBe("node scripts/smoke-ui.mjs");
     expect(packageJson.scripts["build:pages"]).toContain("--base /Catan-Imitation/");
+    expect(workspace).toContain("allowBuilds:");
+    expect(workspace).toContain("  esbuild: true");
     expect(ci).toContain("node-version: 22");
     expect(pages).toContain("node-version: 22");
     expect(ci).toContain("pnpm install --frozen-lockfile");
