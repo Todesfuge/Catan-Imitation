@@ -13,10 +13,9 @@ Created: 2026-07-08
 
 - The target online UI prioritizes a large board and dense side information rather than a marketing-style landing page.
 - A portfolio reviewer should see the requested innovation quickly, so the Commerce Guild and statistics controls should be first-class panels, not hidden debug tools.
-- The clone should use original visual assets. Similar layout and information hierarchy are acceptable; copying proprietary art is not.
+- Catan Imitation should use original visual assets. Similar layout and information hierarchy are acceptable; copying proprietary art is not.
 
 ## Open Technical Unknowns
 
 - Package installation may require network approval. If dependency installation fails, request escalation instead of silently changing the technology.
 - Board interaction can be simplified with fixed node IDs if precise geometric hit testing becomes a time risk.
-

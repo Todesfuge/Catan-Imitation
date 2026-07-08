@@ -1,6 +1,6 @@
 # Requirements Quality Checklist
 
-Feature: 001-catan-clone
+Feature: 001-catan-imitation
 Checked: 2026-07-08
 
 ## Completeness
@@ -35,4 +35,3 @@ Checked: 2026-07-08
 - [x] Proprietary art and branding are excluded.
 - [x] Longest road and largest army are stretch goals, not blockers for the main demo.
 - [x] AI opponents are optional, not part of the first acceptance path.
-

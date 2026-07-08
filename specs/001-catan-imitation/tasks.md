@@ -1,6 +1,6 @@
-# Tasks: Catan Clone With Commerce Guild Expansion
+# Tasks: Catan Imitation With Commerce Guild Expansion
 
-Feature: 001-catan-clone
+Feature: 001-catan-imitation
 Status: Draft for implementation
 
 ## MVP Task List
@@ -47,4 +47,3 @@ Status: Draft for implementation
 - Slice 3: Statistics panel answers all three requested queries.
 - Slice 4: Commerce Guild loop works from trade slot to prize scoring.
 - Slice 5: Tests and handoff docs support review.
-

@@ -1,11 +1,17 @@
-# Implementation Plan: Catan Clone With Commerce Guild Expansion
+# Implementation Plan: Catan Imitation With Commerce Guild Expansion
 
 Created: 2026-07-08
 Workflow phase: Technical Plan
 
 ## Recommended Approach
 
-Use Vite + React + TypeScript for a single-page local hot-seat prototype. Keep all game rules in pure TypeScript modules under `src/domain`, and make React a rendering and command-dispatch layer.
+Use Vite + React + TypeScript for a single-page local hot-seat prototype named Catan Imitation. Keep all game rules in pure TypeScript modules under `src/domain`, and make React a rendering and command-dispatch layer.
+
+## GitHub Sync Target
+
+- Remote repository: `https://github.com/Todesfuge/Catan-Imitation`
+- Local remote name: `origin`
+- Branch policy for implementation: keep work committed locally first, then push to GitHub after build/test evidence exists.
 
 This approach best fits the two-hour challenge because it produces a playable browser demo quickly while still showing engineering discipline: typed state, pure reducers, testable logic, and clean UI/domain separation.
 

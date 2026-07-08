@@ -1,6 +1,6 @@
 # Project Constitution
 
-Project: Catan portfolio prototype
+Project: Catan Imitation portfolio prototype
 Version: 1.0.0
 Ratified: 2026-07-08
 Last amended: 2026-07-08
@@ -36,4 +36,3 @@ The two-hour challenge optimizes for a convincing, inspectable product slice. Ne
   - Patch: wording clarifications only.
   - Minor: new principle or changed verification rule.
   - Major: changed project objective or authority model.
-

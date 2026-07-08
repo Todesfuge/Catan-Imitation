@@ -1,4 +1,4 @@
-# Feature Specification: Catan Clone With Commerce Guild Expansion
+# Feature Specification: Catan Imitation With Commerce Guild Expansion
 
 Created: 2026-07-08
 Status: Draft for user review
@@ -6,7 +6,11 @@ Workflow phase: Specification
 
 ## Feature Goal
 
-Build a TypeScript portfolio project that recreates the recognizable online Catan experience shown in the reference screenshot while adding an original commerce and guild expansion. The project should demonstrate fast AI-assisted delivery, clean architecture, product improvement from a prototype baseline, and traceable documentation.
+Build a TypeScript portfolio project named Catan Imitation that recreates the recognizable online Catan experience shown in the reference screenshot while adding an original commerce and guild expansion. The project should demonstrate fast AI-assisted delivery, clean architecture, product improvement from a prototype baseline, and traceable documentation.
+
+## Repository Target
+
+Future work will be synchronized to `https://github.com/Todesfuge/Catan-Imitation`.
 
 ## Users and Actors
 
@@ -72,7 +76,7 @@ The reference UI is a desktop board-game table:
 - A vertical utility rail on the far left contains settings, rulebook/help, fullscreen, and info controls.
 - The right side stacks a large game log/help area, a chat header, a bank/resource summary row, and compact player status panels.
 - The bottom contains an action/status strip with the current required action, timer, command buttons, build buttons, and the active player's hand/status.
-- The visual style is readable, board-game-like, and icon-heavy. The clone should evoke the layout and interaction density without copying proprietary assets.
+- The visual style is readable, board-game-like, and icon-heavy. Catan Imitation should evoke the layout and interaction density without copying proprietary assets.
 
 ## Statistics Panel Requirements
 
@@ -135,4 +139,3 @@ Show a complete table combining players, dice totals, probabilities, and resourc
 - The first version is a single-machine hot-seat demo, not an online multiplayer implementation.
 - The project may use generated or CSS/SVG-like original assets to avoid copying proprietary art.
 - If package installation is unavailable, the fallback is still a TypeScript-first browser project, but Vite + React remains the preferred implementation target.
-
