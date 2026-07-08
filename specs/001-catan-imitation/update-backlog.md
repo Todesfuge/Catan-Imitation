@@ -111,14 +111,14 @@ This backlog records all known unfinished or improvable work after the MVP. Item
 ## Priority 5: Engineering and Delivery
 
 - [x] U020 Add GitHub Actions CI.
-  - Current state: `.github/workflows/ci.yml` runs install, test, build, and UI smoke on push to `master` and pull requests.
+  - Current state: `.github/workflows/ci.yml` runs install, test, build, and UI smoke on push to `main` and pull requests.
   - Target: run `pnpm install`, `pnpm test`, and `pnpm build` on push and pull request.
   - Acceptance: delivery-readiness test covers workflow content; local `pnpm test`, `pnpm build`, and `pnpm smoke:ui` pass.
 
 - [x] U021 Add deployment.
   - Current state: `.github/workflows/pages.yml` runs `pnpm build:pages` with `/Catan-Imitation/` base and deploys `dist` to GitHub Pages.
   - Target: deploy to GitHub Pages, Vercel, or another static host.
-  - Acceptance: README links to `https://todesfuge.github.io/Catan-Imitation/`; Pages workflow publishes on `master`.
+  - Acceptance: README links to `https://todesfuge.github.io/Catan-Imitation/`; Pages workflow publishes on `main`.
 
 - [x] U022 Add UI smoke tests.
   - Current state: `pnpm smoke:ui` starts Vite preview through the Vite API and checks built HTML, JS, CSS, board/panel strings, Activity, and mobile breakpoint CSS.
@@ -134,3 +134,8 @@ This backlog records all known unfinished or improvable work after the MVP. Item
   - Current state: `docs/roadmap.md` groups completed and future milestones, and README links it.
   - Target: group follow-up work into reviewable milestones: rules, expansion, UI polish, delivery.
   - Acceptance: delivery-readiness test confirms README roadmap link and Delivery Automation milestone.
+
+- [x] U025 Normalize board topology to shared Catan vertices and edges.
+  - Current state: `src/domain/board.ts` now deduplicates neighboring hex corners and sides into 54 shared vertices and 72 shared edges.
+  - Target: settlements/cities live on real intersections, roads live on real edges, and production can pay from every terrain adjacent to a shared intersection.
+  - Acceptance: production tests cover 54/72 topology counts and multi-hex production from one settlement vertex; full test/build/smoke verification passes.

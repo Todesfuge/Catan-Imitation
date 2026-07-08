@@ -12,3 +12,4 @@
 | 2026-07-08 21:10 | updates/2026-07-08-2110-ci-node-version-fix.md | U020-U021 fix | `pnpm test`, `pnpm build`, `pnpm build:pages`, `pnpm smoke:ui` | ready for review | Verify new GitHub Actions runs |
 | 2026-07-08 21:28 | updates/2026-07-08-2128-pages-action-version-fix.md | U020-U024 fix | `pnpm test -- test/domain/deliveryReadiness.test.ts`, `pnpm build:pages` | ready for review | Enable Pages Source: GitHub Actions |
 | 2026-07-08 21:40 | updates/2026-07-08-2140-main-branch-pages-deploy.md | U020-U024 fix | `pnpm test -- test/domain/deliveryReadiness.test.ts`, `pnpm build:pages` | ready for review | Push deployment workflow to `main` |
+| 2026-07-08 22:00 | updates/2026-07-08-2200-shared-board-topology-u025.md | U025 | `pnpm test`, `pnpm build`, `pnpm build:pages`, `pnpm smoke:ui` | ready for review | Push and visually inspect deployment |

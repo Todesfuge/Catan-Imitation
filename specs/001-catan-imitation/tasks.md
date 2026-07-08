@@ -58,8 +58,9 @@ Status: Draft for implementation
 - [x] U022 Add UI smoke tests.
 - [x] U023 Add PR and issue templates.
 - [x] U024 Add roadmap milestones.
+- [x] U025 Normalize board topology to shared Catan vertices and edges.
 
-Detailed acceptance criteria for U001-U024 live in [update-backlog.md](update-backlog.md).
+Detailed acceptance criteria for U001-U025 live in [update-backlog.md](update-backlog.md).
 
 ## Independent Acceptance Slices
 

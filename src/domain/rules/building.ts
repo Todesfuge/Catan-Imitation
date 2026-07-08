@@ -72,6 +72,10 @@ function isVertexOccupied(game: GameState, vertexId: VertexId): boolean {
   return game.buildings.some((building) => building.vertexId === vertexId);
 }
 
+function isBoardVertex(game: GameState, vertexId: VertexId): boolean {
+  return game.board.some((hex) => hex.vertexIds.includes(vertexId));
+}
+
 function getAdjacentVertexIds(game: GameState, vertexId: VertexId): Set<VertexId> {
   const adjacent = new Set<VertexId>();
 
@@ -96,6 +100,10 @@ function hasAdjacentBuilding(game: GameState, vertexId: VertexId): boolean {
 }
 
 function assertSettlementLocation(game: GameState, vertexId: VertexId): void {
+  if (!isBoardVertex(game, vertexId)) {
+    throw new Error(`Settlement must be placed on a board vertex: ${vertexId}`);
+  }
+
   if (isVertexOccupied(game, vertexId)) {
     throw new Error(`Building vertex is already occupied: ${vertexId}`);
   }

@@ -17,14 +17,20 @@ describe("core gameplay rules", () => {
           : player
       )
     };
+    const p1City = richGame.buildings.find((building) => building.ownerId === "p1");
+    const connectedEdge = richGame.edges.find((edge) =>
+      edge.vertexIds.includes(p1City?.vertexId ?? "")
+    );
+    const forest = richGame.board.find((hex) => hex.id === "forest-4");
+    const settlementVertexId = forest?.vertexIds[0] ?? "";
 
-    const roadGame = buildRoad(richGame, "p1", "pasture-8-e0");
-    const settlementGame = buildSettlement(roadGame, "p1", "forest-4-v0");
-    const cityGame = buildCity(settlementGame, "p1", "built-settlement-p1-forest-4-v0");
+    const roadGame = buildRoad(richGame, "p1", connectedEdge?.id ?? "");
+    const settlementGame = buildSettlement(roadGame, "p1", settlementVertexId);
+    const cityGame = buildCity(settlementGame, "p1", `built-settlement-p1-${settlementVertexId}`);
     const p1 = cityGame.players.find((player) => player.id === "p1");
 
-    expect(cityGame.roads.some((road) => road.edgeId === "pasture-8-e0")).toBe(true);
-    expect(cityGame.buildings.find((building) => building.vertexId === "forest-4-v0")?.kind).toBe(
+    expect(cityGame.roads.some((road) => road.edgeId === connectedEdge?.id)).toBe(true);
+    expect(cityGame.buildings.find((building) => building.vertexId === settlementVertexId)?.kind).toBe(
       "city"
     );
     expect(p1?.resources).toMatchObject({ wood: 1, brick: 1, wool: 0, grain: 0, ore: 0 });

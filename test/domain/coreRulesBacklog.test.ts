@@ -11,7 +11,7 @@ import {
   placeSetupRoad,
   placeSetupSettlement
 } from "../../src/domain/rules/building";
-import type { GameState, ResourceMap } from "../../src/domain/types";
+import type { GameState, PlayerId, ResourceMap } from "../../src/domain/types";
 
 function withPlayerResources(game: GameState, playerId: string, resources: Partial<ResourceMap>) {
   return {
@@ -27,6 +27,32 @@ function withPlayerResources(game: GameState, playerId: string, resources: Parti
   };
 }
 
+function placeSetupPairOnHex(game: GameState, playerId: PlayerId, hexId: string): GameState {
+  const hex = game.board.find((candidate) => candidate.id === hexId);
+  if (!hex) {
+    throw new Error(`Unknown test hex: ${hexId}`);
+  }
+
+  for (const vertexId of hex.vertexIds) {
+    try {
+      const settlementGame = placeSetupSettlement(game, playerId, vertexId);
+      const edge = settlementGame.edges.find(
+        (candidate) =>
+          candidate.vertexIds.includes(vertexId) &&
+          !settlementGame.roads.some((road) => road.edgeId === candidate.id)
+      );
+      if (!edge) {
+        continue;
+      }
+      return placeSetupRoad(settlementGame, playerId, edge.id);
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error(`No legal setup pair found for ${playerId} on ${hexId}`);
+}
+
 describe("post-MVP core Catan rules", () => {
   it("runs setup in settlement-road pairs using snake player order before normal play", () => {
     let game = createSetupGame();
@@ -34,25 +60,27 @@ describe("post-MVP core Catan rules", () => {
     expect(game.phase).toBe("setup");
     expect(game.activePlayerId).toBe("p1");
 
-    game = placeSetupSettlement(game, "p1", "forest-4-v0");
+    const forest = game.board.find((hex) => hex.id === "forest-4");
+    const firstVertex = forest?.vertexIds[0] ?? "";
+    game = placeSetupSettlement(game, "p1", firstVertex);
     expect(game.setup?.stage).toBe("road");
     expect(game.activePlayerId).toBe("p1");
 
-    game = placeSetupRoad(game, "p1", "forest-4-e0");
+    const firstEdge = game.edges.find((edge) => edge.vertexIds.includes(firstVertex));
+    game = placeSetupRoad(game, "p1", firstEdge?.id ?? "");
     expect(game.setup?.stage).toBe("settlement");
     expect(game.activePlayerId).toBe("p2");
 
-    for (const [playerId, vertexId, edgeId] of [
-      ["p2", "mountain-8-v0", "mountain-8-e0"],
-      ["p3", "pasture-5-v0", "pasture-5-e0"],
-      ["p4", "field-11-a-v0", "field-11-a-e0"],
-      ["p4", "field-3-v0", "field-3-e0"],
-      ["p3", "mountain-10-v0", "mountain-10-e0"],
-      ["p2", "pasture-2-v0", "pasture-2-e0"],
-      ["p1", "forest-12-v0", "forest-12-e0"]
+    for (const [playerId, hexId] of [
+      ["p2", "mountain-8"],
+      ["p3", "pasture-5"],
+      ["p4", "field-11-a"],
+      ["p4", "field-3"],
+      ["p3", "mountain-10"],
+      ["p2", "pasture-2"],
+      ["p1", "forest-12"]
     ] as const) {
-      game = placeSetupSettlement(game, playerId, vertexId);
-      game = placeSetupRoad(game, playerId, edgeId);
+      game = placeSetupPairOnHex(game, playerId, hexId);
     }
 
     expect(game.phase).toBe("playing");
@@ -76,14 +104,27 @@ describe("post-MVP core Catan rules", () => {
       wool: 4,
       grain: 4
     });
+    const fundedGame = withPlayerResources(game, "p2", {
+      wood: 4,
+      brick: 4,
+      wool: 4,
+      grain: 4
+    });
+    const forest = fundedGame.board.find((hex) => hex.id === "forest-4");
+    const settlementVertexId = forest?.vertexIds[0] ?? "";
+    const adjacentVertexId =
+      fundedGame.edges.find((edge) => edge.vertexIds.includes(settlementVertexId))?.vertexIds.find(
+        (vertexId) => vertexId !== settlementVertexId
+      ) ?? "";
     const withSettlement = buildSettlement(
-      { ...game, phase: "playing", setup: undefined },
+      { ...fundedGame, phase: "playing", setup: undefined },
       "p1",
-      "forest-4-v0"
+      settlementVertexId
     );
 
-    expect(() => buildSettlement(withSettlement, "p2", "forest-4-v0")).toThrow(/occupied/i);
-    expect(() => buildSettlement(withSettlement, "p2", "forest-4-v1")).toThrow(/distance/i);
+    expect(() => buildSettlement(withSettlement, "p2", settlementVertexId)).toThrow(/occupied/i);
+    expect(() => buildSettlement(withSettlement, "p2", adjacentVertexId)).toThrow(/distance/i);
+    expect(() => buildSettlement(withSettlement, "p2", "not-a-board-vertex")).toThrow(/board vertex/i);
   });
 
   it("requires roads to use valid edges and connect to owned pieces", () => {

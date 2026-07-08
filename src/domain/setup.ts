@@ -1,6 +1,6 @@
 import { createStandardBoardData } from "./board";
 import { createDevelopmentDeck } from "./rules/developmentCards";
-import { emptyResources, type GameState, type Player } from "./types";
+import { emptyResources, type BoardHex, type GameState, type Player } from "./types";
 
 function createPlayer(id: string, name: string, color: string): Player {
   return {
@@ -37,8 +37,18 @@ function createBank() {
   };
 }
 
+function getHex(board: BoardHex[], hexId: string): BoardHex {
+  const hex = board.find((candidate) => candidate.id === hexId);
+  if (!hex) {
+    throw new Error(`Unknown setup hex: ${hexId}`);
+  }
+  return hex;
+}
+
 export function createDemoGame(): GameState {
   const { board, edges } = createStandardBoardData();
+  const pastureEight = getHex(board, "pasture-8");
+  const mountainEight = getHex(board, "mountain-8");
 
   return {
     phase: "playing",
@@ -54,13 +64,13 @@ export function createDemoGame(): GameState {
       {
         id: "b-p1-city-pasture-8",
         ownerId: "p1",
-        vertexId: "pasture-8-v0",
+        vertexId: pastureEight.vertexIds[0],
         kind: "city"
       },
       {
         id: "b-p2-settlement-mountain-8",
         ownerId: "p2",
-        vertexId: "mountain-8-v0",
+        vertexId: mountainEight.vertexIds[0],
         kind: "settlement"
       }
     ],

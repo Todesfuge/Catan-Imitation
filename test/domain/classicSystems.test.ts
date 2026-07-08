@@ -147,8 +147,10 @@ describe("classic Catan systems", () => {
   });
 
   it("resolves maritime trades with default, generic port, and resource-specific port ratios", () => {
+    const demoGame = createDemoGame();
+    const p1PortVertexId = demoGame.buildings.find((building) => building.ownerId === "p1")?.vertexId ?? "";
     const defaultTrade = maritimeTrade(
-      withPlayerResources(createDemoGame(), "p1", { wood: 4 }),
+      withPlayerResources(demoGame, "p1", { wood: 4 }),
       "p1",
       "wood",
       "ore"
@@ -162,8 +164,8 @@ describe("classic Catan systems", () => {
     const genericTrade = maritimeTrade(
       withPlayerResources(
         {
-          ...createDemoGame(),
-          ports: [{ id: "generic-port", kind: "generic" as const, vertexIds: ["pasture-8-v0"] }]
+          ...demoGame,
+          ports: [{ id: "generic-port", kind: "generic" as const, vertexIds: [p1PortVertexId] }]
         },
         "p1",
         { brick: 3 }
@@ -178,13 +180,13 @@ describe("classic Catan systems", () => {
     });
 
     const specificPortGame = {
-      ...createDemoGame(),
+      ...demoGame,
       ports: [
         {
           id: "wood-port",
           kind: "resource" as const,
           resource: "wood" as const,
-          vertexIds: ["pasture-8-v0"]
+          vertexIds: [p1PortVertexId]
         }
       ]
     };

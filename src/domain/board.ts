@@ -49,19 +49,71 @@ export interface StandardBoardData {
   edges: BoardEdge[];
 }
 
+const geometryScale = {
+  centerQx: 3464,
+  centerRx: 1732,
+  centerRy: 3000,
+  cornerOffsets: [
+    [0, -2000],
+    [1732, -1000],
+    [1732, 1000],
+    [0, 2000],
+    [-1732, 1000],
+    [-1732, -1000]
+  ]
+} as const;
+
+function centerPoint(q: number, r: number) {
+  return {
+    x: q * geometryScale.centerQx + r * geometryScale.centerRx,
+    y: r * geometryScale.centerRy
+  };
+}
+
+function vertexKey(q: number, r: number, vertexIndex: number): string {
+  const center = centerPoint(q, r);
+  const [offsetX, offsetY] = geometryScale.cornerOffsets[vertexIndex];
+  return `${center.x + offsetX}:${center.y + offsetY}`;
+}
+
+function edgeKey(leftVertexId: string, rightVertexId: string): string {
+  return [leftVertexId, rightVertexId].sort().join("|");
+}
+
 export function createStandardBoardData(): StandardBoardData {
   const edges: BoardEdge[] = [];
+  const vertexIdsByKey = new Map<string, string>();
+  const edgeIdsByKey = new Map<string, string>();
   const board = terrainPlan.map((hex, index) => {
     const [q, r] = ringCoords[index];
-    const vertexIds = Array.from({ length: 6 }, (_, vertexIndex) => `${hex.id}-v${vertexIndex}`);
-    const edgeIds = Array.from({ length: 6 }, (_, edgeIndex) => `${hex.id}-e${edgeIndex}`);
+    const vertexIds = Array.from({ length: 6 }, (_, vertexIndex) => {
+      const key = vertexKey(q, r, vertexIndex);
+      const existingVertexId = vertexIdsByKey.get(key);
+      if (existingVertexId) {
+        return existingVertexId;
+      }
 
-    edgeIds.forEach((edgeId, edgeIndex) => {
+      const vertexId = `${hex.id}-v${vertexIndex}`;
+      vertexIdsByKey.set(key, vertexId);
+      return vertexId;
+    });
+
+    const edgeIds = vertexIds.map((leftVertexId, edgeIndex) => {
+      const rightVertexId = vertexIds[(edgeIndex + 1) % vertexIds.length];
+      const key = edgeKey(leftVertexId, rightVertexId);
+      const existingEdgeId = edgeIdsByKey.get(key);
+      if (existingEdgeId) {
+        return existingEdgeId;
+      }
+
+      const edgeId = `${hex.id}-e${edgeIndex}`;
+      edgeIdsByKey.set(key, edgeId);
       edges.push({
         id: edgeId,
         hexId: hex.id,
-        vertexIds: [vertexIds[edgeIndex], vertexIds[(edgeIndex + 1) % vertexIds.length]]
+        vertexIds: [leftVertexId, rightVertexId]
       });
+      return edgeId;
     });
 
     return {
