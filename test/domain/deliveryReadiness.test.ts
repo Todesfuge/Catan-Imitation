@@ -13,6 +13,8 @@ describe("delivery readiness", () => {
 
     expect(packageJson.scripts["smoke:ui"]).toBe("node scripts/smoke-ui.mjs");
     expect(packageJson.scripts["build:pages"]).toContain("--base /Catan-Imitation/");
+    expect(ci).toContain("node-version: 22");
+    expect(pages).toContain("node-version: 22");
     expect(ci).toContain("pnpm install --frozen-lockfile");
     expect(ci).toContain("pnpm test");
     expect(ci).toContain("pnpm build");
