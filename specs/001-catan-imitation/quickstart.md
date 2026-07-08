@@ -1,14 +1,14 @@
 # Quickstart
 
-Status: Draft. Commands become authoritative after project scaffold is created.
+Status: Active.
 
 ## Expected Commands
 
 ```bash
-npm install
-npm run dev
-npm test
-npm run build
+pnpm install
+pnpm dev -- --port 5173
+pnpm test
+pnpm build
 ```
 
 ## Manual Demo Path
@@ -21,4 +21,3 @@ npm run build
 6. Complete one Commerce Guild trade slot and confirm tokens increase and the slot refreshes.
 7. Trigger a guild gathering, redeem up to 4 resources for one player, run three auctions, and resolve blind boxes.
 8. Redeem vouchers into a prize card and confirm score changes.
-
