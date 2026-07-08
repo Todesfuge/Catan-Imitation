@@ -110,27 +110,27 @@ This backlog records all known unfinished or improvable work after the MVP. Item
 
 ## Priority 5: Engineering and Delivery
 
-- [ ] U020 Add GitHub Actions CI.
-  - Current state: checks are manual.
+- [x] U020 Add GitHub Actions CI.
+  - Current state: `.github/workflows/ci.yml` runs install, test, build, and UI smoke on push to `master` and pull requests.
   - Target: run `pnpm install`, `pnpm test`, and `pnpm build` on push and pull request.
-  - Acceptance: GitHub Actions passes on `master`.
+  - Acceptance: delivery-readiness test covers workflow content; local `pnpm test`, `pnpm build`, and `pnpm smoke:ui` pass.
 
-- [ ] U021 Add deployment.
-  - Current state: app runs locally only.
+- [x] U021 Add deployment.
+  - Current state: `.github/workflows/pages.yml` runs `pnpm build:pages` with `/Catan-Imitation/` base and deploys `dist` to GitHub Pages.
   - Target: deploy to GitHub Pages, Vercel, or another static host.
-  - Acceptance: README links to a working public URL.
+  - Acceptance: README links to `https://todesfuge.github.io/Catan-Imitation/`; Pages workflow publishes on `master`.
 
-- [ ] U022 Add UI smoke tests.
-  - Current state: browser smoke checks were manual.
+- [x] U022 Add UI smoke tests.
+  - Current state: `pnpm smoke:ui` starts Vite preview through the Vite API and checks built HTML, JS, CSS, board/panel strings, Activity, and mobile breakpoint CSS.
   - Target: automate rendering checks for board, panels, statistics, and Commerce Guild controls.
-  - Acceptance: CI runs UI smoke tests headlessly or documents a stable local command.
+  - Acceptance: CI runs `pnpm smoke:ui`; local smoke command passes after `pnpm build`.
 
-- [ ] U023 Add PR and issue templates.
-  - Current state: no collaboration templates.
+- [x] U023 Add PR and issue templates.
+  - Current state: PR, bug, and feature templates live under `.github/` and reference verification expectations.
   - Target: repository includes templates for feature work, bug reports, and PR validation.
-  - Acceptance: `.github/` templates exist and reference test/build expectations.
+  - Acceptance: delivery-readiness test confirms templates exist and include expected sections.
 
-- [ ] U024 Add roadmap milestones.
-  - Current state: future work is documented in this backlog only.
+- [x] U024 Add roadmap milestones.
+  - Current state: `docs/roadmap.md` groups completed and future milestones, and README links it.
   - Target: group follow-up work into reviewable milestones: rules, expansion, UI polish, delivery.
-  - Acceptance: README or docs expose the milestone order clearly.
+  - Acceptance: delivery-readiness test confirms README roadmap link and Delivery Automation milestone.

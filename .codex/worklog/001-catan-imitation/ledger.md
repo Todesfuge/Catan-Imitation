@@ -8,3 +8,4 @@
 | 2026-07-08 19:41 | updates/2026-07-08-1941-classic-systems-u007-u010.md | U007-U010 | `pnpm test -- test/domain/classicSystems.test.ts`, `pnpm build` | ready for review | Continue with U011 |
 | 2026-07-08 20:00 | updates/2026-07-08-2000-commerce-guild-polish-u011-u014.md | U011-U014 | `pnpm test`, `pnpm build` | ready for review | Continue with U015 |
 | 2026-07-08 20:22 | updates/2026-07-08-2022-product-polish-u015-u019.md | U015-U019 | `pnpm test`, `pnpm build`, browser smoke | ready for review | Continue with U020 |
+| 2026-07-08 20:36 | updates/2026-07-08-2036-delivery-automation-u020-u024.md | U020-U024 | `pnpm test`, `pnpm build`, `pnpm build:pages`, `pnpm smoke:ui` | ready for review | Inspect GitHub Actions / Pages |

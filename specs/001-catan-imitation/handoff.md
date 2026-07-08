@@ -1,7 +1,7 @@
 # Handoff: Catan Imitation MVP
 
 Date: 2026-07-08
-Scope: MVP implementation through T001-T026, plus U001-U019 core, classic-system, Commerce Guild, and product-polish updates
+Scope: MVP implementation through T001-T026, plus U001-U024 core, classic-system, Commerce Guild, product-polish, and delivery-automation updates
 
 ## Overview
 
@@ -48,6 +48,12 @@ Catan Imitation is now a local hot-seat TypeScript browser prototype. It recreat
   - auction round resolution with blind-box outcomes
   - development-card rewards drawn from the shared deck
   - voucher-to-prize redemption
+- Delivery automation:
+  - GitHub Actions CI for install, tests, production build, and UI smoke
+  - GitHub Pages deployment workflow using `pnpm build:pages` for `https://todesfuge.github.io/Catan-Imitation/`
+  - stable `pnpm smoke:ui` preview smoke command
+  - PR, bug report, and feature request templates
+  - milestone roadmap in `docs/roadmap.md`
 
 ## Verification
 
@@ -56,13 +62,16 @@ Commands run successfully:
 ```bash
 pnpm test
 pnpm build
+pnpm build:pages
+pnpm smoke:ui
 ```
 
 Latest results:
 
-- 8 test files passed.
-- 29 tests passed.
+- 9 test files passed.
+- 31 tests passed.
 - Production build completed with Vite.
+- UI smoke command completed against the built Vite preview.
 
 Browser smoke checks:
 
@@ -75,11 +84,11 @@ Browser smoke checks:
 
 - Multiplayer is local hot-seat only.
 - Board geometry is fixed and demo-oriented; follow-up work is still needed for true shared intersections across neighboring hexes.
-- Commerce Guild UI controls are functional but still compact; deeper visual polish and automated browser smoke tests remain follow-up work.
+- Commerce Guild UI controls are functional but still compact; deeper visual polish and browser-level click-flow automation remain follow-up work.
 - AI players remain out of scope.
 - Visual assets are original CSS shapes and labels rather than polished production art.
 
 ## Next Steps
 
-- Follow the ordered backlog in [update-backlog.md](update-backlog.md).
-- Continue with U020-U024 for delivery automation, CI, deployment, UI smoke automation, and repository templates.
+- Follow the future milestones in [Roadmap](../../docs/roadmap.md).
+- Enable GitHub Pages for the repository if the Pages environment is not already active.

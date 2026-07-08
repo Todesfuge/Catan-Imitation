@@ -9,6 +9,8 @@ pnpm install
 pnpm dev -- --port 5173
 pnpm test
 pnpm build
+pnpm build:pages
+pnpm smoke:ui
 ```
 
 ## Manual Demo Path

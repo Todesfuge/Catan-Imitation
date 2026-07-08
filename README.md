@@ -25,9 +25,17 @@ pnpm install
 pnpm dev -- --port 5173
 pnpm test
 pnpm build
+pnpm build:pages
+pnpm smoke:ui
 ```
 
 The app is designed for `http://127.0.0.1:5173/` during local development.
+
+## Deployment
+
+GitHub Pages deployment target: [https://todesfuge.github.io/Catan-Imitation/](https://todesfuge.github.io/Catan-Imitation/)
+
+The deployment workflow runs `pnpm build:pages`, which builds the Vite app with the `/Catan-Imitation/` base path and publishes the `dist` artifact from `master`.
 
 ## Documentation Map
 
@@ -35,6 +43,7 @@ The app is designed for `http://127.0.0.1:5173/` during local development.
 - [Implementation plan](specs/001-catan-imitation/plan.md)
 - [Task list](specs/001-catan-imitation/tasks.md)
 - [Quickstart](specs/001-catan-imitation/quickstart.md)
+- [Roadmap](docs/roadmap.md)
 - [Project constitution](.specify/memory/constitution.md)
 
 ## Engineering Notes
@@ -42,4 +51,3 @@ The app is designed for `http://127.0.0.1:5173/` during local development.
 Game rules live in pure TypeScript modules under `src/domain`. React components render state and dispatch typed commands through `src/app/gameReducer.ts`.
 
 The first version intentionally excludes real-time multiplayer, accounts, persistence, and exact proprietary artwork.
-

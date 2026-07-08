@@ -53,11 +53,11 @@ Status: Draft for implementation
 - [x] U017 Improve board visual fidelity and inspectability.
 - [x] U018 Add real local chat or remove chat affordance.
 - [x] U019 Harden mobile layout.
-- [ ] U020 Add GitHub Actions CI.
-- [ ] U021 Add deployment.
-- [ ] U022 Add UI smoke tests.
-- [ ] U023 Add PR and issue templates.
-- [ ] U024 Add roadmap milestones.
+- [x] U020 Add GitHub Actions CI.
+- [x] U021 Add deployment.
+- [x] U022 Add UI smoke tests.
+- [x] U023 Add PR and issue templates.
+- [x] U024 Add roadmap milestones.
 
 Detailed acceptance criteria for U001-U024 live in [update-backlog.md](update-backlog.md).
 
