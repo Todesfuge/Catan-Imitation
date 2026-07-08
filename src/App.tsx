@@ -511,6 +511,19 @@ function ActionBar({
   const upgradable = state.game.buildings.find(
     (building) => building.ownerId === activePlayer?.id && building.kind === "settlement"
   );
+  const canBuyDevelopmentCard =
+    Boolean(activePlayer) &&
+    activePlayer!.resources.wool >= 1 &&
+    activePlayer!.resources.grain >= 1 &&
+    activePlayer!.resources.ore >= 1 &&
+    state.game.developmentDeck.length > 0;
+  const playableKnight = activePlayer?.developmentCards.find(
+    (card) => card.kind === "knight" && card.purchasedTurn < state.game.turn
+  );
+  const knightTargetHexId =
+    state.game.board.find((hex) => hex.id !== state.game.robberHexId)?.id ?? state.game.robberHexId;
+  const tradeGive = resources.find((resource) => (activePlayer?.resources[resource] ?? 0) >= 4);
+  const tradeReceive = resources.find((resource) => resource !== tradeGive);
 
   return (
     <footer className="action-bar">
@@ -554,6 +567,48 @@ function ActionBar({
         type="button"
       >
         <Castle size={20} /> City
+      </button>
+      <button
+        onClick={() =>
+          activePlayer && dispatch({ type: "BUY_DEVELOPMENT_CARD", playerId: activePlayer.id })
+        }
+        disabled={!canBuyDevelopmentCard}
+        type="button"
+      >
+        <ScrollText size={20} /> Dev Card
+      </button>
+      <button
+        onClick={() =>
+          activePlayer &&
+          playableKnight &&
+          dispatch({
+            type: "PLAY_KNIGHT_CARD",
+            playerId: activePlayer.id,
+            cardId: playableKnight.id,
+            targetHexId: knightTargetHexId
+          })
+        }
+        disabled={!playableKnight}
+        type="button"
+      >
+        <Gift size={20} /> Knight
+      </button>
+      <button
+        onClick={() =>
+          activePlayer &&
+          tradeGive &&
+          tradeReceive &&
+          dispatch({
+            type: "MARITIME_TRADE",
+            playerId: activePlayer.id,
+            give: tradeGive,
+            receive: tradeReceive
+          })
+        }
+        disabled={!tradeGive || !tradeReceive}
+        type="button"
+      >
+        <ArrowRightLeft size={20} /> Maritime
       </button>
       <button className="primary" onClick={() => dispatch({ type: "END_TURN" })} type="button">
         End Turn

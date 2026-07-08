@@ -1,4 +1,5 @@
 import { createStandardBoardData } from "./board";
+import { createDevelopmentDeck } from "./rules/developmentCards";
 import { emptyResources, type GameState, type Player } from "./types";
 
 function createPlayer(id: string, name: string, color: string): Player {
@@ -10,7 +11,8 @@ function createPlayer(id: string, name: string, color: string): Player {
     guildTokens: 0,
     vouchers: 0,
     prizeCards: 0,
-    developmentCards: []
+    developmentCards: [],
+    knightsPlayed: 0
   };
 }
 
@@ -47,6 +49,7 @@ export function createDemoGame(): GameState {
     targetScore: 10,
     board,
     edges,
+    ports: [],
     buildings: [
       {
         id: "b-p1-city-pasture-8",
@@ -64,6 +67,7 @@ export function createDemoGame(): GameState {
     roads: [],
     robberHexId: "desert",
     bank: createBank(),
+    developmentDeck: createDevelopmentDeck(),
     log: [
       {
         id: "log-welcome",
@@ -85,10 +89,12 @@ export function createSetupGame(): GameState {
     targetScore: 10,
     board,
     edges,
+    ports: [],
     buildings: [],
     roads: [],
     robberHexId: "desert",
     bank: createBank(),
+    developmentDeck: createDevelopmentDeck(),
     setup: {
       order: ["p1", "p2", "p3", "p4", "p4", "p3", "p2", "p1"],
       placementIndex: 0,

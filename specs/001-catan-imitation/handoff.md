@@ -1,7 +1,7 @@
 # Handoff: Catan Imitation MVP
 
 Date: 2026-07-08
-Scope: MVP implementation through T001-T026, plus U001-U006 core rule updates
+Scope: MVP implementation through T001-T026, plus U001-U010 core and classic-system updates
 
 ## Overview
 
@@ -10,7 +10,7 @@ Catan Imitation is now a local hot-seat TypeScript browser prototype. It recreat
 ## Implemented
 
 - Vite + React + TypeScript scaffold.
-- Pure TypeScript domain modules for board data, setup, production, building, scoring, turns, statistics, and Commerce Guild.
+- Pure TypeScript domain modules for board data, setup, production, building, scoring, turns, statistics, development cards, longest road, maritime trade, and Commerce Guild.
 - Desktop-first game table UI:
   - central hex board
   - left utility rail
@@ -24,7 +24,10 @@ Catan Imitation is now a local hot-seat TypeScript browser prototype. It recreat
 - Bank-aware production and build-cost accounting, including short-bank production caps.
 - 7-roll handling for over-limit discards, robber movement, and optional stealing from adjacent opponents.
 - Game-over state and winner id once the active player reaches the target score.
-- Score calculation from settlements, cities, and Commerce Guild prize cards.
+- Development card deck purchase flow, hidden card ownership, knight play timing, and Largest Army scoring.
+- Longest Road calculation and scoring, including branch and opponent-building breaks.
+- Maritime trade with default 4:1, owned generic 3:1, and owned resource-specific 2:1 ratios.
+- Score calculation from settlements, cities, development victory points, Largest Army, Longest Road, and Commerce Guild prize cards.
 - Statistics modes for player query, dice query, and expected income matrix.
 - Commerce Guild:
   - three rotating trade slots
@@ -45,8 +48,8 @@ pnpm build
 
 Latest results:
 
-- 5 test files passed.
-- 18 tests passed.
+- 6 test files passed.
+- 22 tests passed.
 - Production build completed with Vite.
 
 Browser smoke checks:
@@ -58,11 +61,11 @@ Browser smoke checks:
 
 - Multiplayer is local hot-seat only.
 - Board geometry is fixed and demo-oriented; follow-up work is still needed for true shared intersections across neighboring hexes.
-- Development cards are represented minimally for Commerce Guild rewards.
-- Longest road, largest army, maritime port trading, and AI players remain stretch tasks.
+- Commerce Guild development-card rewards are now structured cards, but they do not yet draw from the shared deck.
+- AI players remain out of scope.
 - Visual assets are original CSS shapes and labels rather than polished production art.
 
 ## Next Steps
 
 - Follow the ordered backlog in [update-backlog.md](update-backlog.md).
-- Continue with U007-U010 for classic Catan systems, U011-U014 for Commerce Guild polish, U015-U019 for product polish, and U020-U024 for delivery automation.
+- Continue with U011-U014 for Commerce Guild polish, U015-U019 for product polish, and U020-U024 for delivery automation.

@@ -14,6 +14,15 @@ export type Terrain = "forest" | "hill" | "pasture" | "field" | "mountain" | "de
 export type BuildingKind = "settlement" | "city";
 export type GamePhase = "setup" | "playing" | "gameOver";
 export type SetupStage = "settlement" | "road";
+export type DevelopmentCardKind = "knight" | "victoryPoint" | "roadBuilding" | "yearOfPlenty" | "monopoly";
+export type PortKind = "generic" | "resource";
+
+export interface DevelopmentCard {
+  id: string;
+  kind: DevelopmentCardKind;
+  purchasedTurn: number;
+  revealed: boolean;
+}
 
 export interface Player {
   id: PlayerId;
@@ -23,7 +32,8 @@ export interface Player {
   guildTokens: number;
   vouchers: number;
   prizeCards: number;
-  developmentCards: string[];
+  developmentCards: DevelopmentCard[];
+  knightsPlayed: number;
 }
 
 export interface BoardHex {
@@ -41,6 +51,13 @@ export interface BoardEdge {
   id: EdgeId;
   hexId: HexId;
   vertexIds: [VertexId, VertexId];
+}
+
+export interface MaritimePort {
+  id: string;
+  kind: PortKind;
+  resource?: Resource;
+  vertexIds: VertexId[];
 }
 
 export interface Building {
@@ -84,13 +101,17 @@ export interface GameState {
   targetScore: number;
   board: BoardHex[];
   edges: BoardEdge[];
+  ports: MaritimePort[];
   buildings: Building[];
   roads: Road[];
   robberHexId: HexId;
   bank: Bank;
   log: GameLogEntry[];
+  developmentDeck: DevelopmentCard[];
   setup?: SetupState;
   winnerId?: PlayerId;
+  largestArmyOwnerId?: PlayerId;
+  longestRoadOwnerId?: PlayerId;
 }
 
 export interface ProductionEvent {

@@ -15,13 +15,17 @@ import { createDemoGame } from "../domain/setup";
 import { applyProduction, resolveSevenRoll } from "../domain/rules/production";
 import { advanceTurn } from "../domain/rules/turns";
 import { buildCity, buildRoad, buildSettlement } from "../domain/rules/building";
+import { buyDevelopmentCard, playKnightCard } from "../domain/rules/developmentCards";
+import { updateLongestRoadAward } from "../domain/rules/longestRoad";
+import { maritimeTrade } from "../domain/rules/maritimeTrade";
 import { calculatePlayerScore } from "../domain/rules/scoring";
 import {
   resources,
   type GameLogEntry,
   type GameState,
   type HexId,
-  type PlayerId
+  type PlayerId,
+  type Resource
 } from "../domain/types";
 
 export interface DiceRoll {
@@ -44,6 +48,9 @@ export type GameCommand =
   | { type: "BUILD_ROAD"; playerId: PlayerId; edgeId: string }
   | { type: "BUILD_SETTLEMENT"; playerId: PlayerId; vertexId: string }
   | { type: "BUILD_CITY"; playerId: PlayerId; buildingId: string }
+  | { type: "BUY_DEVELOPMENT_CARD"; playerId: PlayerId }
+  | { type: "PLAY_KNIGHT_CARD"; playerId: PlayerId; cardId: string; targetHexId: HexId }
+  | { type: "MARITIME_TRADE"; playerId: PlayerId; give: Resource; receive: Resource }
   | { type: "PLACE_ROBBER"; hexId: HexId }
   | { type: "COMPLETE_TRADE_SLOT"; playerId: PlayerId; slotId: string }
   | { type: "TRANSFER_TOKENS"; fromPlayerId: PlayerId; toPlayerId: PlayerId; amount: number }
@@ -166,7 +173,10 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
       assertCanUseNormalAction(state.game);
       return {
         ...state,
-        game: buildRoad(state.game, command.playerId, command.edgeId)
+        game: withWinnerState(
+          updateLongestRoadAward(buildRoad(state.game, command.playerId, command.edgeId)),
+          command.playerId
+        )
       };
     case "BUILD_SETTLEMENT":
       assertCanUseNormalAction(state.game);
@@ -179,6 +189,41 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
       return {
         ...state,
         game: withWinnerState(buildCity(state.game, command.playerId, command.buildingId), command.playerId)
+      };
+    case "BUY_DEVELOPMENT_CARD": {
+      assertCanUseNormalAction(state.game);
+      const result = buyDevelopmentCard(state.game, command.playerId);
+      return {
+        ...state,
+        game: {
+          ...withWinnerState(result.game, command.playerId),
+          log: [log(`${command.playerId} bought a development card.`), ...result.game.log]
+        }
+      };
+    }
+    case "PLAY_KNIGHT_CARD":
+      assertCanUseNormalAction(state.game);
+      return {
+        ...state,
+        game: {
+          ...withWinnerState(
+            playKnightCard(state.game, command.playerId, command.cardId, command.targetHexId),
+            command.playerId
+          ),
+          log: [log(`${command.playerId} played a knight card.`), ...state.game.log]
+        }
+      };
+    case "MARITIME_TRADE":
+      assertCanUseNormalAction(state.game);
+      return {
+        ...state,
+        game: {
+          ...maritimeTrade(state.game, command.playerId, command.give, command.receive),
+          log: [
+            log(`${command.playerId} completed a maritime trade: ${command.give} for ${command.receive}.`),
+            ...state.game.log
+          ]
+        }
       };
     case "PLACE_ROBBER":
       assertCanUseNormalAction(state.game);

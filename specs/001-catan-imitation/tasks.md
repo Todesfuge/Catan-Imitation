@@ -40,10 +40,10 @@ Status: Draft for implementation
 - [x] U004 Implement full 7-roll robber flow.
 - [x] U005 Add bank resource accounting and exhaustion handling.
 - [x] U006 Implement game-over and winner flow.
-- [ ] U007 Implement development card deck and purchase flow.
-- [ ] U008 Implement knight cards and Largest Army.
-- [ ] U009 Implement Longest Road.
-- [ ] U010 Implement maritime trade and port benefits.
+- [x] U007 Implement development card deck and purchase flow.
+- [x] U008 Implement knight cards and Largest Army.
+- [x] U009 Implement Longest Road.
+- [x] U010 Implement maritime trade and port benefits.
 - [ ] U011 Auto-trigger Commerce Guild gatherings by interval.
 - [ ] U012 Improve auction validation and result display.
 - [ ] U013 Integrate Commerce Guild development-card rewards with the real card deck.

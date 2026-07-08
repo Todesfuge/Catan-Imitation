@@ -565,7 +565,7 @@ th {
   grid-column: 1 / -1;
   grid-row: 3;
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) repeat(5, auto) minmax(130px, 0.4fr);
+  grid-template-columns: minmax(220px, 1fr) repeat(8, auto) minmax(130px, 0.4fr);
   align-items: center;
   gap: 0.5rem;
   padding: 0.65rem;

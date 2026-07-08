@@ -2,12 +2,14 @@ import {
   addResourceMaps,
   emptyResources,
   resources,
+  type DevelopmentCardKind,
   type GameState,
   type Player,
   type PlayerId,
   type Resource,
   type ResourceMap
 } from "../types";
+import { createGuildDevelopmentCard } from "../rules/developmentCards";
 
 export type ResourceCost = Partial<Record<Resource, number>>;
 
@@ -22,7 +24,7 @@ export type GatheringPhase = "idle" | "redemption" | "auction" | "complete";
 export type BlindBoxOutcome =
   | { kind: "resources"; resources: ResourceMap }
   | { kind: "voucher" }
-  | { kind: "developmentCard"; card: string };
+  | { kind: "developmentCard"; card: DevelopmentCardKind };
 
 export interface GatheringState {
   phase: GatheringPhase;
@@ -312,7 +314,7 @@ function openBlindBox(random: () => number): BlindBoxOutcome {
   if (roll < 0.8) {
     return { kind: "voucher" };
   }
-  return { kind: "developmentCard", card: "progress" };
+  return { kind: "developmentCard", card: "knight" };
 }
 
 function applyBlindBoxOutcome(game: GameState, playerId: PlayerId, outcome: BlindBoxOutcome): GameState {
@@ -323,7 +325,13 @@ function applyBlindBoxOutcome(game: GameState, playerId: PlayerId, outcome: Blin
     if (outcome.kind === "voucher") {
       return { ...player, vouchers: player.vouchers + 1 };
     }
-    return { ...player, developmentCards: [...player.developmentCards, outcome.card] };
+    return {
+      ...player,
+      developmentCards: [
+        ...player.developmentCards,
+        createGuildDevelopmentCard(outcome.card, game, player)
+      ]
+    };
   });
 }
 
@@ -377,4 +385,3 @@ export function redeemPrizeCards(game: GameState, playerId: PlayerId): GameState
     };
   });
 }
-

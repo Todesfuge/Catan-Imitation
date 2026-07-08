@@ -39,22 +39,22 @@ This backlog records all known unfinished or improvable work after the MVP. Item
 
 ## Priority 2: Development Cards and Classic Catan Systems
 
-- [ ] U007 Implement development card deck and purchase flow.
+- [x] U007 Implement development card deck and purchase flow.
   - Current state: development cards are strings used only for simplified Commerce Guild rewards.
   - Target: deck contains knight, victory point, road building, year of plenty, and monopoly cards.
   - Acceptance: tests cover purchase cost, deck draw, hidden card ownership, and no same-turn play for non-victory cards.
 
-- [ ] U008 Implement knight cards and Largest Army.
+- [x] U008 Implement knight cards and Largest Army.
   - Current state: Largest Army is not implemented.
   - Target: playing knights moves the robber and awards Largest Army when the threshold is met.
   - Acceptance: tests cover threshold, tie behavior, and score contribution.
 
-- [ ] U009 Implement Longest Road.
+- [x] U009 Implement Longest Road.
   - Current state: Longest Road is not implemented.
   - Target: calculate each player's longest continuous road and award the bonus.
   - Acceptance: tests cover simple chain, branch handling, blocked paths, and ownership boundaries.
 
-- [ ] U010 Implement maritime trade and port benefits.
+- [x] U010 Implement maritime trade and port benefits.
   - Current state: ports are not represented in gameplay.
   - Target: generic 4:1, owned 3:1, and resource-specific 2:1 trades.
   - Acceptance: tests cover each trade ratio and ownership requirement.
