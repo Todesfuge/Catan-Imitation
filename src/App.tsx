@@ -21,7 +21,14 @@ import {
 import { createInitialAppState, gameReducer, type GameCommand } from "./app/gameReducer";
 import { getDiceIncome, getExpectedIncomeMatrix, getPlayerIncome } from "./domain/stats/income";
 import { calculatePlayerScore } from "./domain/rules/scoring";
-import { resources, type BoardHex, type Building, type ResourceMap } from "./domain/types";
+import {
+  resources,
+  type BoardEdge,
+  type BoardHex,
+  type Building,
+  type ResourceMap,
+  type Road
+} from "./domain/types";
 import type { ResourceCost } from "./domain/expansion/commerceGuild";
 
 type StatsMode = "player" | "dice" | "matrix";
@@ -79,23 +86,67 @@ function terrainLabel(hex: BoardHex) {
 
 function hexPosition(hex: BoardHex) {
   return {
-    x: 50 + hex.q * 11 + hex.r * 5.5,
-    y: 50 + hex.r * 9.5
+    x: 50 + hex.q * 9.2 + hex.r * 4.6,
+    y: 50 + hex.r * 17.2
+  };
+}
+
+function vertexPosition(hexes: BoardHex[], vertexId: string) {
+  const hex = hexes.find((candidate) => candidate.vertexIds.includes(vertexId));
+  if (!hex) {
+    return { x: 50, y: 50 };
+  }
+  const vertexIndex = Math.max(0, hex.vertexIds.indexOf(vertexId));
+  const center = hexPosition(hex);
+  const angle = ((vertexIndex * 60 - 90) * Math.PI) / 180;
+  return {
+    x: center.x + Math.cos(angle) * 5.3,
+    y: center.y + Math.sin(angle) * 8.6
   };
 }
 
 function buildingPosition(hexes: BoardHex[], building: Building) {
-  const hex = hexes.find((candidate) => candidate.vertexIds.includes(building.vertexId));
-  if (!hex) {
-    return { x: 50, y: 50 };
-  }
-  const vertexIndex = Math.max(0, hex.vertexIds.indexOf(building.vertexId));
-  const center = hexPosition(hex);
-  const angle = ((vertexIndex * 60 - 90) * Math.PI) / 180;
+  return vertexPosition(hexes, building.vertexId);
+}
+
+function edgePosition(hexes: BoardHex[], edge: BoardEdge) {
+  const from = vertexPosition(hexes, edge.vertexIds[0]);
+  const to = vertexPosition(hexes, edge.vertexIds[1]);
+  const deltaX = to.x - from.x;
+  const deltaY = to.y - from.y;
   return {
-    x: center.x + Math.cos(angle) * 5,
-    y: center.y + Math.sin(angle) * 5.5
+    x: (from.x + to.x) / 2,
+    y: (from.y + to.y) / 2,
+    length: Math.hypot(deltaX, deltaY),
+    angle: (Math.atan2(deltaY, deltaX) * 180) / Math.PI
   };
+}
+
+function RoadMarker({
+  edge,
+  hexes,
+  road,
+  ownerColor
+}: {
+  edge: BoardEdge;
+  hexes: BoardHex[];
+  road?: Road;
+  ownerColor?: string;
+}) {
+  const position = edgePosition(hexes, edge);
+  return (
+    <span
+      aria-hidden="true"
+      className={road ? "road-marker" : "edge-guide"}
+      style={{
+        left: `${position.x}%`,
+        top: `${position.y}%`,
+        width: `${position.length}%`,
+        transform: `translate(-50%, -50%) rotate(${position.angle}deg)`,
+        backgroundColor: road ? ownerColor : undefined
+      }}
+    />
+  );
 }
 
 function BoardView({
@@ -109,6 +160,9 @@ function BoardView({
   onUtilityOpen: (panel: Exclude<UtilityPanel, null>) => void;
   onFullscreen: () => void;
 }) {
+  const roadsByEdgeId = new Map(state.game.roads.map((road) => [road.edgeId, road]));
+  const playerColorById = new Map(state.game.players.map((player) => [player.id, player.color]));
+
   return (
     <section className="board-zone" aria-label="Catan board">
       <div className="utility-rail" aria-label="Utility controls">
@@ -126,6 +180,20 @@ function BoardView({
         </button>
       </div>
       <div className="island">
+        <div className="road-layer" aria-hidden="true">
+          {state.game.edges.map((edge) => {
+            const road = roadsByEdgeId.get(edge.id);
+            return (
+              <RoadMarker
+                edge={edge}
+                hexes={state.game.board}
+                key={edge.id}
+                ownerColor={road ? playerColorById.get(road.ownerId) : undefined}
+                road={road}
+              />
+            );
+          })}
+        </div>
         {state.game.board.map((hex) => {
           const position = hexPosition(hex);
           return (

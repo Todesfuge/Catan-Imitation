@@ -59,8 +59,9 @@ Status: Draft for implementation
 - [x] U023 Add PR and issue templates.
 - [x] U024 Add roadmap milestones.
 - [x] U025 Normalize board topology to shared Catan vertices and edges.
+- [x] U026 Separate board hexes visually and render road edges.
 
-Detailed acceptance criteria for U001-U025 live in [update-backlog.md](update-backlog.md).
+Detailed acceptance criteria for U001-U026 live in [update-backlog.md](update-backlog.md).
 
 ## Independent Acceptance Slices
 

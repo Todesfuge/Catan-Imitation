@@ -139,3 +139,8 @@ This backlog records all known unfinished or improvable work after the MVP. Item
   - Current state: `src/domain/board.ts` now deduplicates neighboring hex corners and sides into 54 shared vertices and 72 shared edges.
   - Target: settlements/cities live on real intersections, roads live on real edges, and production can pay from every terrain adjacent to a shared intersection.
   - Acceptance: production tests cover 54/72 topology counts and multi-hex production from one settlement vertex; full test/build/smoke verification passes.
+
+- [x] U026 Separate board hexes visually and render road edges.
+  - Current state: the board now uses wider axial spacing, visible hex drop-shadow boundaries, edge guide markers, and player-colored road markers for built roads.
+  - Target: neighboring hexes have clear visual boundaries and shared edges can be inspected as road positions.
+  - Acceptance: UI smoke checks road and edge marker classes, visible hex border styling, board panels, and responsive CSS.

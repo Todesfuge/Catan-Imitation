@@ -83,9 +83,12 @@ try {
     assert(js.includes(text), `Expected JavaScript bundle to include ${text}.`);
   }
 
-  for (const text of [".board-zone", ".activity-shell", ".terrain-icon"]) {
+  for (const text of [".board-zone", ".activity-shell", ".terrain-icon", ".edge-guide", ".road-marker"]) {
     assert(css.includes(text), `Expected CSS bundle to include ${text}.`);
   }
+  assert(js.includes("road-marker"), "Expected JavaScript bundle to render road markers.");
+  assert(js.includes("edge-guide"), "Expected JavaScript bundle to render board edge guides.");
+  assert(/filter:\s*drop-shadow/.test(css), "Expected hexes to have visible separated borders.");
   assert(/@media \(max-width:\s*640px\)/.test(css), "Expected CSS bundle to include the mobile breakpoint.");
 
   console.log("UI smoke passed: built preview exposes board, panels, activity, and responsive CSS.");
