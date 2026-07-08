@@ -7,10 +7,13 @@ export type ResourceMap = Record<Resource, number>;
 export type PlayerId = string;
 export type HexId = string;
 export type VertexId = string;
+export type EdgeId = string;
 
 export type Terrain = "forest" | "hill" | "pasture" | "field" | "mountain" | "desert";
 
 export type BuildingKind = "settlement" | "city";
+export type GamePhase = "setup" | "playing" | "gameOver";
+export type SetupStage = "settlement" | "road";
 
 export interface Player {
   id: PlayerId;
@@ -29,8 +32,15 @@ export interface BoardHex {
   resource: Resource | null;
   diceNumber: number | null;
   vertexIds: VertexId[];
+  edgeIds: EdgeId[];
   q: number;
   r: number;
+}
+
+export interface BoardEdge {
+  id: EdgeId;
+  hexId: HexId;
+  vertexIds: [VertexId, VertexId];
 }
 
 export interface Building {
@@ -43,7 +53,7 @@ export interface Building {
 export interface Road {
   id: string;
   ownerId: PlayerId;
-  edgeId: string;
+  edgeId: EdgeId;
 }
 
 export interface Bank {
@@ -55,18 +65,32 @@ export interface GameLogEntry {
   message: string;
 }
 
+export interface SetupState {
+  order: PlayerId[];
+  placementIndex: number;
+  stage: SetupStage;
+  pendingSettlement?: {
+    playerId: PlayerId;
+    vertexId: VertexId;
+  };
+}
+
 export interface GameState {
+  phase: GamePhase;
   players: Player[];
   activePlayerId: PlayerId;
   turn: number;
   round: number;
   targetScore: number;
   board: BoardHex[];
+  edges: BoardEdge[];
   buildings: Building[];
   roads: Road[];
   robberHexId: HexId;
   bank: Bank;
   log: GameLogEntry[];
+  setup?: SetupState;
+  winnerId?: PlayerId;
 }
 
 export interface ProductionEvent {
@@ -111,4 +135,3 @@ export function scaleResources(resourcesMap: ResourceMap, multiplier: number): R
     ore: resourcesMap.ore * multiplier
   };
 }
-

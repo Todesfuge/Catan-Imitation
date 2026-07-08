@@ -1,10 +1,14 @@
 import {
+  addResourceMaps,
   emptyResources,
   resources,
+  type BoardEdge,
+  type EdgeId,
   type GameState,
   type Player,
   type PlayerId,
-  type ResourceMap
+  type ResourceMap,
+  type VertexId
 } from "../types";
 
 export const buildCosts = {
@@ -50,19 +54,100 @@ function updatePlayer(game: GameState, playerId: PlayerId, update: (player: Play
   };
 }
 
-export function buildRoad(game: GameState, playerId: PlayerId, edgeId: string): GameState {
-  getPlayer(game, playerId);
+function payBuildCost(game: GameState, playerId: PlayerId, cost: ResourceMap): GameState {
+  const paidGame = updatePlayer(game, playerId, (player) => payCost(player, cost));
+  return {
+    ...paidGame,
+    bank: {
+      resources: addResourceMaps(paidGame.bank.resources, cost)
+    }
+  };
+}
+
+function getEdge(game: GameState, edgeId: EdgeId): BoardEdge | undefined {
+  return game.edges.find((edge) => edge.id === edgeId);
+}
+
+function isVertexOccupied(game: GameState, vertexId: VertexId): boolean {
+  return game.buildings.some((building) => building.vertexId === vertexId);
+}
+
+function getAdjacentVertexIds(game: GameState, vertexId: VertexId): Set<VertexId> {
+  const adjacent = new Set<VertexId>();
+
+  for (const edge of game.edges) {
+    if (!edge.vertexIds.includes(vertexId)) {
+      continue;
+    }
+
+    for (const candidate of edge.vertexIds) {
+      if (candidate !== vertexId) {
+        adjacent.add(candidate);
+      }
+    }
+  }
+
+  return adjacent;
+}
+
+function hasAdjacentBuilding(game: GameState, vertexId: VertexId): boolean {
+  const adjacent = getAdjacentVertexIds(game, vertexId);
+  return game.buildings.some((building) => adjacent.has(building.vertexId));
+}
+
+function assertSettlementLocation(game: GameState, vertexId: VertexId): void {
+  if (isVertexOccupied(game, vertexId)) {
+    throw new Error(`Building vertex is already occupied: ${vertexId}`);
+  }
+
+  if (hasAdjacentBuilding(game, vertexId)) {
+    throw new Error(`Settlement violates distance rule at vertex: ${vertexId}`);
+  }
+}
+
+function edgeConnectsToOwnedPiece(game: GameState, playerId: PlayerId, edge: BoardEdge): boolean {
+  const endpointIds = new Set(edge.vertexIds);
+  const touchesOwnedBuilding = game.buildings.some(
+    (building) => building.ownerId === playerId && endpointIds.has(building.vertexId)
+  );
+  if (touchesOwnedBuilding) {
+    return true;
+  }
+
+  return game.roads.some((road) => {
+    if (road.ownerId !== playerId) {
+      return false;
+    }
+
+    const ownedEdge = getEdge(game, road.edgeId);
+    return ownedEdge?.vertexIds.some((vertexId) => endpointIds.has(vertexId)) ?? false;
+  });
+}
+
+function assertRoadLocation(game: GameState, playerId: PlayerId, edgeId: EdgeId): BoardEdge {
+  const edge = getEdge(game, edgeId);
+  if (!edge) {
+    throw new Error(`Road must connect to an owned building or road: ${edgeId}`);
+  }
+
   if (game.roads.some((road) => road.edgeId === edgeId)) {
     throw new Error(`Road edge is already occupied: ${edgeId}`);
   }
 
-  const paidGame = updatePlayer(game, playerId, (player) => payCost(player, buildCosts.road));
+  if (!edgeConnectsToOwnedPiece(game, playerId, edge)) {
+    throw new Error(`Road must connect to an owned building or road: ${edgeId}`);
+  }
+
+  return edge;
+}
+
+function addRoad(game: GameState, playerId: PlayerId, edgeId: EdgeId, prefix = "built-road"): GameState {
   return {
-    ...paidGame,
+    ...game,
     roads: [
-      ...paidGame.roads,
+      ...game.roads,
       {
-        id: `built-road-${playerId}-${edgeId}`,
+        id: `${prefix}-${playerId}-${edgeId}`,
         ownerId: playerId,
         edgeId
       }
@@ -70,19 +155,13 @@ export function buildRoad(game: GameState, playerId: PlayerId, edgeId: string): 
   };
 }
 
-export function buildSettlement(game: GameState, playerId: PlayerId, vertexId: string): GameState {
-  getPlayer(game, playerId);
-  if (game.buildings.some((building) => building.vertexId === vertexId)) {
-    throw new Error(`Building vertex is already occupied: ${vertexId}`);
-  }
-
-  const paidGame = updatePlayer(game, playerId, (player) => payCost(player, buildCosts.settlement));
+function addSettlement(game: GameState, playerId: PlayerId, vertexId: VertexId, prefix = "built-settlement"): GameState {
   return {
-    ...paidGame,
+    ...game,
     buildings: [
-      ...paidGame.buildings,
+      ...game.buildings,
       {
-        id: `built-settlement-${playerId}-${vertexId}`,
+        id: `${prefix}-${playerId}-${vertexId}`,
         ownerId: playerId,
         vertexId,
         kind: "settlement"
@@ -91,13 +170,35 @@ export function buildSettlement(game: GameState, playerId: PlayerId, vertexId: s
   };
 }
 
+export function buildRoad(game: GameState, playerId: PlayerId, edgeId: EdgeId): GameState {
+  if (game.phase === "setup") {
+    throw new Error("Use setup placement during setup.");
+  }
+  getPlayer(game, playerId);
+  assertRoadLocation(game, playerId, edgeId);
+
+  const paidGame = payBuildCost(game, playerId, buildCosts.road);
+  return addRoad(paidGame, playerId, edgeId);
+}
+
+export function buildSettlement(game: GameState, playerId: PlayerId, vertexId: VertexId): GameState {
+  if (game.phase === "setup") {
+    throw new Error("Use setup placement during setup.");
+  }
+  getPlayer(game, playerId);
+  assertSettlementLocation(game, vertexId);
+
+  const paidGame = payBuildCost(game, playerId, buildCosts.settlement);
+  return addSettlement(paidGame, playerId, vertexId);
+}
+
 export function buildCity(game: GameState, playerId: PlayerId, buildingId: string): GameState {
   const building = game.buildings.find((candidate) => candidate.id === buildingId);
   if (!building || building.ownerId !== playerId || building.kind !== "settlement") {
     throw new Error("City upgrades require one of the player's settlements.");
   }
 
-  const paidGame = updatePlayer(game, playerId, (player) => payCost(player, buildCosts.city));
+  const paidGame = payBuildCost(game, playerId, buildCosts.city);
   return {
     ...paidGame,
     buildings: paidGame.buildings.map((candidate) =>
@@ -106,3 +207,80 @@ export function buildCity(game: GameState, playerId: PlayerId, buildingId: strin
   };
 }
 
+export function placeSetupSettlement(
+  game: GameState,
+  playerId: PlayerId,
+  vertexId: VertexId
+): GameState {
+  if (game.phase !== "setup" || !game.setup) {
+    throw new Error("Setup settlement placement is only available during setup.");
+  }
+
+  if (game.setup.stage !== "settlement") {
+    throw new Error("A setup road must be placed before the next settlement.");
+  }
+
+  if (game.activePlayerId !== playerId || game.setup.order[game.setup.placementIndex] !== playerId) {
+    throw new Error("It is not this player's setup placement.");
+  }
+
+  getPlayer(game, playerId);
+  assertSettlementLocation(game, vertexId);
+
+  return {
+    ...addSettlement(game, playerId, vertexId, "setup-settlement"),
+    setup: {
+      ...game.setup,
+      stage: "road",
+      pendingSettlement: {
+        playerId,
+        vertexId
+      }
+    }
+  };
+}
+
+export function placeSetupRoad(game: GameState, playerId: PlayerId, edgeId: EdgeId): GameState {
+  if (game.phase !== "setup" || !game.setup) {
+    throw new Error("Setup road placement is only available during setup.");
+  }
+
+  if (game.setup.stage !== "road" || game.setup.pendingSettlement?.playerId !== playerId) {
+    throw new Error("A setup settlement must be placed before its road.");
+  }
+
+  if (game.activePlayerId !== playerId) {
+    throw new Error("It is not this player's setup placement.");
+  }
+
+  const edge = getEdge(game, edgeId);
+  if (!edge || !edge.vertexIds.includes(game.setup.pendingSettlement.vertexId)) {
+    throw new Error(`Setup road must touch the just-placed settlement: ${edgeId}`);
+  }
+
+  if (game.roads.some((road) => road.edgeId === edgeId)) {
+    throw new Error(`Road edge is already occupied: ${edgeId}`);
+  }
+
+  const roadGame = addRoad(game, playerId, edgeId, "setup-road");
+  const nextPlacementIndex = game.setup.placementIndex + 1;
+
+  if (nextPlacementIndex >= game.setup.order.length) {
+    return {
+      ...roadGame,
+      phase: "playing",
+      activePlayerId: game.setup.order[0],
+      setup: undefined
+    };
+  }
+
+  return {
+    ...roadGame,
+    activePlayerId: game.setup.order[nextPlacementIndex],
+    setup: {
+      order: game.setup.order,
+      placementIndex: nextPlacementIndex,
+      stage: "settlement"
+    }
+  };
+}

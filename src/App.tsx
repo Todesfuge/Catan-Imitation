@@ -487,6 +487,24 @@ function ActionBar({
   dispatch: (command: GameCommand) => void;
 }) {
   const activePlayer = state.game.players.find((player) => player.id === state.game.activePlayerId);
+  const ownedBuildingVertices = new Set(
+    state.game.buildings
+      .filter((building) => building.ownerId === activePlayer?.id)
+      .map((building) => building.vertexId)
+  );
+  const ownedRoadVertices = new Set(
+    state.game.roads
+      .filter((road) => road.ownerId === activePlayer?.id)
+      .flatMap((road) => state.game.edges.find((edge) => edge.id === road.edgeId)?.vertexIds ?? [])
+  );
+  const occupiedRoadEdgeIds = new Set(state.game.roads.map((road) => road.edgeId));
+  const nextRoadEdge = state.game.edges.find(
+    (edge) =>
+      !occupiedRoadEdgeIds.has(edge.id) &&
+      edge.vertexIds.some(
+        (vertexId) => ownedBuildingVertices.has(vertexId) || ownedRoadVertices.has(vertexId)
+      )
+  )?.id;
   const nextVertex = state.game.board
     .flatMap((hex) => hex.vertexIds)
     .find((vertexId) => !state.game.buildings.some((building) => building.vertexId === vertexId));
@@ -509,8 +527,10 @@ function ActionBar({
       <button
         onClick={() =>
           activePlayer &&
-          dispatch({ type: "BUILD_ROAD", playerId: activePlayer.id, edgeId: `edge-${state.game.turn}` })
+          nextRoadEdge &&
+          dispatch({ type: "BUILD_ROAD", playerId: activePlayer.id, edgeId: nextRoadEdge })
         }
+        disabled={!nextRoadEdge}
         type="button"
       >
         <Hammer size={20} /> Road

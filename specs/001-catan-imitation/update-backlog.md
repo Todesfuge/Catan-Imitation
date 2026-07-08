@@ -7,32 +7,32 @@ This backlog records all known unfinished or improvable work after the MVP. Item
 
 ## Priority 1: Core Rule Completeness
 
-- [ ] U001 Add full setup placement flow.
+- [x] U001 Add full setup placement flow.
   - Current state: demo preset creates initial buildings automatically.
   - Target: players can place initial settlements and roads in correct snake order.
   - Acceptance: setup phase blocks normal turns until every player has completed required initial placements.
 
-- [ ] U002 Enforce settlement distance and occupied-vertex legality.
+- [x] U002 Enforce settlement distance and occupied-vertex legality.
   - Current state: occupied vertices are blocked, but Catan distance rule is not enforced.
   - Target: settlement placement rejects adjacent occupied vertices.
   - Acceptance: tests cover valid placement, occupied vertex rejection, and adjacent settlement rejection.
 
-- [ ] U003 Enforce road connectivity and ownership legality.
+- [x] U003 Enforce road connectivity and ownership legality.
   - Current state: roads can be built on any unused demo edge.
   - Target: new roads must connect to the player's road network or owned building.
   - Acceptance: tests cover connected road acceptance, disconnected road rejection, and occupied edge rejection.
 
-- [ ] U004 Implement full 7-roll robber flow.
+- [x] U004 Implement full 7-roll robber flow.
   - Current state: robber can move and blocks production.
   - Target: rolling 7 triggers discard for players above hand limit, robber movement, and optional random steal from adjacent opponent.
   - Acceptance: tests cover discard rounding, robber movement, and steal/no-steal outcomes.
 
-- [ ] U005 Add bank resource accounting and exhaustion handling.
+- [x] U005 Add bank resource accounting and exhaustion handling.
   - Current state: player hands update, but the bank is mostly visual.
   - Target: production and builds update bank counts; exhausted resources are not overpaid.
   - Acceptance: tests cover bank decrement, build refund to bank, and limited production when bank is short.
 
-- [ ] U006 Implement game-over and winner flow.
+- [x] U006 Implement game-over and winner flow.
   - Current state: score is calculated but no winner state ends the game.
   - Target: reaching target score on the active player's turn creates a winner state and blocks further actions.
   - Acceptance: tests cover normal scoring below target and winner detection at target.
@@ -134,4 +134,3 @@ This backlog records all known unfinished or improvable work after the MVP. Item
   - Current state: future work is documented in this backlog only.
   - Target: group follow-up work into reviewable milestones: rules, expansion, UI polish, delivery.
   - Acceptance: README or docs expose the milestone order clearly.
-

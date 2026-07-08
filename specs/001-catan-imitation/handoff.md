@@ -1,7 +1,7 @@
 # Handoff: Catan Imitation MVP
 
 Date: 2026-07-08
-Scope: MVP implementation through T001-T026
+Scope: MVP implementation through T001-T026, plus U001-U006 core rule updates
 
 ## Overview
 
@@ -18,8 +18,12 @@ Catan Imitation is now a local hot-seat TypeScript browser prototype. It recreat
   - bottom action bar
   - statistics and commerce panels
 - Dice production with robber blocking.
+- Setup placement phase with settlement-road pairs in snake order.
 - Clickable hexes for robber movement.
-- Build road, settlement, and city commands for demo-valid targets.
+- Build road, settlement, and city commands with occupied-location, settlement-distance, and road-connectivity checks.
+- Bank-aware production and build-cost accounting, including short-bank production caps.
+- 7-roll handling for over-limit discards, robber movement, and optional stealing from adjacent opponents.
+- Game-over state and winner id once the active player reaches the target score.
 - Score calculation from settlements, cities, and Commerce Guild prize cards.
 - Statistics modes for player query, dice query, and expected income matrix.
 - Commerce Guild:
@@ -41,8 +45,8 @@ pnpm build
 
 Latest results:
 
-- 4 test files passed.
-- 11 tests passed.
+- 5 test files passed.
+- 18 tests passed.
 - Production build completed with Vite.
 
 Browser smoke checks:
@@ -53,7 +57,7 @@ Browser smoke checks:
 ## Known Limits
 
 - Multiplayer is local hot-seat only.
-- Board geometry is fixed and demo-oriented; it does not yet enforce full Catan settlement distance and road connectivity rules.
+- Board geometry is fixed and demo-oriented; follow-up work is still needed for true shared intersections across neighboring hexes.
 - Development cards are represented minimally for Commerce Guild rewards.
 - Longest road, largest army, maritime port trading, and AI players remain stretch tasks.
 - Visual assets are original CSS shapes and labels rather than polished production art.
@@ -61,5 +65,4 @@ Browser smoke checks:
 ## Next Steps
 
 - Follow the ordered backlog in [update-backlog.md](update-backlog.md).
-- Start with U001-U006 to raise the core rules from demo-valid to rules-complete.
-- Then implement U007-U010 for classic Catan systems, U011-U014 for Commerce Guild polish, U015-U019 for product polish, and U020-U024 for delivery automation.
+- Continue with U007-U010 for classic Catan systems, U011-U014 for Commerce Guild polish, U015-U019 for product polish, and U020-U024 for delivery automation.

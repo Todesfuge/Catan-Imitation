@@ -34,12 +34,12 @@ Status: Draft for implementation
 
 ## Stretch Tasks
 
-- [ ] U001 Add full setup placement flow.
-- [ ] U002 Enforce settlement distance and occupied-vertex legality.
-- [ ] U003 Enforce road connectivity and ownership legality.
-- [ ] U004 Implement full 7-roll robber flow.
-- [ ] U005 Add bank resource accounting and exhaustion handling.
-- [ ] U006 Implement game-over and winner flow.
+- [x] U001 Add full setup placement flow.
+- [x] U002 Enforce settlement distance and occupied-vertex legality.
+- [x] U003 Enforce road connectivity and ownership legality.
+- [x] U004 Implement full 7-roll robber flow.
+- [x] U005 Add bank resource accounting and exhaustion handling.
+- [x] U006 Implement game-over and winner flow.
 - [ ] U007 Implement development card deck and purchase flow.
 - [ ] U008 Implement knight cards and Largest Army.
 - [ ] U009 Implement Longest Road.

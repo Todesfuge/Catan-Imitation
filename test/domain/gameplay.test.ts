@@ -18,16 +18,23 @@ describe("core gameplay rules", () => {
       )
     };
 
-    const roadGame = buildRoad(richGame, "p1", "edge-a");
+    const roadGame = buildRoad(richGame, "p1", "pasture-8-e0");
     const settlementGame = buildSettlement(roadGame, "p1", "forest-4-v0");
     const cityGame = buildCity(settlementGame, "p1", "built-settlement-p1-forest-4-v0");
     const p1 = cityGame.players.find((player) => player.id === "p1");
 
-    expect(cityGame.roads.some((road) => road.edgeId === "edge-a")).toBe(true);
+    expect(cityGame.roads.some((road) => road.edgeId === "pasture-8-e0")).toBe(true);
     expect(cityGame.buildings.find((building) => building.vertexId === "forest-4-v0")?.kind).toBe(
       "city"
     );
     expect(p1?.resources).toMatchObject({ wood: 1, brick: 1, wool: 0, grain: 0, ore: 0 });
+    expect(cityGame.bank.resources).toMatchObject({
+      wood: 21,
+      brick: 21,
+      wool: 20,
+      grain: 22,
+      ore: 22
+    });
   });
 
   it("counts settlements, cities, and commerce prize cards toward score", () => {
@@ -55,4 +62,3 @@ describe("core gameplay rules", () => {
     expect(next.game.log[0].message).toContain("rolled 8");
   });
 });
-

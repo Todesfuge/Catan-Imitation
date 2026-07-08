@@ -1,4 +1,4 @@
-import type { BoardHex } from "./types";
+import type { BoardEdge, BoardHex } from "./types";
 
 const ringCoords = [
   [0, -2],
@@ -44,15 +44,38 @@ const terrainPlan: Array<Pick<BoardHex, "id" | "terrain" | "resource" | "diceNum
   { id: "desert", terrain: "desert", resource: null, diceNumber: null }
 ];
 
-export function createStandardBoard(): BoardHex[] {
-  return terrainPlan.map((hex, index) => {
+export interface StandardBoardData {
+  board: BoardHex[];
+  edges: BoardEdge[];
+}
+
+export function createStandardBoardData(): StandardBoardData {
+  const edges: BoardEdge[] = [];
+  const board = terrainPlan.map((hex, index) => {
     const [q, r] = ringCoords[index];
+    const vertexIds = Array.from({ length: 6 }, (_, vertexIndex) => `${hex.id}-v${vertexIndex}`);
+    const edgeIds = Array.from({ length: 6 }, (_, edgeIndex) => `${hex.id}-e${edgeIndex}`);
+
+    edgeIds.forEach((edgeId, edgeIndex) => {
+      edges.push({
+        id: edgeId,
+        hexId: hex.id,
+        vertexIds: [vertexIds[edgeIndex], vertexIds[(edgeIndex + 1) % vertexIds.length]]
+      });
+    });
+
     return {
       ...hex,
       q,
       r,
-      vertexIds: Array.from({ length: 6 }, (_, vertexIndex) => `${hex.id}-v${vertexIndex}`)
+      vertexIds,
+      edgeIds
     };
   });
+
+  return { board, edges };
 }
 
+export function createStandardBoard(): BoardHex[] {
+  return createStandardBoardData().board;
+}

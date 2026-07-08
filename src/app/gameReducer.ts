@@ -12,11 +12,11 @@ import {
   type TradeSlot
 } from "../domain/expansion/commerceGuild";
 import { createDemoGame } from "../domain/setup";
-import { collectProduction } from "../domain/rules/production";
+import { applyProduction, resolveSevenRoll } from "../domain/rules/production";
 import { advanceTurn } from "../domain/rules/turns";
 import { buildCity, buildRoad, buildSettlement } from "../domain/rules/building";
+import { calculatePlayerScore } from "../domain/rules/scoring";
 import {
-  addResourceMaps,
   resources,
   type GameLogEntry,
   type GameState,
@@ -81,6 +81,32 @@ function generateTradeSlot(seed: number): TradeSlot {
   };
 }
 
+function assertCanUseNormalAction(game: GameState): void {
+  if (game.phase === "setup") {
+    throw new Error("This action is unavailable during setup.");
+  }
+
+  if (game.phase === "gameOver") {
+    throw new Error("The game is already over.");
+  }
+}
+
+function withWinnerState(game: GameState, playerId = game.activePlayerId): GameState {
+  if (game.phase === "gameOver") {
+    return game;
+  }
+
+  if (calculatePlayerScore(game, playerId) < game.targetScore) {
+    return game;
+  }
+
+  return {
+    ...game,
+    phase: "gameOver",
+    winnerId: playerId
+  };
+}
+
 export function createInitialAppState(): AppState {
   const game = createDemoGame();
   return {
@@ -92,20 +118,24 @@ export function createInitialAppState(): AppState {
   };
 }
 
-function applyProductionToHands(game: GameState, diceTotal: number): GameState {
-  const production = collectProduction(game, diceTotal);
+function applyDiceRoll(game: GameState, diceTotal: number): GameState {
+  if (diceTotal === 7) {
+    const robberGame = resolveSevenRoll(game, game.robberHexId);
+    return {
+      ...robberGame,
+      log: [log("A 7 was rolled; robber pressure resolved."), ...robberGame.log]
+    };
+  }
+
+  const production = applyProduction(game, diceTotal);
 
   return {
-    ...game,
-    players: game.players.map((player) => ({
-      ...player,
-      resources: addResourceMaps(player.resources, production.byPlayer[player.id])
-    })),
+    ...production.game,
     log: [
       log(
         `${game.players.find((player) => player.id === game.activePlayerId)?.name ?? "Player"} rolled ${diceTotal}; ${production.events.length} production events resolved.`
       ),
-      ...game.log
+      ...production.game.log
     ]
   };
 }
@@ -113,15 +143,17 @@ function applyProductionToHands(game: GameState, diceTotal: number): GameState {
 export function gameReducer(state: AppState, command: GameCommand): AppState {
   switch (command.type) {
     case "ROLL_DICE": {
+      assertCanUseNormalAction(state.game);
       const [first, second] = command.dice ?? [rollDie(), rollDie()];
       const total = first + second;
       return {
         ...state,
-        game: applyProductionToHands(state.game, total),
+        game: withWinnerState(applyDiceRoll(state.game, total)),
         lastDice: { first, second, total }
       };
     }
     case "END_TURN":
+      assertCanUseNormalAction(state.game);
       return {
         ...state,
         game: advanceTurn(state.game),
@@ -131,21 +163,25 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
         }
       };
     case "BUILD_ROAD":
+      assertCanUseNormalAction(state.game);
       return {
         ...state,
         game: buildRoad(state.game, command.playerId, command.edgeId)
       };
     case "BUILD_SETTLEMENT":
+      assertCanUseNormalAction(state.game);
       return {
         ...state,
-        game: buildSettlement(state.game, command.playerId, command.vertexId)
+        game: withWinnerState(buildSettlement(state.game, command.playerId, command.vertexId), command.playerId)
       };
     case "BUILD_CITY":
+      assertCanUseNormalAction(state.game);
       return {
         ...state,
-        game: buildCity(state.game, command.playerId, command.buildingId)
+        game: withWinnerState(buildCity(state.game, command.playerId, command.buildingId), command.playerId)
       };
     case "PLACE_ROBBER":
+      assertCanUseNormalAction(state.game);
       return {
         ...state,
         game: {
@@ -155,6 +191,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
         }
       };
     case "COMPLETE_TRADE_SLOT": {
+      assertCanUseNormalAction(state.game);
       const result = completeTradeSlot(
         state.game,
         state.guild,
@@ -172,6 +209,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
       };
     }
     case "TRANSFER_TOKENS":
+      assertCanUseNormalAction(state.game);
       return {
         ...state,
         game: {
@@ -190,6 +228,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
         }
       };
     case "START_GATHERING":
+      assertCanUseNormalAction(state.game);
       return {
         ...state,
         guild: startGuildGathering(state.guild),
@@ -199,6 +238,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
         }
       };
     case "OPEN_AUCTION":
+      assertCanUseNormalAction(state.game);
       return {
         ...state,
         guild: openGuildAuction(state.guild),
@@ -208,6 +248,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
         }
       };
     case "REDEEM_GATHERING": {
+      assertCanUseNormalAction(state.game);
       const result = redeemGatheringResources(state.game, state.guild, command.playerId, command.resources);
       return {
         ...state,
@@ -219,6 +260,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
       };
     }
     case "RESOLVE_AUCTION": {
+      assertCanUseNormalAction(state.game);
       const result = resolveAuctionRound(state.game, state.guild, command.bids);
       return {
         ...state,
@@ -235,10 +277,11 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
       };
     }
     case "REDEEM_PRIZE":
+      assertCanUseNormalAction(state.game);
       return {
         ...state,
         game: {
-          ...redeemPrizeCards(state.game, command.playerId),
+          ...withWinnerState(redeemPrizeCards(state.game, command.playerId), command.playerId),
           log: [log(`${command.playerId} redeemed vouchers for prize cards.`), ...state.game.log]
         }
       };

@@ -1,4 +1,4 @@
-import { createStandardBoard } from "./board";
+import { createStandardBoardData } from "./board";
 import { emptyResources, type GameState, type Player } from "./types";
 
 function createPlayer(id: string, name: string, color: string): Player {
@@ -14,21 +14,39 @@ function createPlayer(id: string, name: string, color: string): Player {
   };
 }
 
+function createPlayers(): Player[] {
+  return [
+    createPlayer("p1", "Voyage1969", "#f2f2f2"),
+    createPlayer("p2", "Loss", "#ef4444"),
+    createPlayer("p3", "Kay", "#f97316"),
+    createPlayer("p4", "Amias", "#2563eb")
+  ];
+}
+
+function createBank() {
+  return {
+    resources: {
+      wood: 19,
+      brick: 19,
+      wool: 19,
+      grain: 19,
+      ore: 19
+    }
+  };
+}
+
 export function createDemoGame(): GameState {
-  const board = createStandardBoard();
+  const { board, edges } = createStandardBoardData();
 
   return {
-    players: [
-      createPlayer("p1", "Voyage1969", "#f2f2f2"),
-      createPlayer("p2", "Loss", "#ef4444"),
-      createPlayer("p3", "Kay", "#f97316"),
-      createPlayer("p4", "Amias", "#2563eb")
-    ],
+    phase: "playing",
+    players: createPlayers(),
     activePlayerId: "p1",
     turn: 1,
     round: 1,
     targetScore: 10,
     board,
+    edges,
     buildings: [
       {
         id: "b-p1-city-pasture-8",
@@ -45,15 +63,7 @@ export function createDemoGame(): GameState {
     ],
     roads: [],
     robberHexId: "desert",
-    bank: {
-      resources: {
-        wood: 19,
-        brick: 19,
-        wool: 19,
-        grain: 19,
-        ore: 19
-      }
-    },
+    bank: createBank(),
     log: [
       {
         id: "log-welcome",
@@ -63,3 +73,32 @@ export function createDemoGame(): GameState {
   };
 }
 
+export function createSetupGame(): GameState {
+  const { board, edges } = createStandardBoardData();
+
+  return {
+    phase: "setup",
+    players: createPlayers(),
+    activePlayerId: "p1",
+    turn: 1,
+    round: 1,
+    targetScore: 10,
+    board,
+    edges,
+    buildings: [],
+    roads: [],
+    robberHexId: "desert",
+    bank: createBank(),
+    setup: {
+      order: ["p1", "p2", "p3", "p4", "p4", "p3", "p2", "p1"],
+      placementIndex: 0,
+      stage: "settlement"
+    },
+    log: [
+      {
+        id: "log-setup",
+        message: "Setup started. Place settlements and roads in snake order."
+      }
+    ]
+  };
+}
