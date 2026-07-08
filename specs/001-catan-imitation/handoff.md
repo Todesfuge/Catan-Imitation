@@ -60,9 +60,6 @@ Browser smoke checks:
 
 ## Next Steps
 
-- Add full Catan build legality: settlement distance, road adjacency, and port trades.
-- Add development card deck timing and card-specific effects.
-- Add richer setup placement flow.
-- Add GitHub Actions for `pnpm test` and `pnpm build`.
-- Push to `https://github.com/Todesfuge/Catan-Imitation` after deciding branch policy.
-
+- Follow the ordered backlog in [update-backlog.md](update-backlog.md).
+- Start with U001-U006 to raise the core rules from demo-valid to rules-complete.
+- Then implement U007-U010 for classic Catan systems, U011-U014 for Commerce Guild polish, U015-U019 for product polish, and U020-U024 for delivery automation.

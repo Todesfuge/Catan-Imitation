@@ -34,11 +34,32 @@ Status: Draft for implementation
 
 ## Stretch Tasks
 
-- [ ] S001 Longest road calculation.
-- [ ] S002 Largest army and fuller development card timing.
-- [ ] S003 Maritime trade UI using ports.
-- [ ] S004 Simple bot action suggestions for non-human players.
-- [ ] S005 Responsive mobile layout.
+- [ ] U001 Add full setup placement flow.
+- [ ] U002 Enforce settlement distance and occupied-vertex legality.
+- [ ] U003 Enforce road connectivity and ownership legality.
+- [ ] U004 Implement full 7-roll robber flow.
+- [ ] U005 Add bank resource accounting and exhaustion handling.
+- [ ] U006 Implement game-over and winner flow.
+- [ ] U007 Implement development card deck and purchase flow.
+- [ ] U008 Implement knight cards and Largest Army.
+- [ ] U009 Implement Longest Road.
+- [ ] U010 Implement maritime trade and port benefits.
+- [ ] U011 Auto-trigger Commerce Guild gatherings by interval.
+- [ ] U012 Improve auction validation and result display.
+- [ ] U013 Integrate Commerce Guild development-card rewards with the real card deck.
+- [ ] U014 Improve token transfer UX and log naming.
+- [ ] U015 Connect left utility rail actions.
+- [ ] U016 Add guided phase prompts and error recovery.
+- [ ] U017 Improve board visual fidelity and inspectability.
+- [ ] U018 Add real local chat or remove chat affordance.
+- [ ] U019 Harden mobile layout.
+- [ ] U020 Add GitHub Actions CI.
+- [ ] U021 Add deployment.
+- [ ] U022 Add UI smoke tests.
+- [ ] U023 Add PR and issue templates.
+- [ ] U024 Add roadmap milestones.
+
+Detailed acceptance criteria for U001-U024 live in [update-backlog.md](update-backlog.md).
 
 ## Independent Acceptance Slices
 
