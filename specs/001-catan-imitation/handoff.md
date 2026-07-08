@@ -1,7 +1,7 @@
 # Handoff: Catan Imitation MVP
 
 Date: 2026-07-08
-Scope: MVP implementation through T001-T026, plus U001-U014 core, classic-system, and Commerce Guild updates
+Scope: MVP implementation through T001-T026, plus U001-U019 core, classic-system, Commerce Guild, and product-polish updates
 
 ## Overview
 
@@ -14,9 +14,18 @@ Catan Imitation is now a local hot-seat TypeScript browser prototype. It recreat
 - Desktop-first game table UI:
   - central hex board
   - left utility rail
-  - right log/chat/bank/player rail
+  - right log/activity/bank/player rail
   - bottom action bar
   - statistics and commerce panels
+- Connected utility rail actions:
+  - settings modal
+  - rulebook modal
+  - project info modal
+  - browser fullscreen request with recoverable fallback
+- Action-bar phase guidance and recoverable toast errors.
+- Improved board inspectability with terrain badges, readable terrain names, number-token pips, robber marker, settlements, and cities.
+- Activity summary replacing the earlier nonfunctional chat affordance.
+- Mobile/tablet layout hardening for stacked panels and compact two-column controls.
 - Dice production with robber blocking.
 - Setup placement phase with settlement-road pairs in snake order.
 - Clickable hexes for robber movement.
@@ -51,24 +60,26 @@ pnpm build
 
 Latest results:
 
-- 7 test files passed.
-- 26 tests passed.
+- 8 test files passed.
+- 29 tests passed.
 - Production build completed with Vite.
 
 Browser smoke checks:
 
-- Desktop `1280x720`: app renders in one viewport, action bar visible, 19 hexes, 4 player panels, statistics panel, and Commerce Guild panel present.
-- Mobile `390x844`: no horizontal overflow, 19 hexes render, statistics and Commerce Guild content remain reachable by vertical scroll.
+- Desktop `1280x720`: app renders, no horizontal overflow, utility labels present, 19 hexes, 19 terrain badges, 18 dice-pip groups, Activity panel, phase guidance, statistics panel, and Commerce Guild panel present.
+- Utility modal: Settings opens a visible dialog with active player, target score, round, and guild phase; close control is present.
+- Mobile `390x844`: no horizontal overflow, 19 hexes render, Activity and phase guidance remain visible.
+- Tablet `768x1024`: no horizontal overflow, 19 hexes render, Activity and phase guidance remain visible.
 
 ## Known Limits
 
 - Multiplayer is local hot-seat only.
 - Board geometry is fixed and demo-oriented; follow-up work is still needed for true shared intersections across neighboring hexes.
-- Commerce Guild UI controls are functional but still compact; guided prompts and stronger visual feedback remain product-polish work.
+- Commerce Guild UI controls are functional but still compact; deeper visual polish and automated browser smoke tests remain follow-up work.
 - AI players remain out of scope.
 - Visual assets are original CSS shapes and labels rather than polished production art.
 
 ## Next Steps
 
 - Follow the ordered backlog in [update-backlog.md](update-backlog.md).
-- Continue with U015-U019 for product polish and U020-U024 for delivery automation.
+- Continue with U020-U024 for delivery automation, CI, deployment, UI smoke automation, and repository templates.

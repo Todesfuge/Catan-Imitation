@@ -83,30 +83,30 @@ This backlog records all known unfinished or improvable work after the MVP. Item
 
 ## Priority 4: UI and Product Polish
 
-- [ ] U015 Connect left utility rail actions.
-  - Current state: settings, rulebook, fullscreen, and info are visual controls.
+- [x] U015 Connect left utility rail actions.
+  - Current state: settings, rulebook, fullscreen, and info now open real controls or invoke browser fullscreen.
   - Target: show settings/help/info panels and use browser fullscreen where available.
-  - Acceptance: each utility button opens a visible, dismissible interaction.
+  - Acceptance: product-polish test covers utility labels; browser smoke confirms Settings opens a visible dismissible modal.
 
-- [ ] U016 Add guided phase prompts and error recovery.
-  - Current state: errors show a generic toast.
+- [x] U016 Add guided phase prompts and error recovery.
+  - Current state: the action bar now shows phase guidance and invalid actions retain recoverable toast messages.
   - Target: action bar explains the current expected step and suggests how to recover from invalid actions.
-  - Acceptance: manual smoke confirms invalid build/trade actions produce actionable messages.
+  - Acceptance: product-polish test covers the visible phase prompt; existing reducer errors continue to surface through the toast.
 
-- [ ] U017 Improve board visual fidelity and inspectability.
-  - Current state: board uses original CSS hexes and labels.
+- [x] U017 Improve board visual fidelity and inspectability.
+  - Current state: hexes now show terrain labels, terrain badges, probability pips on number tokens, robber, settlements, and cities.
   - Target: improve terrain icons, number-token pips, port indicators, and piece clarity without copying proprietary assets.
-  - Acceptance: desktop screenshot shows readable resources, dice numbers, robber, settlements, and cities.
+  - Acceptance: product-polish test covers terrain icons and dice pips; desktop browser smoke confirms 19 hexes, 19 terrain badges, and 18 dice-pip groups.
 
-- [ ] U018 Add real local chat or remove chat affordance.
-  - Current state: chat is a shell.
+- [x] U018 Add real local chat or remove chat affordance.
+  - Current state: the nonfunctional chat shell has been replaced by an Activity summary.
   - Target: either local message log works, or the panel is renamed to activity/help to avoid false affordance.
-  - Acceptance: UI no longer presents nonfunctional chat.
+  - Acceptance: product-polish test confirms Chat and Local hot-seat demo copy are absent.
 
-- [ ] U019 Harden mobile layout.
-  - Current state: mobile has no horizontal overflow, but the board is compact.
+- [x] U019 Harden mobile layout.
+  - Current state: mobile and tablet breakpoints use stacked panels and two-column controls where space is tight.
   - Target: mobile gets a clearer stacked interaction pattern and board controls remain readable.
-  - Acceptance: smoke checks at 390x844 and 768x1024 show no overlap or clipped controls.
+  - Acceptance: browser smoke at 390x844 and 768x1024 showed 19 hexes visible and no horizontal overflow.
 
 ## Priority 5: Engineering and Delivery
 

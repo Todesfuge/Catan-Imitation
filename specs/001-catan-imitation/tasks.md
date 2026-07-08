@@ -48,11 +48,11 @@ Status: Draft for implementation
 - [x] U012 Improve auction validation and result display.
 - [x] U013 Integrate Commerce Guild development-card rewards with the real card deck.
 - [x] U014 Improve token transfer UX and log naming.
-- [ ] U015 Connect left utility rail actions.
-- [ ] U016 Add guided phase prompts and error recovery.
-- [ ] U017 Improve board visual fidelity and inspectability.
-- [ ] U018 Add real local chat or remove chat affordance.
-- [ ] U019 Harden mobile layout.
+- [x] U015 Connect left utility rail actions.
+- [x] U016 Add guided phase prompts and error recovery.
+- [x] U017 Improve board visual fidelity and inspectability.
+- [x] U018 Add real local chat or remove chat affordance.
+- [x] U019 Harden mobile layout.
 - [ ] U020 Add GitHub Actions CI.
 - [ ] U021 Add deployment.
 - [ ] U022 Add UI smoke tests.

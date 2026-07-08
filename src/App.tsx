@@ -1,4 +1,4 @@
-import { useMemo, useReducer, useState } from "react";
+import React, { useMemo, useReducer, useState } from "react";
 import {
   ArrowRightLeft,
   BookOpen,
@@ -15,7 +15,8 @@ import {
   Settings,
   Timer,
   Trophy,
-  Warehouse
+  Warehouse,
+  X
 } from "lucide-react";
 import { createInitialAppState, gameReducer, type GameCommand } from "./app/gameReducer";
 import { getDiceIncome, getExpectedIncomeMatrix, getPlayerIncome } from "./domain/stats/income";
@@ -24,6 +25,38 @@ import { resources, type BoardHex, type Building, type ResourceMap } from "./dom
 import type { ResourceCost } from "./domain/expansion/commerceGuild";
 
 type StatsMode = "player" | "dice" | "matrix";
+type UtilityPanel = "settings" | "rulebook" | "info" | null;
+
+const terrainLabels: Record<BoardHex["terrain"], string> = {
+  forest: "Forest",
+  hill: "Hill",
+  pasture: "Pasture",
+  field: "Field",
+  mountain: "Mountain",
+  desert: "Desert"
+} as const;
+
+const terrainMarks: Record<BoardHex["terrain"], string> = {
+  forest: "Fo",
+  hill: "Hi",
+  pasture: "Pa",
+  field: "Fi",
+  mountain: "Mt",
+  desert: "De"
+} as const;
+
+const dicePipCounts: Record<number, number> = {
+  2: 1,
+  3: 2,
+  4: 3,
+  5: 4,
+  6: 5,
+  8: 5,
+  9: 4,
+  10: 3,
+  11: 2,
+  12: 1
+} as const;
 
 const resourceLabels = {
   wood: "Wood",
@@ -41,10 +74,7 @@ function formatResourceMap(map: Partial<ResourceMap>) {
 }
 
 function terrainLabel(hex: BoardHex) {
-  if (hex.terrain === "desert") {
-    return "Desert";
-  }
-  return resourceLabels[hex.resource ?? "wood"];
+  return terrainLabels[hex.terrain];
 }
 
 function hexPosition(hex: BoardHex) {
@@ -70,24 +100,28 @@ function buildingPosition(hexes: BoardHex[], building: Building) {
 
 function BoardView({
   state,
-  dispatch
+  dispatch,
+  onUtilityOpen,
+  onFullscreen
 }: {
   state: ReturnType<typeof createInitialAppState>;
   dispatch: (command: GameCommand) => void;
+  onUtilityOpen: (panel: Exclude<UtilityPanel, null>) => void;
+  onFullscreen: () => void;
 }) {
   return (
     <section className="board-zone" aria-label="Catan board">
       <div className="utility-rail" aria-label="Utility controls">
-        <button title="Settings" type="button">
+        <button aria-label="Open settings" onClick={() => onUtilityOpen("settings")} title="Settings" type="button">
           <Settings size={26} />
         </button>
-        <button title="Rulebook" type="button">
+        <button aria-label="Open rulebook" onClick={() => onUtilityOpen("rulebook")} title="Rulebook" type="button">
           <BookOpen size={26} />
         </button>
-        <button title="Fullscreen" type="button">
+        <button aria-label="Toggle fullscreen" onClick={onFullscreen} title="Fullscreen" type="button">
           <Maximize size={26} />
         </button>
-        <button title="Info" type="button">
+        <button aria-label="Open info" onClick={() => onUtilityOpen("info")} title="Info" type="button">
           <Info size={26} />
         </button>
       </div>
@@ -103,10 +137,18 @@ function BoardView({
               onClick={() => dispatch({ type: "PLACE_ROBBER", hexId: hex.id })}
               type="button"
             >
+              <span className="terrain-icon" aria-hidden="true">
+                {terrainMarks[hex.terrain]}
+              </span>
               <span className="hex-resource">{terrainLabel(hex)}</span>
               {hex.diceNumber ? (
                 <span className={`dice-chip ${hex.diceNumber === 6 || hex.diceNumber === 8 ? "hot" : ""}`}>
-                  {hex.diceNumber}
+                  <span className="dice-number">{hex.diceNumber}</span>
+                  <span className="dice-pips" aria-hidden="true">
+                    {Array.from({ length: dicePipCounts[hex.diceNumber] ?? 0 }).map((_, index) => (
+                      <span key={index} />
+                    ))}
+                  </span>
                 </span>
               ) : (
                 <span className="robber-label">Robber</span>
@@ -133,6 +175,106 @@ function BoardView({
         })}
       </div>
     </section>
+  );
+}
+
+function phaseGuidance(state: ReturnType<typeof createInitialAppState>) {
+  const activePlayer = state.game.players.find((player) => player.id === state.game.activePlayerId);
+
+  if (state.game.phase === "gameOver") {
+    const winner = state.game.players.find((player) => player.id === state.game.winnerId);
+    return `${winner?.name ?? "A player"} has won the game`;
+  }
+
+  if (state.game.phase === "setup") {
+    return state.game.setup?.stage === "road"
+      ? "Place the connected setup road"
+      : "Place the next settlement";
+  }
+
+  if (state.guild.gathering.phase === "redemption") {
+    return "Guild redemption is open: spend tokens for up to four resources";
+  }
+
+  if (state.guild.gathering.phase === "auction") {
+    return `Resolve Commerce Guild auction round ${state.guild.gathering.auctionRound}`;
+  }
+
+  if (state.guild.gathering.phase === "complete") {
+    return "Commerce Guild gathering is complete; continue the turn";
+  }
+
+  return `Place the next settlement, or let ${activePlayer?.name ?? "Player"} roll, trade, and build`;
+}
+
+function UtilityModal({
+  panel,
+  state,
+  onClose
+}: {
+  panel: UtilityPanel;
+  state: ReturnType<typeof createInitialAppState>;
+  onClose: () => void;
+}) {
+  if (!panel) {
+    return null;
+  }
+
+  const title = panel === "settings" ? "Settings" : panel === "rulebook" ? "Rulebook" : "Project Info";
+  const activePlayer = state.game.players.find((player) => player.id === state.game.activePlayerId);
+
+  return (
+    <div className="utility-modal" role="dialog" aria-modal="true" aria-labelledby="utility-modal-title">
+      <button className="modal-backdrop" aria-label="Close utility panel" onClick={onClose} type="button" />
+      <section className="modal-card">
+        <div className="modal-header">
+          <h2 id="utility-modal-title">{title}</h2>
+          <button className="modal-close" aria-label="Close utility panel" onClick={onClose} type="button">
+            <X size={18} />
+          </button>
+        </div>
+        {panel === "settings" ? (
+          <div className="modal-stack">
+            <dl className="utility-facts">
+              <div>
+                <dt>Active player</dt>
+                <dd>{activePlayer?.name ?? "Player"}</dd>
+              </div>
+              <div>
+                <dt>Target score</dt>
+                <dd>{state.game.targetScore}</dd>
+              </div>
+              <div>
+                <dt>Round</dt>
+                <dd>{state.game.round}</dd>
+              </div>
+              <div>
+                <dt>Guild phase</dt>
+                <dd>{state.guild.gathering.phase}</dd>
+              </div>
+            </dl>
+            <p>Invalid actions are reported as toast messages so the local turn can recover without a page reload.</p>
+          </div>
+        ) : null}
+        {panel === "rulebook" ? (
+          <ul className="modal-list">
+            <li>Roll dice to produce resources from matching terrain with settlements and cities.</li>
+            <li>Build roads, settlements, and cities by spending the standard resource costs.</li>
+            <li>Use maritime trades, development cards, the robber, longest road, and largest army to reach the target score.</li>
+            <li>Commerce Guild trades convert listed resources into tokens, then gatherings let tokens buy resources or blind boxes.</li>
+          </ul>
+        ) : null}
+        {panel === "info" ? (
+          <div className="modal-stack">
+            <p>
+              Catan Imitation is a TypeScript local-table implementation with deterministic rules, statistics, and an original
+              Commerce Guild expansion.
+            </p>
+            <p>The interface prioritizes reviewable product behavior: visible state, direct commands, and recoverable errors.</p>
+          </div>
+        ) : null}
+      </section>
+    </div>
   );
 }
 
@@ -194,9 +336,9 @@ function RightRail({ state }: { state: ReturnType<typeof createInitialAppState> 
           ))}
         </div>
       </section>
-      <section className="chat-shell">
-        <strong>Chat</strong>
-        <span>Local hot-seat demo</span>
+      <section className="activity-shell" aria-label="Activity summary">
+        <strong>Activity</strong>
+        <span>{state.game.phase === "gameOver" ? "Game complete" : `${state.game.log.length} logged events`}</span>
       </section>
       <section className="bank-panel">
         <Warehouse size={28} />
@@ -535,6 +677,7 @@ function ActionBar({
         <div>
           <strong>{activePlayer?.name ?? "Player"}</strong>
           <span>Turn {state.game.turn} · Round {state.game.round}</span>
+          <span className="phase-guidance">{phaseGuidance(state)}</span>
         </div>
       </div>
       <button onClick={() => dispatch({ type: "ROLL_DICE" })} type="button">
@@ -626,6 +769,7 @@ function ActionBar({
 export default function App() {
   const [state, dispatchBase] = useReducer(gameReducer, undefined, createInitialAppState);
   const [notice, setNotice] = useState<string | null>(null);
+  const [utilityPanel, setUtilityPanel] = useState<UtilityPanel>(null);
 
   function dispatch(command: GameCommand) {
     try {
@@ -636,15 +780,44 @@ export default function App() {
     }
   }
 
+  function toggleFullscreen() {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    if (document.fullscreenElement) {
+      if (!document.exitFullscreen) {
+        setNotice("Fullscreen exit is not available in this browser.");
+        return;
+      }
+
+      void document.exitFullscreen().catch(() => setNotice("Fullscreen exit was blocked by the browser."));
+      return;
+    }
+
+    if (!document.documentElement.requestFullscreen) {
+      setNotice("Fullscreen is not available in this browser.");
+      return;
+    }
+
+    void document.documentElement.requestFullscreen().catch(() => setNotice("Fullscreen is not available in this browser."));
+  }
+
   return (
     <main className="game-shell">
-      <BoardView state={state} dispatch={dispatch} />
+      <BoardView
+        state={state}
+        dispatch={dispatch}
+        onUtilityOpen={setUtilityPanel}
+        onFullscreen={toggleFullscreen}
+      />
       <RightRail state={state} />
       <div className="bottom-dock">
         <StatsPanel state={state} dispatch={dispatch} />
         <CommercePanel state={state} dispatch={dispatch} />
       </div>
       <ActionBar state={state} dispatch={dispatch} />
+      <UtilityModal panel={utilityPanel} state={state} onClose={() => setUtilityPanel(null)} />
       {notice ? <div className="toast">{notice}</div> : null}
     </main>
   );
