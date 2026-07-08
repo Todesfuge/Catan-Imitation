@@ -18,6 +18,8 @@ describe("delivery readiness", () => {
     expect(workspace).toContain("  esbuild: true");
     expect(ci).toContain("node-version: 22");
     expect(pages).toContain("node-version: 22");
+    expect(ci).toContain("      - main");
+    expect(pages).toContain("      - main");
     expect(ci).toContain("pnpm install --frozen-lockfile");
     expect(ci).toContain("pnpm test");
     expect(ci).toContain("pnpm build");
