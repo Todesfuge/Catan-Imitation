@@ -1,7 +1,7 @@
 # Handoff: Catan Imitation MVP
 
 Date: 2026-07-08
-Scope: MVP implementation through T001-T026, plus U001-U024 core, classic-system, Commerce Guild, product-polish, and delivery-automation updates
+Scope: MVP implementation through T001-T026, plus U001-U027 core, classic-system, Commerce Guild, product-polish, delivery-automation, topology, and board-geometry updates
 
 ## Overview
 
@@ -23,7 +23,7 @@ Catan Imitation is now a local hot-seat TypeScript browser prototype. It recreat
   - project info modal
   - browser fullscreen request with recoverable fallback
 - Action-bar phase guidance and recoverable toast errors.
-- Improved board inspectability with terrain badges, readable terrain names, number-token pips, robber marker, settlements, and cities.
+- Improved board inspectability with SVG terrain polygons, readable terrain names, number-token pips, robber marker, settlements, cities, and roads projected from shared board geometry.
 - Activity summary replacing the earlier nonfunctional chat affordance.
 - Mobile/tablet layout hardening for stacked panels and compact two-column controls.
 - Dice production with robber blocking.
@@ -68,8 +68,8 @@ pnpm smoke:ui
 
 Latest results:
 
-- 9 test files passed.
-- 34 tests passed.
+- 10 test files passed.
+- 39 tests passed.
 - Production build completed with Vite.
 - UI smoke command completed against the built Vite preview.
 
@@ -83,8 +83,8 @@ Browser smoke checks:
 ## Known Limits
 
 - Multiplayer is local hot-seat only.
-- Board geometry is fixed and demo-oriented, but neighboring hexes now share canonical vertices and edges for settlement, road, production, and port rules.
-- The board now renders player-colored markers for actual built roads, with larger axial spacing and stronger hex boundaries to keep terrain tiles separated.
+- Board geometry is fixed and demo-oriented, but neighboring hexes now share canonical vertices and edges for settlement, road, production, port rules, and SVG rendering.
+- The board now renders SVG point-top hex polygons plus player-colored actual roads from the same vertex projection, avoiding the earlier CSS-clipped flat-top alignment issue.
 - Commerce Guild UI controls are functional but still compact; deeper visual polish and browser-level click-flow automation remain follow-up work.
 - AI players remain out of scope.
 - Visual assets are original CSS shapes and labels rather than polished production art.

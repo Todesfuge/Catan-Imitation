@@ -14,3 +14,4 @@
 | 2026-07-08 21:40 | updates/2026-07-08-2140-main-branch-pages-deploy.md | U020-U024 fix | `pnpm test -- test/domain/deliveryReadiness.test.ts`, `pnpm build:pages` | ready for review | Push deployment workflow to `main` |
 | 2026-07-08 22:00 | updates/2026-07-08-2200-shared-board-topology-u025.md | U025 | `pnpm test`, `pnpm build`, `pnpm build:pages`, `pnpm smoke:ui` | ready for review | Push and visually inspect deployment |
 | 2026-07-08 22:12 | updates/2026-07-08-2212-board-road-visuals-u026.md | U026 | `pnpm test`, `pnpm build`, `pnpm build:pages`, `pnpm smoke:ui` | ready for review | Push and visually inspect deployment |
+| 2026-07-08 22:39 | updates/2026-07-08-2239-svg-board-geometry-u027.md | U027 | `pnpm test`, `pnpm build`, `pnpm build:pages`, `pnpm smoke:ui` | ready for review | Commit and push when approved |

@@ -83,11 +83,15 @@ try {
     assert(js.includes(text), `Expected JavaScript bundle to include ${text}.`);
   }
 
-  for (const text of [".board-zone", ".activity-shell", ".terrain-icon", ".road-marker"]) {
+  for (const text of [".board-zone", ".activity-shell", ".terrain-icon", ".board-hex", ".road-marker"]) {
     assert(css.includes(text), `Expected CSS bundle to include ${text}.`);
   }
+  assert(js.includes("board-svg"), "Expected JavaScript bundle to render the SVG board.");
+  assert(js.includes("board-hex"), "Expected JavaScript bundle to render SVG hex polygons.");
   assert(js.includes("road-marker"), "Expected JavaScript bundle to render road markers.");
   assert(!js.includes("edge-guide"), "Expected JavaScript bundle not to render every possible edge guide.");
+  assert(!css.includes("clip-path"), "Expected board rendering not to rely on clipped CSS boxes.");
+  assert(/\.terrain-forest\s*{[^}]*fill:/s.test(css), "Expected SVG terrain polygons to have fill colors.");
   assert(/filter:\s*drop-shadow/.test(css), "Expected hexes to have visible separated borders.");
   assert(/@media \(max-width:\s*640px\)/.test(css), "Expected CSS bundle to include the mobile breakpoint.");
 

@@ -33,8 +33,31 @@ describe("product polish UI", () => {
     const html = renderToString(createElement(App));
 
     expect(game.roads.length).toBeGreaterThan(0);
+    expect(html).toContain("board-svg");
+    expect(html).toContain("board-hex");
     expect(html).toContain("road-marker");
     expect(html).not.toContain("edge-guide");
+  });
+
+  it("uses SVG geometry instead of CSS-clipped boxes for the board", () => {
+    const css = readFileSync("src/styles/app.css", "utf8");
+    const html = renderToString(createElement(App));
+
+    expect(html).toContain("<svg");
+    expect(html).toContain("board-hex");
+    expect(css).not.toContain("clip-path");
+    expect(css).not.toContain(".hex {");
+  });
+
+  it("keeps SVG terrain polygons visibly colored", () => {
+    const css = readFileSync("src/styles/app.css", "utf8");
+
+    expect(css).toMatch(/\.terrain-forest\s*{[^}]*fill:/);
+    expect(css).toMatch(/\.terrain-hill\s*{[^}]*fill:/);
+    expect(css).toMatch(/\.terrain-pasture\s*{[^}]*fill:/);
+    expect(css).toMatch(/\.terrain-field\s*{[^}]*fill:/);
+    expect(css).toMatch(/\.terrain-mountain\s*{[^}]*fill:/);
+    expect(css).toMatch(/\.terrain-desert\s*{[^}]*fill:/);
   });
 
   it("includes responsive layout safeguards for mobile controls and panels", () => {

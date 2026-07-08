@@ -144,3 +144,8 @@ This backlog records all known unfinished or improvable work after the MVP. Item
   - Current state: the board now uses wider axial spacing, visible hex drop-shadow boundaries, and player-colored road markers for actual built roads.
   - Target: neighboring hexes have clear visual boundaries and existing roads are readable without covering the board in candidate-edge guides.
   - Acceptance: product-polish and UI smoke checks cover actual road markers, absence of all-edge guide rendering, visible hex border styling, board panels, and responsive CSS.
+
+- [x] U027 Replace CSS-positioned board tiles with shared SVG board geometry.
+  - Current state: the board renders SVG hex polygons, roads, buildings, robber, labels, and dice tokens from one point-top geometry projection.
+  - Target: hex polygons, roads, and buildings are all projected from the same point-top board geometry so neighboring hex borders, roads, and intersections align.
+  - Acceptance: geometry tests cover shared vertex projection and road endpoint projection; product-polish and UI smoke checks confirm SVG board polygons, actual road markers, terrain fills, and no CSS `clip-path` board layout.

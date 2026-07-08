@@ -29,6 +29,14 @@ import {
   type ResourceMap
 } from "./domain/types";
 import type { ResourceCost } from "./domain/expansion/commerceGuild";
+import {
+  boardViewBox,
+  edgeProjection,
+  hexCenterPoint,
+  hexPolygonPoints,
+  pointsAttribute,
+  vertexProjection
+} from "./ui/boardGeometry";
 
 type StatsMode = "player" | "dice" | "matrix";
 type UtilityPanel = "settings" | "rulebook" | "info" | null;
@@ -83,41 +91,8 @@ function terrainLabel(hex: BoardHex) {
   return terrainLabels[hex.terrain];
 }
 
-function hexPosition(hex: BoardHex) {
-  return {
-    x: 50 + hex.q * 9.2 + hex.r * 4.6,
-    y: 50 + hex.r * 17.2
-  };
-}
-
-function vertexPosition(hexes: BoardHex[], vertexId: string) {
-  const hex = hexes.find((candidate) => candidate.vertexIds.includes(vertexId));
-  if (!hex) {
-    return { x: 50, y: 50 };
-  }
-  const vertexIndex = Math.max(0, hex.vertexIds.indexOf(vertexId));
-  const center = hexPosition(hex);
-  const angle = ((vertexIndex * 60 - 90) * Math.PI) / 180;
-  return {
-    x: center.x + Math.cos(angle) * 5.3,
-    y: center.y + Math.sin(angle) * 8.6
-  };
-}
-
 function buildingPosition(hexes: BoardHex[], building: Building) {
-  return vertexPosition(hexes, building.vertexId);
-}
-
-function edgePosition(hexes: BoardHex[], edge: BoardEdge) {
-  const from = vertexPosition(hexes, edge.vertexIds[0]);
-  const to = vertexPosition(hexes, edge.vertexIds[1]);
-  const deltaX = to.x - from.x;
-  const deltaY = to.y - from.y;
-  return {
-    x: (from.x + to.x) / 2,
-    y: (from.y + to.y) / 2,
-    angle: (Math.atan2(deltaY, deltaX) * 180) / Math.PI
-  };
+  return vertexProjection(hexes, building.vertexId);
 }
 
 function RoadMarker({
@@ -129,17 +104,16 @@ function RoadMarker({
   hexes: BoardHex[];
   ownerColor?: string;
 }) {
-  const position = edgePosition(hexes, edge);
+  const position = edgeProjection(hexes, edge);
   return (
-    <span
+    <line
       aria-hidden="true"
       className="road-marker"
-      style={{
-        left: `${position.x}%`,
-        top: `${position.y}%`,
-        transform: `translate(-50%, -50%) rotate(${position.angle}deg)`,
-        backgroundColor: ownerColor
-      }}
+      stroke={ownerColor}
+      x1={position.from.x}
+      x2={position.to.x}
+      y1={position.from.y}
+      y2={position.to.y}
     />
   );
 }
@@ -174,69 +148,120 @@ function BoardView({
         </button>
       </div>
       <div className="island">
-        <div className="road-layer" aria-hidden="true">
-          {state.game.roads.map((road) => {
-            const edge = state.game.edges.find((candidate) => candidate.id === road.edgeId);
-            if (!edge) {
-              return null;
-            }
-            return (
-              <RoadMarker
-                edge={edge}
-                hexes={state.game.board}
-                key={road.id}
-                ownerColor={playerColorById.get(road.ownerId)}
-              />
-            );
-          })}
-        </div>
-        {state.game.board.map((hex) => {
-          const position = hexPosition(hex);
-          return (
-            <button
-              className={`hex terrain-${hex.terrain}`}
-              key={hex.id}
-              style={{ left: `${position.x}%`, top: `${position.y}%` }}
-              title={terrainLabel(hex)}
-              onClick={() => dispatch({ type: "PLACE_ROBBER", hexId: hex.id })}
-              type="button"
-            >
-              <span className="terrain-icon" aria-hidden="true">
-                {terrainMarks[hex.terrain]}
-              </span>
-              <span className="hex-resource">{terrainLabel(hex)}</span>
-              {hex.diceNumber ? (
-                <span className={`dice-chip ${hex.diceNumber === 6 || hex.diceNumber === 8 ? "hot" : ""}`}>
-                  <span className="dice-number">{hex.diceNumber}</span>
-                  <span className="dice-pips" aria-hidden="true">
-                    {Array.from({ length: dicePipCounts[hex.diceNumber] ?? 0 }).map((_, index) => (
-                      <span key={index} />
-                    ))}
-                  </span>
-                </span>
+        <svg
+          aria-label="Catan board map"
+          className="board-svg"
+          role="img"
+          viewBox={`0 0 ${boardViewBox.width} ${boardViewBox.height}`}
+        >
+          <ellipse className="shoreline outer" cx="450" cy="310" rx="408" ry="272" />
+          <ellipse className="shoreline inner" cx="450" cy="310" rx="380" ry="250" />
+          <g className="hex-layer">
+            {state.game.board.map((hex) => {
+              const center = hexCenterPoint(hex);
+              const polygonPoints = hexPolygonPoints(hex);
+
+              return (
+                <g
+                  aria-label={terrainLabel(hex)}
+                  className="hex-tile"
+                  key={hex.id}
+                  onClick={() => dispatch({ type: "PLACE_ROBBER", hexId: hex.id })}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      dispatch({ type: "PLACE_ROBBER", hexId: hex.id });
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <polygon
+                    className={`board-hex terrain-${hex.terrain}`}
+                    points={pointsAttribute(polygonPoints)}
+                  />
+                  <text className="terrain-icon" x={center.x} y={center.y - 30}>
+                    {terrainMarks[hex.terrain]}
+                  </text>
+                  <text className="hex-resource" x={center.x} y={center.y - 4}>
+                    {terrainLabel(hex)}
+                  </text>
+                  {hex.diceNumber ? (
+                    <g className={`dice-chip ${hex.diceNumber === 6 || hex.diceNumber === 8 ? "hot" : ""}`}>
+                      <rect height="46" rx="9" width="50" x={center.x - 25} y={center.y + 8} />
+                      <text className="dice-number" x={center.x} y={center.y + 40}>
+                        {hex.diceNumber}
+                      </text>
+                      <g className="dice-pips" aria-hidden="true">
+                        {Array.from({ length: dicePipCounts[hex.diceNumber] ?? 0 }).map((_, index, pips) => {
+                          const startX = center.x - ((pips.length - 1) * 5) / 2;
+                          return <circle cx={startX + index * 5} cy={center.y + 48} key={index} r="2" />;
+                        })}
+                      </g>
+                    </g>
+                  ) : (
+                    <text className="robber-label" x={center.x} y={center.y + 38}>
+                      Robber
+                    </text>
+                  )}
+                  {state.game.robberHexId === hex.id ? (
+                    <rect className="robber-piece" height="44" rx="14" width="28" x={center.x + 18} y={center.y + 8} />
+                  ) : null}
+                </g>
+              );
+            })}
+          </g>
+          <g className="road-layer" aria-hidden="true">
+            {state.game.roads.map((road) => {
+              const edge = state.game.edges.find((candidate) => candidate.id === road.edgeId);
+              if (!edge) {
+                return null;
+              }
+              return (
+                <RoadMarker
+                  edge={edge}
+                  hexes={state.game.board}
+                  key={road.id}
+                  ownerColor={playerColorById.get(road.ownerId)}
+                />
+              );
+            })}
+          </g>
+          <g className="building-layer" aria-hidden="true">
+            {state.game.buildings.map((building) => {
+              const position = buildingPosition(state.game.board, building);
+              const owner = state.game.players.find((player) => player.id === building.ownerId);
+              const title = `${owner?.name ?? building.ownerId} ${building.kind}`;
+              return building.kind === "city" ? (
+                <rect
+                  className="building-marker city"
+                  height="27"
+                  key={building.id}
+                  rx="5"
+                  stroke={owner?.color}
+                  width="34"
+                  x={position.x - 17}
+                  y={position.y - 13.5}
+                >
+                  <title>{title}</title>
+                </rect>
               ) : (
-                <span className="robber-label">Robber</span>
-              )}
-              {state.game.robberHexId === hex.id ? <span className="robber-piece" /> : null}
-            </button>
-          );
-        })}
-        {state.game.buildings.map((building) => {
-          const position = buildingPosition(state.game.board, building);
-          const owner = state.game.players.find((player) => player.id === building.ownerId);
-          return (
-            <span
-              className={`building-marker ${building.kind}`}
-              key={building.id}
-              style={{
-                left: `${position.x}%`,
-                top: `${position.y}%`,
-                borderColor: owner?.color
-              }}
-              title={`${owner?.name ?? building.ownerId} ${building.kind}`}
-            />
-          );
-        })}
+                <rect
+                  className="building-marker settlement"
+                  height="24"
+                  key={building.id}
+                  rx="4"
+                  stroke={owner?.color}
+                  width="24"
+                  x={position.x - 12}
+                  y={position.y - 12}
+                >
+                  <title>{title}</title>
+                </rect>
+              );
+            })}
+          </g>
+        </svg>
       </div>
     </section>
   );
