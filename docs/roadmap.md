@@ -41,11 +41,30 @@ Status: Complete
 - Pull request and issue templates with verification expectations.
 - Verification: delivery-readiness tests, full test suite, build, and smoke command.
 
-## Future Milestones
+## Other Future Milestones
 
-Status: Planned
+Status: Ready for implementation
 
 - Automated browser-level UI smoke tests for click flows and responsive screenshots.
-- True shared board-intersection model instead of demo-oriented geometry.
-- Stronger port art and port ownership visualization.
+- Generalized board generation beyond the current fixed 19-hex shared topology.
 - Optional persistence or real-time multiplayer layer.
+
+## Milestone 5: Core Rule Integrity Hardening
+
+Status: Complete
+
+- Explicit active-player and once-per-turn dice state.
+- Player-selected seven-roll discards followed by staged robber placement and victim selection.
+- Normal settlement road connectivity and complete Longest Road ownership transitions.
+- Commerce Guild resource conservation through the shared bank.
+- Verification: focused TDD slices for turn flow, rule integrity, and guild accounting, followed by the full delivery gate.
+
+## Milestone 6: Development Cards and Playable Ports
+
+Status: Complete
+
+- One playable non-victory development card per turn with purchase-turn restrictions.
+- Sequential Road Building, bank-aware Year of Plenty, and all-opponent Monopoly effects.
+- Nine deterministic standard coastal ports with live ownership, 4:1/3:1/2:1 ratios, and SVG presentation.
+- Explicit effect-choice controls and per-resource maritime ratio guidance.
+- Verification: focused card/port/product TDD slices, implementation review, rendered responsive checks, and the full delivery gate.

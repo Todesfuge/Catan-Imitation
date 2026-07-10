@@ -21,6 +21,7 @@ import {
 import { createInitialAppState, gameReducer, type GameCommand } from "./app/gameReducer";
 import { getDiceIncome, getExpectedIncomeMatrix, getPlayerIncome } from "./domain/stats/income";
 import { calculatePlayerScore } from "./domain/rules/scoring";
+import { getMaritimeTradeRatio } from "./domain/rules/maritimeTrade";
 import {
   resources,
   type BoardEdge,
@@ -34,9 +35,15 @@ import {
   edgeProjection,
   hexCenterPoint,
   hexPolygonPoints,
+  portProjection,
   pointsAttribute,
   vertexProjection
 } from "./ui/boardGeometry";
+import { TurnFlowPanel } from "./ui/TurnFlowPanel";
+import {
+  DevelopmentCardPanel,
+  RoadBuildingTargets
+} from "./ui/DevelopmentCardPanel";
 
 type StatsMode = "player" | "dice" | "matrix";
 type UtilityPanel = "settings" | "rulebook" | "info" | null;
@@ -83,7 +90,13 @@ const resourceLabels = {
 function formatResourceMap(map: Partial<ResourceMap>) {
   return resources
     .filter((resource) => (map[resource] ?? 0) > 0)
-    .map((resource) => `${resourceLabels[resource]} ${map[resource]}`)
+    .map((resource) => {
+      const quantity = map[resource] ?? 0;
+      const displayQuantity = Number.isInteger(quantity)
+        ? String(quantity)
+        : quantity.toFixed(2).replace(/\.0+$|(?<=\.[0-9])0+$/, "");
+      return `${resourceLabels[resource]} ${displayQuantity}`;
+    })
     .join(", ");
 }
 
@@ -129,6 +142,7 @@ function BoardView({
   onUtilityOpen: (panel: Exclude<UtilityPanel, null>) => void;
   onFullscreen: () => void;
 }) {
+  const canPlaceRobber = state.game.turnState.phase === "awaitingRobberPlacement";
   const playerColorById = new Map(state.game.players.map((player) => [player.id, player.color]));
 
   return (
@@ -151,30 +165,78 @@ function BoardView({
         <svg
           aria-label="Catan board map"
           className="board-svg"
-          role="img"
+          role="group"
           viewBox={`0 0 ${boardViewBox.width} ${boardViewBox.height}`}
         >
           <ellipse className="shoreline outer" cx="450" cy="310" rx="408" ry="272" />
           <ellipse className="shoreline inner" cx="450" cy="310" rx="380" ry="250" />
+          <g className="port-layer" aria-label="Standard maritime ports">
+            {state.game.ports.map((port) => {
+              const position = portProjection(state.game.board, port);
+              const label =
+                port.kind === "generic"
+                  ? "3:1"
+                  : `2:1 ${resourceLabels[port.resource ?? "wood"]}`;
+              return (
+                <g
+                  aria-label={`${label} port`}
+                  className="port-marker"
+                  data-port-id={port.id}
+                  key={port.id}
+                >
+                  <line
+                    className="port-connector"
+                    x1={position.label.x}
+                    x2={position.from.x}
+                    y1={position.label.y}
+                    y2={position.from.y}
+                  />
+                  <line
+                    className="port-connector"
+                    x1={position.label.x}
+                    x2={position.to.x}
+                    y1={position.label.y}
+                    y2={position.to.y}
+                  />
+                  <circle cx={position.label.x} cy={position.label.y} r="25" />
+                  <text x={position.label.x} y={position.label.y + 4}>{label}</text>
+                </g>
+              );
+            })}
+          </g>
           <g className="hex-layer">
             {state.game.board.map((hex) => {
               const center = hexCenterPoint(hex);
               const polygonPoints = hexPolygonPoints(hex);
+              const canTargetHex = canPlaceRobber && hex.id !== state.game.robberHexId;
 
               return (
                 <g
                   aria-label={terrainLabel(hex)}
                   className="hex-tile"
                   key={hex.id}
-                  onClick={() => dispatch({ type: "PLACE_ROBBER", hexId: hex.id })}
+                  onClick={
+                    canTargetHex
+                      ? () =>
+                          dispatch({
+                            type: "PLACE_ROBBER",
+                            playerId: state.game.activePlayerId,
+                            hexId: hex.id
+                          })
+                      : undefined
+                  }
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
+                    if (canTargetHex && (event.key === "Enter" || event.key === " ")) {
                       event.preventDefault();
-                      dispatch({ type: "PLACE_ROBBER", hexId: hex.id });
+                      dispatch({
+                        type: "PLACE_ROBBER",
+                        playerId: state.game.activePlayerId,
+                        hexId: hex.id
+                      });
                     }
                   }}
-                  role="button"
-                  tabIndex={0}
+                  role={canTargetHex ? "button" : undefined}
+                  tabIndex={canTargetHex ? 0 : -1}
                 >
                   <polygon
                     className={`board-hex terrain-${hex.terrain}`}
@@ -227,6 +289,7 @@ function BoardView({
               );
             })}
           </g>
+          <RoadBuildingTargets game={state.game} dispatch={dispatch} />
           <g className="building-layer" aria-hidden="true">
             {state.game.buildings.map((building) => {
               const position = buildingPosition(state.game.board, building);
@@ -291,6 +354,27 @@ function phaseGuidance(state: ReturnType<typeof createInitialAppState>) {
 
   if (state.guild.gathering.phase === "complete") {
     return "Commerce Guild gathering is complete; continue the turn";
+  }
+
+  if (state.game.turnState.phase === "awaitingRoll") {
+    return `${activePlayer?.name ?? "Player"} must roll or play a development card`;
+  }
+  if (state.game.turnState.phase === "awaitingDiscards") {
+    return "Players with more than seven cards must choose their discards";
+  }
+  if (state.game.turnState.phase === "awaitingRobberPlacement") {
+    return `${activePlayer?.name ?? "Player"} must move the robber`;
+  }
+  if (state.game.turnState.phase === "awaitingRobberVictim") {
+    return `${activePlayer?.name ?? "Player"} must choose a robber victim`;
+  }
+  if (state.game.turnState.phase === "awaitingDevelopmentEffect") {
+    const effect = state.game.turnState.pendingDevelopmentEffect;
+    return effect?.kind === "roadBuilding"
+      ? "Choose the next free road"
+      : effect?.kind === "yearOfPlenty"
+        ? "Choose resources from the bank"
+        : "Choose a resource for Monopoly";
   }
 
   return `Place the next settlement, or let ${activePlayer?.name ?? "Player"} roll, trade, and build`;
@@ -583,6 +667,8 @@ function CommercePanel({
   dispatch: (command: GameCommand) => void;
 }) {
   const activePlayer = state.game.players.find((player) => player.id === state.game.activePlayerId);
+  const canUseNormalActions =
+    state.game.phase === "playing" && state.game.turnState.phase === "action";
   const [recipientId, setRecipientId] = useState("p2");
   const [tokenAmount, setTokenAmount] = useState(1);
   const [bids, setBids] = useState<Record<string, number>>({});
@@ -601,6 +687,7 @@ function CommercePanel({
               <ArrowRightLeft size={14} /> {slot.tokenReward} tokens
             </span>
             <button
+              disabled={!canUseNormalActions}
               onClick={() =>
                 activePlayer &&
                 dispatch({ type: "COMPLETE_TRADE_SLOT", playerId: activePlayer.id, slotId: slot.id })
@@ -629,6 +716,7 @@ function CommercePanel({
           onChange={(event) => setTokenAmount(Number(event.currentTarget.value))}
         />
         <button
+          disabled={!canUseNormalActions}
           onClick={() =>
             activePlayer &&
             dispatch({
@@ -703,6 +791,7 @@ function CommercePanel({
           <p className="auction-result">{state.guild.gathering.lastAuctionSummary}</p>
         ) : null}
         <button
+          disabled={!canUseNormalActions}
           onClick={() => activePlayer && dispatch({ type: "REDEEM_PRIZE", playerId: activePlayer.id })}
           type="button"
         >
@@ -721,6 +810,10 @@ function ActionBar({
   dispatch: (command: GameCommand) => void;
 }) {
   const activePlayer = state.game.players.find((player) => player.id === state.game.activePlayerId);
+  const canRoll =
+    state.game.phase === "playing" && state.game.turnState.phase === "awaitingRoll";
+  const canUseNormalActions =
+    state.game.phase === "playing" && state.game.turnState.phase === "action";
   const ownedBuildingVertices = new Set(
     state.game.buildings
       .filter((building) => building.ownerId === activePlayer?.id)
@@ -751,12 +844,15 @@ function ActionBar({
     activePlayer!.resources.grain >= 1 &&
     activePlayer!.resources.ore >= 1 &&
     state.game.developmentDeck.length > 0;
-  const playableKnight = activePlayer?.developmentCards.find(
-    (card) => card.kind === "knight" && card.purchasedTurn < state.game.turn
+  const tradeRatios = Object.fromEntries(
+    resources.map((resource) => [
+      resource,
+      activePlayer ? getMaritimeTradeRatio(state.game, activePlayer.id, resource) : 4
+    ])
+  ) as Record<(typeof resources)[number], number>;
+  const tradeGive = resources.find(
+    (resource) => (activePlayer?.resources[resource] ?? 0) >= tradeRatios[resource]
   );
-  const knightTargetHexId =
-    state.game.board.find((hex) => hex.id !== state.game.robberHexId)?.id ?? state.game.robberHexId;
-  const tradeGive = resources.find((resource) => (activePlayer?.resources[resource] ?? 0) >= 4);
   const tradeReceive = resources.find((resource) => resource !== tradeGive);
 
   return (
@@ -769,83 +865,95 @@ function ActionBar({
           <span className="phase-guidance">{phaseGuidance(state)}</span>
         </div>
       </div>
-      <button onClick={() => dispatch({ type: "ROLL_DICE" })} type="button">
+      <button
+        data-action="roll-dice"
+        disabled={!canRoll}
+        onClick={() => activePlayer && dispatch({ type: "ROLL_DICE", playerId: activePlayer.id })}
+        type="button"
+      >
         <Dices size={20} /> Roll Dice
       </button>
       <button
+        data-action="build-road"
         onClick={() =>
           activePlayer &&
           nextRoadEdge &&
           dispatch({ type: "BUILD_ROAD", playerId: activePlayer.id, edgeId: nextRoadEdge })
         }
-        disabled={!nextRoadEdge}
+        disabled={!canUseNormalActions || !nextRoadEdge}
         type="button"
       >
         <Hammer size={20} /> Road
       </button>
       <button
+        data-action="build-settlement"
         onClick={() =>
           activePlayer &&
           nextVertex &&
           dispatch({ type: "BUILD_SETTLEMENT", playerId: activePlayer.id, vertexId: nextVertex })
         }
+        disabled={!canUseNormalActions || !nextVertex}
         type="button"
       >
         <Home size={20} /> Settlement
       </button>
       <button
+        data-action="build-city"
         onClick={() =>
           activePlayer &&
           upgradable &&
           dispatch({ type: "BUILD_CITY", playerId: activePlayer.id, buildingId: upgradable.id })
         }
+        disabled={!canUseNormalActions || !upgradable}
         type="button"
       >
         <Castle size={20} /> City
       </button>
       <button
+        data-action="buy-development"
         onClick={() =>
           activePlayer && dispatch({ type: "BUY_DEVELOPMENT_CARD", playerId: activePlayer.id })
         }
-        disabled={!canBuyDevelopmentCard}
+        disabled={!canUseNormalActions || !canBuyDevelopmentCard}
         type="button"
       >
         <ScrollText size={20} /> Dev Card
       </button>
+      <DevelopmentCardPanel game={state.game} dispatch={dispatch} />
+      <div className="maritime-action-group">
+        <div className="maritime-ratio-guide" aria-label="Effective maritime trade ratios">
+          {resources.map((resource) => (
+            <span key={resource}>
+              {resourceLabels[resource]} {tradeRatios[resource]}:1
+            </span>
+          ))}
+        </div>
+        <button
+          data-action="maritime"
+          onClick={() =>
+            activePlayer &&
+            tradeGive &&
+            tradeReceive &&
+            dispatch({
+              type: "MARITIME_TRADE",
+              playerId: activePlayer.id,
+              give: tradeGive,
+              receive: tradeReceive
+            })
+          }
+          disabled={!canUseNormalActions || !tradeGive || !tradeReceive}
+          type="button"
+        >
+          <ArrowRightLeft size={20} /> Maritime
+        </button>
+      </div>
       <button
-        onClick={() =>
-          activePlayer &&
-          playableKnight &&
-          dispatch({
-            type: "PLAY_KNIGHT_CARD",
-            playerId: activePlayer.id,
-            cardId: playableKnight.id,
-            targetHexId: knightTargetHexId
-          })
-        }
-        disabled={!playableKnight}
+        className="primary"
+        data-action="end-turn"
+        disabled={!canUseNormalActions}
+        onClick={() => activePlayer && dispatch({ type: "END_TURN", playerId: activePlayer.id })}
         type="button"
       >
-        <Gift size={20} /> Knight
-      </button>
-      <button
-        onClick={() =>
-          activePlayer &&
-          tradeGive &&
-          tradeReceive &&
-          dispatch({
-            type: "MARITIME_TRADE",
-            playerId: activePlayer.id,
-            give: tradeGive,
-            receive: tradeReceive
-          })
-        }
-        disabled={!tradeGive || !tradeReceive}
-        type="button"
-      >
-        <ArrowRightLeft size={20} /> Maritime
-      </button>
-      <button className="primary" onClick={() => dispatch({ type: "END_TURN" })} type="button">
         End Turn
       </button>
       <div className="dice-readout">
@@ -905,6 +1013,7 @@ export default function App() {
         <StatsPanel state={state} dispatch={dispatch} />
         <CommercePanel state={state} dispatch={dispatch} />
       </div>
+      <TurnFlowPanel game={state.game} dispatch={dispatch} />
       <ActionBar state={state} dispatch={dispatch} />
       <UtilityModal panel={utilityPanel} state={state} onClose={() => setUtilityPanel(null)} />
       {notice ? <div className="toast">{notice}</div> : null}

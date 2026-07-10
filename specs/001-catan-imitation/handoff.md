@@ -1,95 +1,50 @@
-# Handoff: Catan Imitation MVP
+# Handoff: Catan Imitation
 
-Date: 2026-07-08
-Scope: MVP implementation through T001-T026, plus U001-U027 core, classic-system, Commerce Guild, product-polish, delivery-automation, topology, and board-geometry updates
+Date: 2026-07-10
+Scope: Implemented and verified through CR-030 / U046
 
-## Overview
+## Current State
 
-Catan Imitation is now a local hot-seat TypeScript browser prototype. It recreates a recognizable online Catan-style table layout and adds the requested statistics panel plus Commerce Guild expansion.
+Catan Imitation is a local hot-seat React and TypeScript browser prototype. Core rule integrity, all standard development-card effects, playable standard ports, the Commerce Guild expansion, and the supporting product UI are implemented through U046.
 
-## Implemented
+The turn model enforces active-player ownership, one roll per turn, staged seven-roll discards and robber choices, one non-victory development card per turn, phase restoration after pending effects, and immutable rejection of invalid commands. Resource-producing and resource-consuming systems conserve the finite bank.
 
-- Vite + React + TypeScript scaffold.
-- Pure TypeScript domain modules for board data, setup, production, building, scoring, turns, statistics, development cards, longest road, maritime trade, and Commerce Guild.
-- Desktop-first game table UI:
-  - central hex board
-  - left utility rail
-  - right log/activity/bank/player rail
-  - bottom action bar
-  - statistics and commerce panels
-- Connected utility rail actions:
-  - settings modal
-  - rulebook modal
-  - project info modal
-  - browser fullscreen request with recoverable fallback
-- Action-bar phase guidance and recoverable toast errors.
-- Improved board inspectability with SVG terrain polygons, readable terrain names, number-token pips, robber marker, settlements, cities, and roads projected from shared board geometry.
-- Activity summary replacing the earlier nonfunctional chat affordance.
-- Mobile/tablet layout hardening for stacked panels and compact two-column controls.
-- Dice production with robber blocking.
-- Setup placement phase with settlement-road pairs in snake order.
-- Clickable hexes for robber movement.
-- Build road, settlement, and city commands with occupied-location, settlement-distance, and road-connectivity checks.
-- Bank-aware production and build-cost accounting, including short-bank production caps.
-- 7-roll handling for over-limit discards, robber movement, and optional stealing from adjacent opponents.
-- Game-over state and winner id once the active player reaches the target score.
-- Development card deck purchase flow, hidden card ownership, knight play timing, and Largest Army scoring.
-- Longest Road calculation and scoring, including branch and opponent-building breaks.
-- Maritime trade with default 4:1, owned generic 3:1, and owned resource-specific 2:1 ratios.
-- Score calculation from settlements, cities, development victory points, Largest Army, Longest Road, and Commerce Guild prize cards.
-- Statistics modes for player query, dice query, and expected income matrix.
-- Commerce Guild:
-  - three rotating trade slots
-  - once-per-turn trade limit
-  - token transfer
-  - gathering resource redemption capped at 4 per player
-  - automatic gathering trigger every six completed rounds
-  - auction validation with player-name errors and visible result summaries
-  - auction round resolution with blind-box outcomes
-  - development-card rewards drawn from the shared deck
-  - voucher-to-prize redemption
-- Delivery automation:
-  - GitHub Actions CI for install, tests, production build, and UI smoke
-  - GitHub Pages deployment workflow using `pnpm build:pages` for `https://todesfuge.github.io/Catan-Imitation/`
-  - stable `pnpm smoke:ui` preview smoke command
-  - PR, bug report, and feature request templates
-  - milestone roadmap in `docs/roadmap.md`
+## Latest Delivery
+
+- Added Road Building with up to two sequential free legal roads and Longest Road/winner recalculation.
+- Added bank-aware Year of Plenty with two explicit resource choices and early completion when stock is unavailable.
+- Added Monopoly with an explicit resource choice and transfers from every opponent.
+- Kept victory-point cards hidden/passive and enforced purchase-turn restrictions for playable cards.
+- Added active-player card counts, effect prompts, legal road targets, resource choices, and paused-action guidance.
+- Generated nine deterministic coastal ports: four generic 3:1 and five resource-specific 2:1 ports.
+- Derived port ownership from buildings on either endpoint and displayed each active player's effective maritime ratios.
+- Rendered port connectors and labels through shared SVG geometry with responsive wrapping controls.
+- Preserved the CR-001 through CR-018 turn-flow, Longest Road, and Commerce Guild conservation fixes in the same delivery.
 
 ## Verification
 
-Commands run successfully:
+Latest complete gate:
 
-```bash
-pnpm test
-pnpm build
-pnpm build:pages
-pnpm smoke:ui
-```
+- `pnpm test`: 15 test files and 93 tests passed.
+- `pnpm build`: passed; Vite transformed 1,598 modules.
+- `pnpm build:pages`: passed with the repository Pages base.
+- `pnpm smoke:ui`: passed against the built preview.
+- `git diff --check`: passed after artifact convergence.
+- Two independent code reviews reported no Critical, Important, or Minor findings.
 
-Latest results:
+Rendered checks:
 
-- 10 test files passed.
-- 39 tests passed.
-- Production build completed with Vite.
-- UI smoke command completed against the built Vite preview.
+- Desktop 1440x1000: nine port markers and all five maritime ratios are visible with no horizontal overflow or clipping.
+- Mobile 375x844 (requested 390x844): board ports, development-card area, maritime controls, and bottom actions remain usable with no horizontal overflow.
+- The one P1 visual finding, desktop ratio-guide truncation, was fixed with a wrapping layout and reverified.
 
-Browser smoke checks:
+## Remaining Limits
 
-- Desktop `1280x720`: app renders, no horizontal overflow, utility labels present, 19 hexes, 19 terrain badges, 18 dice-pip groups, Activity panel, phase guidance, statistics panel, and Commerce Guild panel present.
-- Utility modal: Settings opens a visible dialog with active player, target score, round, and guild phase; close control is present.
-- Mobile `390x844`: no horizontal overflow, 19 hexes render, Activity and phase guidance remain visible.
-- Tablet `768x1024`: no horizontal overflow, 19 hexes render, Activity and phase guidance remain visible.
+- Multiplayer remains local hot-seat only; persistence and real-time networking are out of scope.
+- The board is a fixed 19-hex topology rather than a generalized or randomized generator.
+- Persisted or externally restored Commerce Guild state is trusted to contain valid historical token/redemption counts; validate that boundary if persistence is introduced.
+- Automated browser click-flow coverage and responsive screenshot regression remain future improvements.
 
-## Known Limits
+## Next Action
 
-- Multiplayer is local hot-seat only.
-- Board geometry is fixed and demo-oriented, but neighboring hexes now share canonical vertices and edges for settlement, road, production, port rules, and SVG rendering.
-- The board now renders SVG point-top hex polygons plus player-colored actual roads from the same vertex projection, avoiding the earlier CSS-clipped flat-top alignment issue.
-- Commerce Guild UI controls are functional but still compact; deeper visual polish and browser-level click-flow automation remain follow-up work.
-- AI players remain out of scope.
-- Visual assets are original CSS shapes and labels rather than polished production art.
-
-## Next Steps
-
-- Follow the future milestones in [Roadmap](../../docs/roadmap.md).
-- Enable GitHub Pages for the repository if the Pages environment is not already active.
+Create the requested single local commit containing CR-001 through CR-030. Do not push without explicit authorization.

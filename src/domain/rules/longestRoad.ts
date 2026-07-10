@@ -73,24 +73,26 @@ export function updateLongestRoadAward(game: GameState): GameState {
   const lengths = new Map(
     game.players.map((player) => [player.id, calculateLongestRoadLength(game, player.id)])
   );
-  const currentOwnerLength = game.longestRoadOwnerId ? lengths.get(game.longestRoadOwnerId) ?? 0 : 0;
-  const leader = [...lengths.entries()].sort((left, right) => right[1] - left[1])[0];
-
-  if (!leader || leader[1] < 5) {
-    return game;
-  }
-
-  if (game.longestRoadOwnerId && leader[1] <= currentOwnerLength) {
-    return game;
-  }
-
-  const tiedLeaders = [...lengths.values()].filter((length) => length === leader[1]).length;
-  if (!game.longestRoadOwnerId && tiedLeaders > 1) {
-    return game;
-  }
+  const maximumLength = Math.max(0, ...lengths.values());
+  const leaders = [...lengths.entries()]
+    .filter(([, length]) => length === maximumLength)
+    .map(([playerId]) => playerId);
+  const currentOwnerId = game.longestRoadOwnerId;
+  const currentOwnerStillLeads =
+    currentOwnerId !== undefined &&
+    maximumLength >= 5 &&
+    leaders.includes(currentOwnerId);
+  const nextOwnerId =
+    maximumLength < 5
+      ? undefined
+      : currentOwnerStillLeads
+        ? currentOwnerId
+        : leaders.length === 1
+          ? leaders[0]
+          : undefined;
 
   return {
     ...game,
-    longestRoadOwnerId: leader[0]
+    longestRoadOwnerId: nextOwnerId
   };
 }

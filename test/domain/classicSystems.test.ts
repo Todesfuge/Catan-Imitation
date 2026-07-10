@@ -49,7 +49,7 @@ describe("classic Catan systems", () => {
     expect(p1?.developmentCards.map((card) => card.id)).toEqual([purchase.card.id]);
     expect(p1?.resources).toMatchObject({ wool: 0, grain: 0, ore: 0 });
     expect(purchase.game.bank.resources).toMatchObject({ wool: 20, grain: 20, ore: 20 });
-    expect(() => playKnightCard(purchase.game, "p1", purchase.card.id, "forest-4")).toThrow(
+    expect(() => playKnightCard(purchase.game, "p1", purchase.card.id)).toThrow(
       /same turn/i
     );
   });
@@ -72,10 +72,9 @@ describe("classic Catan systems", () => {
       knightsPlayed: 2
     }));
 
-    const played = playKnightCard({ ...readyGame, turn: 3 }, "p1", initialPurchase.card.id, "forest-4");
+    const played = playKnightCard({ ...readyGame, turn: 3 }, "p1", initialPurchase.card.id);
     const p1 = played.players.find((player) => player.id === "p1");
 
-    expect(played.robberHexId).toBe("forest-4");
     expect(p1?.knightsPlayed).toBe(3);
     expect(p1?.developmentCards).toHaveLength(0);
     expect(played.largestArmyOwnerId).toBe("p1");

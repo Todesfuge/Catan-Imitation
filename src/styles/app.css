@@ -149,6 +149,32 @@ input {
   stroke-width: 16;
 }
 
+.port-layer {
+  pointer-events: none;
+}
+
+.port-marker circle {
+  fill: #f7edcf;
+  stroke: #705b31;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 2px 1px rgba(31, 23, 12, 0.28));
+}
+
+.port-marker text {
+  fill: #3e321d;
+  font-size: 0.63rem;
+  font-weight: 900;
+  text-anchor: middle;
+}
+
+.port-connector {
+  stroke: #8b6d35;
+  stroke-linecap: round;
+  stroke-width: 5;
+  vector-effect: non-scaling-stroke;
+}
+
 .hex-layer {
   filter: drop-shadow(0 3px 1px rgba(63, 48, 21, 0.26));
 }
@@ -647,6 +673,30 @@ button.primary {
   font-weight: 900;
 }
 
+.maritime-action-group {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.maritime-ratio-guide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 190px;
+}
+
+.maritime-ratio-guide span {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  border-radius: 5px;
+  color: var(--muted-ink);
+  background: rgba(255, 255, 255, 0.5);
+  font-size: 0.64rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .toast {
   position: fixed;
   right: 376px;
@@ -901,5 +951,121 @@ button.primary {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+.turn-flow-panel {
+  position: fixed;
+  left: 50%;
+  bottom: 92px;
+  z-index: 30;
+  display: grid;
+  gap: 10px;
+  width: min(620px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 14px;
+  background: rgb(12 28 45 / 94%);
+  box-shadow: 0 16px 42px rgb(0 0 0 / 34%);
+  transform: translateX(-50%);
+}
+
+.turn-flow-resources {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.turn-flow-resources label {
+  display: grid;
+  gap: 4px;
+  text-transform: capitalize;
+}
+
+.turn-flow-resources input {
+  width: 100%;
+}
+
+.robber-victim-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.development-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  overflow-x: auto;
+}
+
+.development-card-controls:empty::before {
+  content: "No cards";
+  color: var(--muted-ink);
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.development-card-controls button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.development-card-victory-points {
+  flex: 0 0 auto;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted-ink);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.development-effect-panel {
+  color: #f6f2e8;
+}
+
+.development-resource-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.road-building-target {
+  stroke: #f4d35e;
+  stroke-dasharray: 10 7;
+  stroke-linecap: round;
+  stroke-width: 10;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+  filter: drop-shadow(0 0 4px rgba(244, 211, 94, 0.75));
+}
+
+.road-building-target:hover,
+.road-building-target:focus-visible {
+  stroke: #fff3a6;
+  stroke-width: 13;
+  outline: none;
+}
+
+@media (max-width: 640px) {
+  .development-card-controls {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+
+  .maritime-action-group {
+    grid-column: 1 / -1;
+  }
+
+  .maritime-ratio-guide {
+    max-width: none;
+  }
+
+  .development-resource-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

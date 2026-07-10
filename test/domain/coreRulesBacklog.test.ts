@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { gameReducer, createInitialAppState } from "../../src/app/gameReducer";
 import { createSetupGame } from "../../src/domain/setup";
-import {
-  applyProduction,
-  resolveSevenRoll
-} from "../../src/domain/rules/production";
+import { applyProduction } from "../../src/domain/rules/production";
 import {
   buildRoad,
   buildSettlement,
@@ -94,7 +91,9 @@ describe("post-MVP core Catan rules", () => {
       game: createSetupGame()
     };
 
-    expect(() => gameReducer(state, { type: "ROLL_DICE", dice: [3, 4] })).toThrow(/setup/i);
+    expect(() =>
+      gameReducer(state, { type: "ROLL_DICE", playerId: "p1", dice: [3, 4] })
+    ).toThrow(/setup/i);
   });
 
   it("rejects occupied and adjacent settlement vertices", () => {
@@ -112,12 +111,24 @@ describe("post-MVP core Catan rules", () => {
     });
     const forest = fundedGame.board.find((hex) => hex.id === "forest-4");
     const settlementVertexId = forest?.vertexIds[0] ?? "";
+    const settlementRoad = fundedGame.edges.find((edge) => edge.vertexIds.includes(settlementVertexId));
     const adjacentVertexId =
       fundedGame.edges.find((edge) => edge.vertexIds.includes(settlementVertexId))?.vertexIds.find(
         (vertexId) => vertexId !== settlementVertexId
       ) ?? "";
     const withSettlement = buildSettlement(
-      { ...fundedGame, phase: "playing", setup: undefined },
+      {
+        ...fundedGame,
+        phase: "playing",
+        setup: undefined,
+        roads: [
+          {
+            id: "p1-settlement-seed-road",
+            ownerId: "p1",
+            edgeId: settlementRoad?.id ?? ""
+          }
+        ]
+      },
       "p1",
       settlementVertexId
     );
@@ -134,10 +145,25 @@ describe("post-MVP core Catan rules", () => {
       wool: 4,
       grain: 4
     });
+    const settlementVertexId = "forest-4-v0";
+    const seedEdge = game.edges.find(
+      (edge) => edge.vertexIds.includes(settlementVertexId) && edge.id !== "forest-4-e0"
+    );
     const playingGame = buildSettlement(
-      { ...game, phase: "playing", setup: undefined },
+      {
+        ...game,
+        phase: "playing",
+        setup: undefined,
+        roads: [
+          {
+            id: "p1-road-seed",
+            ownerId: "p1",
+            edgeId: seedEdge?.id ?? ""
+          }
+        ]
+      },
       "p1",
-      "forest-4-v0"
+      settlementVertexId
     );
 
     expect(() => buildRoad(playingGame, "p1", "desert-e3")).toThrow(/connect/i);
@@ -163,39 +189,6 @@ describe("post-MVP core Catan rules", () => {
     expect(result.game.bank.resources.ore).toBe(18);
   });
 
-  it("rolling 7 discards over-limit hands, moves the robber, and steals from an adjacent opponent", () => {
-    const richGame = {
-      ...createInitialAppState().game,
-      activePlayerId: "p1",
-      players: createInitialAppState().game.players.map((player) =>
-        player.id === "p2"
-          ? {
-              ...player,
-              resources: { wood: 4, brick: 4, wool: 2, grain: 0, ore: 0 }
-            }
-          : player
-      )
-    };
-
-    const result = resolveSevenRoll(richGame, "mountain-8", "p2", () => 0);
-    const p1 = result.players.find((player) => player.id === "p1");
-    const p2 = result.players.find((player) => player.id === "p2");
-
-    expect(result.robberHexId).toBe("mountain-8");
-    expect(Object.values(p2?.resources ?? {}).reduce((sum, count) => sum + count, 0)).toBe(4);
-    expect(p1?.resources.wool).toBe(1);
-
-    const noStealResult = resolveSevenRoll(richGame, "mountain-8");
-    const noStealP1 = noStealResult.players.find((player) => player.id === "p1");
-    const noStealP2 = noStealResult.players.find((player) => player.id === "p2");
-
-    expect(noStealResult.robberHexId).toBe("mountain-8");
-    expect(Object.values(noStealP2?.resources ?? {}).reduce((sum, count) => sum + count, 0)).toBe(
-      5
-    );
-    expect(noStealP1?.resources.wool).toBe(0);
-  });
-
   it("enters game-over state when the active player reaches the target score", () => {
     const state = {
       ...createInitialAppState(),
@@ -205,10 +198,10 @@ describe("post-MVP core Catan rules", () => {
       }
     };
 
-    const next = gameReducer(state, { type: "ROLL_DICE", dice: [4, 4] });
+    const next = gameReducer(state, { type: "ROLL_DICE", playerId: "p1", dice: [4, 4] });
 
     expect(next.game.phase).toBe("gameOver");
     expect(next.game.winnerId).toBe("p1");
-    expect(() => gameReducer(next, { type: "END_TURN" })).toThrow(/over/i);
+    expect(() => gameReducer(next, { type: "END_TURN", playerId: "p1" })).toThrow(/over/i);
   });
 });

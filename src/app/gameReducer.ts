@@ -13,10 +13,39 @@ import {
   type TradeSlot
 } from "../domain/expansion/commerceGuild";
 import { createDemoGame } from "../domain/setup";
-import { applyProduction, resolveSevenRoll } from "../domain/rules/production";
+import { applyProduction } from "../domain/rules/production";
 import { advanceTurn } from "../domain/rules/turns";
-import { buildCity, buildRoad, buildSettlement } from "../domain/rules/building";
-import { buyDevelopmentCard, playKnightCard } from "../domain/rules/developmentCards";
+import {
+  assertCanRoll,
+  assertCanUseTurnAction,
+  assertGameInProgress,
+  advanceRoadBuildingEffect,
+  beginKnightRobber,
+  beginPendingDevelopmentEffect,
+  beginSevenRoll,
+  completePendingDevelopmentEffect,
+  enterActionPhase,
+  getKnightResumePhase,
+  getPendingDevelopmentEffect,
+  placePendingRobber,
+  resetTurnFlow,
+  stealPendingRobberResource,
+  submitSevenDiscard
+} from "../domain/rules/turnFlow";
+import {
+  buildCity,
+  buildRoad,
+  buildSettlement,
+  getLegalRoadEdgeIds,
+  placeFreeRoad
+} from "../domain/rules/building";
+import {
+  buyDevelopmentCard,
+  chooseMonopolyResource,
+  chooseYearOfPlentyResource,
+  playDevelopmentCard,
+  playKnightCard
+} from "../domain/rules/developmentCards";
 import { updateLongestRoadAward } from "../domain/rules/longestRoad";
 import { maritimeTrade } from "../domain/rules/maritimeTrade";
 import { calculatePlayerScore } from "../domain/rules/scoring";
@@ -26,7 +55,8 @@ import {
   type GameState,
   type HexId,
   type PlayerId,
-  type Resource
+  type Resource,
+  type ResourceMap
 } from "../domain/types";
 
 export interface DiceRoll {
@@ -44,15 +74,26 @@ export interface AppState {
 }
 
 export type GameCommand =
-  | { type: "ROLL_DICE"; dice?: [number, number] }
-  | { type: "END_TURN" }
+  | { type: "ROLL_DICE"; playerId: PlayerId; dice?: [number, number] }
+  | { type: "END_TURN"; playerId: PlayerId }
   | { type: "BUILD_ROAD"; playerId: PlayerId; edgeId: string }
   | { type: "BUILD_SETTLEMENT"; playerId: PlayerId; vertexId: string }
   | { type: "BUILD_CITY"; playerId: PlayerId; buildingId: string }
   | { type: "BUY_DEVELOPMENT_CARD"; playerId: PlayerId }
-  | { type: "PLAY_KNIGHT_CARD"; playerId: PlayerId; cardId: string; targetHexId: HexId }
+  | { type: "PLAY_DEVELOPMENT_CARD"; playerId: PlayerId; cardId: string }
+  | { type: "PLAY_KNIGHT_CARD"; playerId: PlayerId; cardId: string }
+  | { type: "PLACE_FREE_ROAD"; playerId: PlayerId; edgeId: string }
+  | { type: "CHOOSE_YEAR_OF_PLENTY_RESOURCE"; playerId: PlayerId; resource: Resource }
+  | { type: "CHOOSE_MONOPOLY_RESOURCE"; playerId: PlayerId; resource: Resource }
   | { type: "MARITIME_TRADE"; playerId: PlayerId; give: Resource; receive: Resource }
-  | { type: "PLACE_ROBBER"; hexId: HexId }
+  | { type: "DISCARD_FOR_SEVEN"; playerId: PlayerId; resources: ResourceMap }
+  | { type: "PLACE_ROBBER"; playerId: PlayerId; hexId: HexId }
+  | {
+      type: "STEAL_ROBBER_RESOURCE";
+      playerId: PlayerId;
+      victimId: PlayerId;
+      random?: () => number;
+    }
   | { type: "COMPLETE_TRADE_SLOT"; playerId: PlayerId; slotId: string }
   | { type: "TRANSFER_TOKENS"; fromPlayerId: PlayerId; toPlayerId: PlayerId; amount: number }
   | { type: "START_GATHERING" }
@@ -89,16 +130,6 @@ function generateTradeSlot(seed: number): TradeSlot {
   };
 }
 
-function assertCanUseNormalAction(game: GameState): void {
-  if (game.phase === "setup") {
-    throw new Error("This action is unavailable during setup.");
-  }
-
-  if (game.phase === "gameOver") {
-    throw new Error("The game is already over.");
-  }
-}
-
 function withWinnerState(game: GameState, playerId = game.activePlayerId): GameState {
   if (game.phase === "gameOver") {
     return game;
@@ -131,14 +162,6 @@ export function createInitialAppState(): AppState {
 }
 
 function applyDiceRoll(game: GameState, diceTotal: number): GameState {
-  if (diceTotal === 7) {
-    const robberGame = resolveSevenRoll(game, game.robberHexId);
-    return {
-      ...robberGame,
-      log: [log("A 7 was rolled; robber pressure resolved."), ...robberGame.log]
-    };
-  }
-
   const production = applyProduction(game, diceTotal);
 
   return {
@@ -152,22 +175,82 @@ function applyDiceRoll(game: GameState, diceTotal: number): GameState {
   };
 }
 
+function startDevelopmentCardEffect(
+  state: AppState,
+  playerId: PlayerId,
+  cardId: string
+): AppState {
+  const played = playDevelopmentCard(state.game, playerId, cardId);
+  let effectGame: GameState;
+
+  if (played.card.kind === "knight") {
+    effectGame = beginKnightRobber(played.game, played.resumePhase);
+  } else {
+    effectGame = beginPendingDevelopmentEffect(
+      played.game,
+      playerId,
+      played.card.kind,
+      played.resumePhase
+    );
+    if (
+      played.card.kind === "roadBuilding" &&
+      getLegalRoadEdgeIds(effectGame, playerId).length === 0
+    ) {
+      effectGame = completePendingDevelopmentEffect(effectGame);
+    }
+    if (
+      played.card.kind === "yearOfPlenty" &&
+      resources.every((resource) => effectGame.bank.resources[resource] === 0)
+    ) {
+      effectGame = completePendingDevelopmentEffect(effectGame);
+    }
+  }
+
+  return {
+    ...state,
+    game: {
+      ...effectGame,
+      log: [
+        log(`${getPlayerName(state.game, playerId)} played ${played.card.kind}.`),
+        ...effectGame.log
+      ]
+    }
+  };
+}
+
 export function gameReducer(state: AppState, command: GameCommand): AppState {
   switch (command.type) {
     case "ROLL_DICE": {
-      assertCanUseNormalAction(state.game);
+      assertCanRoll(state.game, command.playerId);
       const [first, second] = command.dice ?? [rollDie(), rollDie()];
       const total = first + second;
+      const rolledGame =
+        total === 7
+          ? {
+              ...beginSevenRoll(state.game),
+              log: [log("A 7 was rolled; resolve discards and the robber."), ...state.game.log]
+            }
+          : enterActionPhase(applyDiceRoll(state.game, total));
       return {
         ...state,
-        game: withWinnerState(applyDiceRoll(state.game, total)),
+        game: total === 7 ? rolledGame : withWinnerState(rolledGame),
         lastDice: { first, second, total }
       };
     }
+    case "DISCARD_FOR_SEVEN": {
+      const discardedGame = submitSevenDiscard(state.game, command.playerId, command.resources);
+      return {
+        ...state,
+        game: {
+          ...discardedGame,
+          log: [log(`${getPlayerName(state.game, command.playerId)} completed a seven-roll discard.`), ...discardedGame.log]
+        }
+      };
+    }
     case "END_TURN":
-      assertCanUseNormalAction(state.game);
+      assertCanUseTurnAction(state.game, command.playerId);
       {
-        const nextGame = advanceTurn(state.game);
+        const nextGame = resetTurnFlow(advanceTurn(state.game));
         const resetGuild = {
           ...state.guild,
           usedTradePlayerIds: []
@@ -187,11 +270,12 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
               ? [log("The Commerce Guild gathering has started automatically."), ...nextGame.log]
               : nextGame.log
           },
-          guild: nextGuild
+          guild: nextGuild,
+          lastDice: null
         };
       }
     case "BUILD_ROAD":
-      assertCanUseNormalAction(state.game);
+      assertCanUseTurnAction(state.game, command.playerId);
       return {
         ...state,
         game: withWinnerState(
@@ -200,19 +284,22 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
         )
       };
     case "BUILD_SETTLEMENT":
-      assertCanUseNormalAction(state.game);
+      assertCanUseTurnAction(state.game, command.playerId);
       return {
         ...state,
-        game: withWinnerState(buildSettlement(state.game, command.playerId, command.vertexId), command.playerId)
+        game: withWinnerState(
+          updateLongestRoadAward(buildSettlement(state.game, command.playerId, command.vertexId)),
+          command.playerId
+        )
       };
     case "BUILD_CITY":
-      assertCanUseNormalAction(state.game);
+      assertCanUseTurnAction(state.game, command.playerId);
       return {
         ...state,
         game: withWinnerState(buildCity(state.game, command.playerId, command.buildingId), command.playerId)
       };
     case "BUY_DEVELOPMENT_CARD": {
-      assertCanUseNormalAction(state.game);
+      assertCanUseTurnAction(state.game, command.playerId);
       const result = buyDevelopmentCard(state.game, command.playerId);
       return {
         ...state,
@@ -223,19 +310,69 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
       };
     }
     case "PLAY_KNIGHT_CARD":
-      assertCanUseNormalAction(state.game);
+      {
+        const resumePhase = getKnightResumePhase(state.game, command.playerId);
+        const knightGame = beginKnightRobber(
+          playKnightCard(state.game, command.playerId, command.cardId),
+          resumePhase
+        );
+        return {
+          ...state,
+          game: {
+            ...knightGame,
+            log: [log(`${command.playerId} played a knight card; move the robber.`), ...knightGame.log]
+          }
+        };
+      }
+    case "PLAY_DEVELOPMENT_CARD":
+      return startDevelopmentCardEffect(state, command.playerId, command.cardId);
+    case "PLACE_FREE_ROAD": {
+      getPendingDevelopmentEffect(state.game, command.playerId, "roadBuilding");
+      const placedGame = updateLongestRoadAward(
+        placeFreeRoad(state.game, command.playerId, command.edgeId)
+      );
+      const progressedGame = advanceRoadBuildingEffect(
+        placedGame,
+        command.playerId,
+        getLegalRoadEdgeIds(placedGame, command.playerId).length > 0
+      );
       return {
         ...state,
         game: {
-          ...withWinnerState(
-            playKnightCard(state.game, command.playerId, command.cardId, command.targetHexId),
-            command.playerId
-          ),
-          log: [log(`${command.playerId} played a knight card.`), ...state.game.log]
+          ...withWinnerState(progressedGame, command.playerId),
+          log: [
+            log(`${getPlayerName(state.game, command.playerId)} placed a free road.`),
+            ...progressedGame.log
+          ]
         }
       };
+    }
+    case "CHOOSE_YEAR_OF_PLENTY_RESOURCE": {
+      const result = chooseYearOfPlentyResource(
+        state.game,
+        command.playerId,
+        command.resource
+      );
+      return {
+        ...state,
+        game: {
+          ...result,
+          log: [log(`Year of Plenty supplied ${command.resource}.`), ...result.log]
+        }
+      };
+    }
+    case "CHOOSE_MONOPOLY_RESOURCE": {
+      const result = chooseMonopolyResource(state.game, command.playerId, command.resource);
+      return {
+        ...state,
+        game: {
+          ...result,
+          log: [log(`Monopoly collected all opponent ${command.resource}.`), ...result.log]
+        }
+      };
+    }
     case "MARITIME_TRADE":
-      assertCanUseNormalAction(state.game);
+      assertCanUseTurnAction(state.game, command.playerId);
       return {
         ...state,
         game: {
@@ -246,18 +383,43 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
           ]
         }
       };
-    case "PLACE_ROBBER":
-      assertCanUseNormalAction(state.game);
+    case "PLACE_ROBBER": {
+      const robberGame = placePendingRobber(state.game, command.playerId, command.hexId);
+      const resolvedGame =
+        robberGame.turnState.phase === "awaitingRobberVictim"
+          ? robberGame
+          : withWinnerState(robberGame, command.playerId);
       return {
         ...state,
         game: {
-          ...state.game,
-          robberHexId: command.hexId,
-          log: [log(`Robber moved to ${command.hexId}.`), ...state.game.log]
+          ...resolvedGame,
+          log: [log(`Robber moved to ${command.hexId}.`), ...resolvedGame.log]
         }
       };
+    }
+    case "STEAL_ROBBER_RESOURCE": {
+      const stolenGame = stealPendingRobberResource(
+        state.game,
+        command.playerId,
+        command.victimId,
+        command.random
+      );
+      const resolvedGame = withWinnerState(stolenGame, command.playerId);
+      return {
+        ...state,
+        game: {
+          ...resolvedGame,
+          log: [
+            log(
+              `${getPlayerName(state.game, command.playerId)} stole one random resource from ${getPlayerName(state.game, command.victimId)}.`
+            ),
+            ...resolvedGame.log
+          ]
+        }
+      };
+    }
     case "COMPLETE_TRADE_SLOT": {
-      assertCanUseNormalAction(state.game);
+      assertCanUseTurnAction(state.game, command.playerId);
       const result = completeTradeSlot(
         state.game,
         state.guild,
@@ -275,7 +437,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
       };
     }
     case "TRANSFER_TOKENS":
-      assertCanUseNormalAction(state.game);
+      assertCanUseTurnAction(state.game, command.fromPlayerId);
       return {
         ...state,
         game: {
@@ -294,7 +456,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
         }
       };
     case "START_GATHERING":
-      assertCanUseNormalAction(state.game);
+      assertGameInProgress(state.game);
       return {
         ...state,
         guild: startGuildGathering(state.guild),
@@ -304,7 +466,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
         }
       };
     case "OPEN_AUCTION":
-      assertCanUseNormalAction(state.game);
+      assertGameInProgress(state.game);
       return {
         ...state,
         guild: openGuildAuction(state.guild),
@@ -314,7 +476,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
         }
       };
     case "REDEEM_GATHERING": {
-      assertCanUseNormalAction(state.game);
+      assertGameInProgress(state.game);
       const result = redeemGatheringResources(state.game, state.guild, command.playerId, command.resources);
       return {
         ...state,
@@ -326,7 +488,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
       };
     }
     case "RESOLVE_AUCTION": {
-      assertCanUseNormalAction(state.game);
+      assertGameInProgress(state.game);
       const result = resolveAuctionRound(state.game, state.guild, command.bids);
       return {
         ...state,
@@ -343,7 +505,7 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
       };
     }
     case "REDEEM_PRIZE":
-      assertCanUseNormalAction(state.game);
+      assertCanUseTurnAction(state.game, command.playerId);
       return {
         ...state,
         game: {

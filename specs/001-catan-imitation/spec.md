@@ -1,8 +1,9 @@
 # Feature Specification: Catan Imitation With Commerce Guild Expansion
 
 Created: 2026-07-08
-Status: Draft for user review
-Workflow phase: Specification
+Last updated: 2026-07-10
+Status: Implemented and verified through CR-030
+Workflow phase: P2 complete
 
 ## Feature Goal
 
@@ -49,6 +50,78 @@ Future work will be synchronized to `https://github.com/Todesfuge/Catan-Imitatio
 - AI opponents beyond optional simple automation for demonstration.
 - Mobile-first redesign. The initial target is desktop browser, with responsive guardrails where cheap.
 
+## Completed Update: Core Rule Integrity Hardening
+
+This completed update corrected four high-priority rule-integrity gaps found during the post-baseline code review. It covers turn sequencing and robber resolution, normal settlement connectivity, Longest Road ownership, and Commerce Guild bank accounting.
+
+### Turn Sequence and Command Ownership
+
+- CR-001: Only the active player may perform turn-owned actions, including rolling dice, building, buying or playing a development card, maritime trading, completing a Commerce Guild trade slot, transferring tokens, and ending the turn.
+- CR-002: Each turn starts by waiting for the active player to roll. The player may roll exactly once, and normal building, purchasing, trading, and end-turn actions are unavailable until the roll resolves.
+- CR-003: A knight may be played either before the roll or during the post-roll action phase. After its robber interaction finishes, play resumes in the phase from which the knight was played.
+- CR-004: Ending a turn resets the next player to the waiting-for-roll phase and clears display state that belongs only to the previous turn.
+
+### Seven Roll and Robber Resolution
+
+- CR-005: When a 7 is rolled, every player holding more than seven resource cards must choose exactly half their hand, rounded down, to discard.
+- CR-006: A discard submission must contain non-negative whole resource counts, may not exceed the player's holdings, and must total the required discard count. Discarded resources return to the bank.
+- CR-007: All required discards must finish before the active player can move the robber.
+- CR-008: The robber must move to a different board hex. If one or more adjacent opponents still hold resources, the active player chooses one eligible opponent and steals one random resource from that player.
+- CR-009: A robber interaction caused by a 7 resumes the post-roll action phase; one caused by a knight resumes the phase from which the knight was played.
+
+### Settlement and Longest Road Integrity
+
+- CR-010: Outside initial setup, a new settlement must occupy a legal vertex connected to at least one road owned by the building player.
+- CR-011: Longest Road ownership must be recalculated whenever a road or settlement changes the traversable road network.
+- CR-012: No player owns Longest Road when every qualifying length is below five. The current owner retains it when tied for the longest qualifying route. A unique leader takes it; if the previous owner is no longer tied and multiple challengers share the lead, the award remains unowned until the tie is broken.
+- CR-013: Winner detection and displayed scores must use the recalculated Longest Road owner.
+
+### Commerce Guild Bank Accounting
+
+- CR-014: Resources paid into a Commerce Guild trade slot return to the bank.
+- CR-015: Gathering redemption transfers the chosen resource from the bank to the player and rejects a choice when the bank lacks the requested stock.
+- CR-016: Blind-box resource rewards transfer only quantities currently available in the bank. The visible result and log must report the quantity actually awarded when stock truncates the generated reward.
+- CR-017: Resource, guild-token, redemption, and auction quantities must be finite non-negative whole numbers wherever zero is meaningful, and positive whole numbers where an actual transfer or bid is required.
+- CR-018: An invalid command must leave game and Commerce Guild state unchanged and surface a recoverable error to the local player.
+
+### Current Update Acceptance Signals
+
+- A complete turn cannot be advanced, repeated, or executed on behalf of a non-active player through any exposed command.
+- A 7 follows the observable sequence: player-selected discards, robber placement, victim selection when eligible, random steal, then normal actions.
+- Normal settlement placement, Longest Road scoring, and winner detection remain consistent after roads are blocked or extended.
+- Each Commerce Guild operation preserves the combined bank-plus-player total for every resource.
+- Focused tests cover each CR-001 through CR-018 behavior, and the full test, production build, and UI smoke commands remain successful.
+
+## Current Update: P2 Development Cards and Playable Ports
+
+This update completes the two previously deferred gameplay areas without adding networking, persistence, a generic card engine, or randomized board generation.
+
+### Development Card Completion
+
+- CR-019: The active player may play at most one non-victory development card per turn. Knights, Road Building, Year of Plenty, and Monopoly share this limit, and a non-victory card cannot be played on the turn it was acquired.
+- CR-020: Road Building lets the active player choose and place up to two legal roads sequentially without paying resources. The first road changes the legal choices for the second; Longest Road, score, and winner state are recalculated after each placement. The effect ends early when no legal road remains.
+- CR-021: Year of Plenty lets the active player choose up to two resource cards sequentially from current bank stock, including two of the same resource. Each selected card transfers from the bank to the player, and the effect ends early when the bank has no resources.
+- CR-022: Monopoly requires the active player to choose one resource type, then transfers every card of that type held by every opponent to the active player. The bank does not participate.
+- CR-023: A non-victory development-card effect pauses rolling, normal actions, trading, and ending the turn until its required choices finish, then resumes the `awaitingRoll` or `action` phase from which the card was played.
+- CR-024: Victory-point cards remain hidden in the owner's hand, are never played as actions, and continue to contribute one point automatically.
+- CR-025: Invalid card, phase, ownership, target, inventory, or selection commands leave game state unchanged and surface through the existing recoverable error path.
+
+### Playable Port Completion
+
+- CR-026: The standard board contains exactly nine deterministic coastal ports using eighteen distinct coastal vertices: four generic 3:1 ports and one 2:1 port for each resource.
+- CR-027: A player owns a port when that player has a settlement or city on either endpoint; ownership changes only through the current building state and needs no separate mutable flag.
+- CR-028: Maritime trade uses the best applicable ratio for the resource given: matching resource port 2:1, otherwise any owned generic port 3:1, otherwise 4:1.
+- CR-029: Every port is visibly rendered outside the island with its ratio/type and connections to both board endpoints, using the shared SVG geometry.
+- CR-030: The active-player UI displays the effective maritime ratio for each resource, and development-card effects expose explicit road/resource choices rather than auto-selecting a result.
+
+### P2 Acceptance Signals
+
+- All four playable non-victory card types obey purchase-turn and one-card-per-turn restrictions and resume the correct turn phase.
+- Road Building, Year of Plenty, and Monopoly preserve road/resource inventories and cannot be used to bypass normal legality.
+- The fixed board exposes nine usable ports with the required 4+5 distribution and eighteen valid coastal endpoints.
+- Building on either port endpoint changes the relevant maritime ratio and the visible UI agrees with the domain rule.
+- Focused development-card, port-geometry, reducer, and product tests pass together with the full delivery gate.
+
 ## Core Catan Rule Understanding
 
 - The standard board has terrain that produces wood, brick, wool, grain, and ore; desert does not produce resources.
@@ -64,7 +137,7 @@ Future work will be synchronized to `https://github.com/Todesfuge/Catan-Imitatio
   - settlement: 1
   - city: 2
   - victory point development card: 1
-  - largest army and longest road are planned stretch goals for the two-hour run
+  - largest army and longest road: 2 each
   - commerce guild prize card: 2
 - First player to reach the configured target score wins. The default target remains 10 unless the demo mode lowers it for faster play.
 
@@ -133,6 +206,8 @@ Show a complete table combining players, dice totals, probabilities, and resourc
 - The codebase has clear domain/UI boundaries and typed state.
 - The project contains enough docs for another engineer to understand scope, architecture, and remaining work.
 - Build and focused tests pass before the project is presented as complete.
+- Turn-owned actions, dice sequencing, seven-roll discards, robber placement, and victim selection follow the current update requirements without allowing an invalid intermediate state.
+- Settlement connectivity, Longest Road ownership, and Commerce Guild resource transfers remain correct under the reviewed edge cases.
 
 ## Assumptions
 

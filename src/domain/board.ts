@@ -1,4 +1,4 @@
-import type { BoardEdge, BoardHex } from "./types";
+import type { BoardEdge, BoardHex, MaritimePort, Resource } from "./types";
 
 const ringCoords = [
   [0, -2],
@@ -47,6 +47,7 @@ const terrainPlan: Array<Pick<BoardHex, "id" | "terrain" | "resource" | "diceNum
 export interface StandardBoardData {
   board: BoardHex[];
   edges: BoardEdge[];
+  ports: MaritimePort[];
 }
 
 const geometryScale = {
@@ -78,6 +79,70 @@ function vertexKey(q: number, r: number, vertexIndex: number): string {
 
 function edgeKey(leftVertexId: string, rightVertexId: string): string {
   return [leftVertexId, rightVertexId].sort().join("|");
+}
+
+function orderCoastalEdges(board: BoardHex[], edges: BoardEdge[]): BoardEdge[] {
+  const edgeUse = new Map<string, number>();
+  for (const hex of board) {
+    for (const edgeId of hex.edgeIds) {
+      edgeUse.set(edgeId, (edgeUse.get(edgeId) ?? 0) + 1);
+    }
+  }
+  const coastalEdges = edges.filter((edge) => edgeUse.get(edge.id) === 1);
+  const byVertex = new Map<string, BoardEdge[]>();
+  for (const edge of coastalEdges) {
+    for (const vertexId of edge.vertexIds) {
+      byVertex.set(vertexId, [...(byVertex.get(vertexId) ?? []), edge]);
+    }
+  }
+
+  const startVertex = [...byVertex.keys()].sort()[0];
+  const ordered: BoardEdge[] = [];
+  let currentVertex = startVertex;
+  let previousEdgeId: string | undefined;
+  do {
+    const candidates = (byVertex.get(currentVertex) ?? [])
+      .filter((edge) => edge.id !== previousEdgeId)
+      .sort((left, right) => left.id.localeCompare(right.id));
+    const edge = candidates[0];
+    if (!edge) {
+      throw new Error("Standard coastal edges must form one closed boundary.");
+    }
+    ordered.push(edge);
+    previousEdgeId = edge.id;
+    currentVertex = edge.vertexIds.find((vertexId) => vertexId !== currentVertex) ?? startVertex;
+  } while (currentVertex !== startVertex && ordered.length <= coastalEdges.length);
+
+  if (ordered.length !== coastalEdges.length) {
+    throw new Error("Standard coastal boundary traversal did not include every edge.");
+  }
+  return ordered;
+}
+
+function createStandardPorts(board: BoardHex[], edges: BoardEdge[]): MaritimePort[] {
+  const coastalEdges = orderCoastalEdges(board, edges);
+  const portEdgeIndices = [0, 3, 6, 10, 13, 16, 20, 23, 26];
+  const portKinds: Array<{ kind: "generic" } | { kind: "resource"; resource: Resource }> = [
+    { kind: "generic" },
+    { kind: "resource", resource: "wood" },
+    { kind: "generic" },
+    { kind: "resource", resource: "brick" },
+    { kind: "resource", resource: "wool" },
+    { kind: "generic" },
+    { kind: "resource", resource: "grain" },
+    { kind: "generic" },
+    { kind: "resource", resource: "ore" }
+  ];
+
+  return portEdgeIndices.map((edgeIndex, index) => {
+    const edge = coastalEdges[edgeIndex];
+    const portKind = portKinds[index];
+    return {
+      id: `standard-port-${index + 1}`,
+      ...portKind,
+      vertexIds: [...edge.vertexIds]
+    };
+  });
 }
 
 export function createStandardBoardData(): StandardBoardData {
@@ -125,7 +190,7 @@ export function createStandardBoardData(): StandardBoardData {
     };
   });
 
-  return { board, edges };
+  return { board, edges, ports: createStandardPorts(board, edges) };
 }
 
 export function createStandardBoard(): BoardHex[] {

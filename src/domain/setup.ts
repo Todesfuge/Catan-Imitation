@@ -1,5 +1,6 @@
 import { createStandardBoardData } from "./board";
 import { createDevelopmentDeck } from "./rules/developmentCards";
+import { createAwaitingRollTurnState } from "./rules/turnFlow";
 import { emptyResources, type BoardEdge, type BoardHex, type GameState, type Player } from "./types";
 
 function createPlayer(id: string, name: string, color: string): Player {
@@ -54,7 +55,7 @@ function getEdgeTouchingVertex(edges: BoardEdge[], vertexId: string): BoardEdge 
 }
 
 export function createDemoGame(): GameState {
-  const { board, edges } = createStandardBoardData();
+  const { board, edges, ports } = createStandardBoardData();
   const pastureEight = getHex(board, "pasture-8");
   const mountainEight = getHex(board, "mountain-8");
   const p1VertexId = pastureEight.vertexIds[0];
@@ -68,10 +69,11 @@ export function createDemoGame(): GameState {
     activePlayerId: "p1",
     turn: 1,
     round: 1,
+    turnState: createAwaitingRollTurnState(),
     targetScore: 10,
     board,
     edges,
-    ports: [],
+    ports,
     buildings: [
       {
         id: "b-p1-city-pasture-8",
@@ -111,7 +113,7 @@ export function createDemoGame(): GameState {
 }
 
 export function createSetupGame(): GameState {
-  const { board, edges } = createStandardBoardData();
+  const { board, edges, ports } = createStandardBoardData();
 
   return {
     phase: "setup",
@@ -119,10 +121,11 @@ export function createSetupGame(): GameState {
     activePlayerId: "p1",
     turn: 1,
     round: 1,
+    turnState: createAwaitingRollTurnState(),
     targetScore: 10,
     board,
     edges,
-    ports: [],
+    ports,
     buildings: [],
     roads: [],
     robberHexId: "desert",

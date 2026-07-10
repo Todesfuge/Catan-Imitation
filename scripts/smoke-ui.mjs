@@ -79,11 +79,37 @@ try {
   const js = jsPaths.map((path) => readFileSync(distAssetPath(path, basePath), "utf8")).join("\n");
   const css = cssPaths.map((path) => readFileSync(distAssetPath(path, basePath), "utf8")).join("\n");
 
-  for (const text of ["Catan board", "Yield Statistics", "Commerce Guild", "Activity"]) {
+  for (const text of [
+    "Catan board",
+    "Yield Statistics",
+    "Commerce Guild",
+    "Activity",
+    "Submit Discard",
+    "Move the robber to a different hex",
+    "Choose a player to steal from",
+    "Road Building",
+    "Year of Plenty",
+    "Monopoly",
+    "Effective maritime trade ratios",
+    "Standard maritime ports",
+    "2:1 "
+  ]) {
     assert(js.includes(text), `Expected JavaScript bundle to include ${text}.`);
   }
 
-  for (const text of [".board-zone", ".activity-shell", ".terrain-icon", ".board-hex", ".road-marker"]) {
+  for (const text of [
+    ".board-zone",
+    ".activity-shell",
+    ".terrain-icon",
+    ".board-hex",
+    ".road-marker",
+    ".turn-flow-panel",
+    ".robber-victim-buttons",
+    ".development-card-controls",
+    ".road-building-target",
+    ".port-marker",
+    ".maritime-ratio-guide"
+  ]) {
     assert(css.includes(text), `Expected CSS bundle to include ${text}.`);
   }
   assert(js.includes("board-svg"), "Expected JavaScript bundle to render the SVG board.");

@@ -99,6 +99,34 @@ function canPay(resourcesMap: ResourceMap, cost: ResourceCost): boolean {
   return resources.every((resource) => resourcesMap[resource] >= (cost[resource] ?? 0));
 }
 
+function assertWholeNumber(value: number, label: string, allowZero = true): void {
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0 || (!allowZero && value === 0)) {
+    throw new Error(`${label} must be a ${allowZero ? "non-negative" : "positive"} finite whole number.`);
+  }
+}
+
+function assertResourceCost(cost: ResourceCost, label: string, requirePositive = true): void {
+  for (const resource of resources) {
+    assertWholeNumber(cost[resource] ?? 0, `${label} ${resource}`);
+  }
+  if (requirePositive && resources.every((resource) => (cost[resource] ?? 0) === 0)) {
+    throw new Error(`${label} must include at least one resource.`);
+  }
+}
+
+function assertTradeSlot(slot: TradeSlot): void {
+  assertResourceCost(slot.requires, "Trade-slot cost");
+  assertWholeNumber(slot.tokenReward, "Trade-slot reward", false);
+}
+
+function sampleRandom(random: () => number): number {
+  const value = random();
+  if (!Number.isFinite(value) || value < 0 || value >= 1) {
+    throw new Error("Random source must return a finite value in the range [0, 1).");
+  }
+  return value;
+}
+
 function subtractCost(resourcesMap: ResourceMap, cost: ResourceCost): ResourceMap {
   return {
     wood: resourcesMap.wood - (cost.wood ?? 0),
@@ -137,15 +165,24 @@ export function completeTradeSlot(
 
   const player = getPlayer(game, playerId);
   const slot = guild.tradeSlots[slotIndex];
+  assertTradeSlot(slot);
+  assertTradeSlot(nextSlot);
   if (!canPay(player.resources, slot.requires)) {
     throw new Error("Player does not have the required resources for this trade.");
   }
 
-  const updatedGame = updatePlayer(game, playerId, (candidate) => ({
+  const normalizedCost = normalizeCost(slot.requires);
+  const paidGame = updatePlayer(game, playerId, (candidate) => ({
     ...candidate,
     resources: subtractCost(candidate.resources, slot.requires),
     guildTokens: candidate.guildTokens + slot.tokenReward
   }));
+  const updatedGame = {
+    ...paidGame,
+    bank: {
+      resources: addResourceMaps(paidGame.bank.resources, normalizedCost)
+    }
+  };
 
   const refreshedSlots = guild.tradeSlots.map((candidate, index) =>
     index === slotIndex ? nextSlot : candidate
@@ -171,9 +208,7 @@ export function transferGuildTokens(
     throw new Error("Token transfer requires two different players.");
   }
 
-  if (amount <= 0) {
-    throw new Error("Token transfer amount must be positive.");
-  }
+  assertWholeNumber(amount, "Token transfer amount", false);
 
   const from = getPlayer(game, fromPlayerId);
   getPlayer(game, toPlayerId);
@@ -248,9 +283,17 @@ export function redeemGatheringResources(
     throw new Error("Guild gathering is not in resource redemption phase.");
   }
 
+  assertResourceCost(requested, "Gathering redemption");
+
   const player = getPlayer(game, playerId);
   const alreadyRedeemed = guild.gathering.redemptions[playerId] ?? 0;
   const remainingGatheringCap = Math.max(0, 4 - alreadyRedeemed);
+  if (remainingGatheringCap === 0) {
+    throw new Error("The gathering redemption cap has already been reached.");
+  }
+  if (player.guildTokens === 0) {
+    throw new Error("The player has no guild tokens available for redemption.");
+  }
   const redeemable = Math.min(remainingGatheringCap, player.guildTokens);
   let remaining = redeemable;
   let redeemedCount = 0;
@@ -268,12 +311,23 @@ export function redeemGatheringResources(
     redeemedCount += accepted;
   }
 
+  if (resources.some((resource) => gained[resource] > game.bank.resources[resource])) {
+    throw new Error("The bank does not have enough stock for this gathering redemption.");
+  }
+
+  const redeemedGame = updatePlayer(game, playerId, (candidate) => ({
+    ...candidate,
+    guildTokens: candidate.guildTokens - redeemedCount,
+    resources: addResourceMaps(candidate.resources, gained)
+  }));
+
   return {
-    game: updatePlayer(game, playerId, (candidate) => ({
-      ...candidate,
-      guildTokens: candidate.guildTokens - redeemedCount,
-      resources: addResourceMaps(candidate.resources, gained)
-    })),
+    game: {
+      ...redeemedGame,
+      bank: {
+        resources: subtractCost(redeemedGame.bank.resources, gained)
+      }
+    },
     guild: {
       ...guild,
       gathering: {
@@ -299,10 +353,8 @@ function pickAuctionWinner(
 ): { winnerId: PlayerId; winningBid: number } {
   const turnOrder = turnOrderFromActive(game);
   const validBids = Object.entries(bids).filter(([playerId, bid]) => {
+    assertWholeNumber(bid, "Auction bid");
     const player = getPlayer(game, playerId);
-    if (bid < 0) {
-      throw new Error(`${player.name} bid cannot be negative.`);
-    }
     if (bid > player.guildTokens) {
       throw new Error(`${player.name} bid exceeds available guild tokens.`);
     }
@@ -327,11 +379,11 @@ function pickAuctionWinner(
 }
 
 function rollResourceBundle(random: () => number): ResourceMap {
-  const amount = 2 + Math.floor(random() * 3);
+  const amount = 2 + Math.floor(sampleRandom(random) * 3);
   let bundle = emptyResources();
 
   for (let index = 0; index < amount; index += 1) {
-    const resource = resources[Math.floor(random() * resources.length)];
+    const resource = resources[Math.floor(sampleRandom(random) * resources.length)];
     bundle = addResourceMaps(bundle, { ...emptyResources(), [resource]: 1 });
   }
 
@@ -339,7 +391,7 @@ function rollResourceBundle(random: () => number): ResourceMap {
 }
 
 function openBlindBox(random: () => number): BlindBoxOutcome {
-  const roll = random();
+  const roll = sampleRandom(random);
 
   if (roll < 0.5) {
     return { kind: "resources", resources: rollResourceBundle(random) };
@@ -350,16 +402,44 @@ function openBlindBox(random: () => number): BlindBoxOutcome {
   return { kind: "developmentCard", card: "knight" };
 }
 
-function applyBlindBoxOutcome(game: GameState, playerId: PlayerId, outcome: BlindBoxOutcome): GameState {
-  return updatePlayer(game, playerId, (player) => {
-    if (outcome.kind === "resources") {
-      return { ...player, resources: addResourceMaps(player.resources, outcome.resources) };
-    }
-    if (outcome.kind === "voucher") {
-      return { ...player, vouchers: player.vouchers + 1 };
-    }
-    return player;
-  });
+function applyBlindBoxOutcome(
+  game: GameState,
+  playerId: PlayerId,
+  outcome: BlindBoxOutcome
+): { game: GameState; outcome: BlindBoxOutcome } {
+  if (outcome.kind === "resources") {
+    const awarded = Object.fromEntries(
+      resources.map((resource) => [
+        resource,
+        Math.min(outcome.resources[resource], game.bank.resources[resource])
+      ])
+    ) as ResourceMap;
+    const rewardedGame = updatePlayer(game, playerId, (player) => ({
+      ...player,
+      resources: addResourceMaps(player.resources, awarded)
+    }));
+    return {
+      game: {
+        ...rewardedGame,
+        bank: {
+          resources: subtractCost(rewardedGame.bank.resources, awarded)
+        }
+      },
+      outcome: { kind: "resources", resources: awarded }
+    };
+  }
+
+  if (outcome.kind === "voucher") {
+    return {
+      game: updatePlayer(game, playerId, (player) => ({
+        ...player,
+        vouchers: player.vouchers + 1
+      })),
+      outcome
+    };
+  }
+
+  return { game, outcome };
 }
 
 function resolveBlindBoxOutcome(
@@ -369,10 +449,7 @@ function resolveBlindBoxOutcome(
 ): { game: GameState; outcome: BlindBoxOutcome } {
   const provisionalOutcome = openBlindBox(random);
   if (provisionalOutcome.kind !== "developmentCard") {
-    return {
-      game: applyBlindBoxOutcome(game, playerId, provisionalOutcome),
-      outcome: provisionalOutcome
-    };
+    return applyBlindBoxOutcome(game, playerId, provisionalOutcome);
   }
 
   const reward = awardDevelopmentCardFromDeck(game, playerId);
@@ -392,10 +469,11 @@ export function describeBlindBoxOutcome(outcome: BlindBoxOutcome): string {
   if (outcome.kind === "developmentCard") {
     return `${outcome.card} development card`;
   }
-  return `resources: ${resources
+  const description = resources
     .filter((resource) => outcome.resources[resource] > 0)
     .map((resource) => `${resource} ${outcome.resources[resource]}`)
-    .join(", ")}`;
+    .join(", ");
+  return description.length > 0 ? `resources: ${description}` : "no resources (bank stock exhausted)";
 }
 
 export function resolveAuctionRound(

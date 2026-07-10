@@ -1,7 +1,7 @@
 # Tasks: Catan Imitation With Commerce Guild Expansion
 
 Feature: 001-catan-imitation
-Status: Draft for implementation
+Status: Implemented and verified through U046
 
 ## MVP Task List
 
@@ -60,8 +60,34 @@ Status: Draft for implementation
 - [x] U024 Add roadmap milestones.
 - [x] U025 Normalize board topology to shared Catan vertices and edges.
 - [x] U026 Separate board hexes visually and render road edges.
+- [x] U027 Replace CSS-positioned board tiles with shared SVG board geometry.
 
-Detailed acceptance criteria for U001-U026 live in [update-backlog.md](update-backlog.md).
+## Core Rule Integrity Tasks
+
+- [x] U028 Add failing active-player and dice-sequencing tests in `test/domain/turnFlow.test.ts` for CR-001 through CR-004.
+- [x] U029 Add the typed turn state and shared authorization/phase gates in `src/domain/types.ts`, `src/domain/rules/turnFlow.ts`, `src/domain/setup.ts`, and `src/app/gameReducer.ts` until U028 passes.
+- [x] U030 Add failing player-selected discard, robber placement, victim selection, random steal, and knight-resume tests in `test/domain/turnFlow.test.ts` for CR-005 through CR-009.
+- [x] U031 Implement the staged seven/robber/knight flow in `src/domain/rules/turnFlow.ts`, `src/domain/rules/production.ts`, `src/domain/rules/developmentCards.ts`, and `src/app/gameReducer.ts` until U030 passes.
+- [x] U032 Add phase-aware discard and robber controls in `src/ui/TurnFlowPanel.tsx`, `src/App.tsx`, and `src/styles/app.css`, with product assertions covering the new controls and disabled pre-roll actions.
+- [x] U033 Add failing settlement-connectivity and Longest Road transition tests in `test/domain/ruleIntegrity.test.ts` for CR-010 through CR-013.
+- [x] U034 Implement normal settlement road connectivity and complete Longest Road recomputation in `src/domain/rules/building.ts`, `src/domain/rules/longestRoad.ts`, and `src/app/gameReducer.ts` until U033 passes.
+- [x] U035 Add failing Commerce Guild resource-conservation, short-bank, and integer-validation tests in `test/domain/commerceGuildIntegrity.test.ts` for CR-014 through CR-018.
+- [x] U036 Implement local Commerce Guild bank-transfer and numeric-validation helpers in `src/domain/expansion/commerceGuild.ts`, preserving deterministic blind-box results, until U035 passes.
+- [x] U037 Run focused integration and product checks for the complete CR-001 through CR-018 command flow; update `scripts/smoke-ui.mjs` only where the new visible workflow requires it.
+- [x] U038 Run full test/build/Pages/smoke verification, update handoff and private worklog records, and record any remaining risks without marking deferred P2 work complete.
+
+## P2 Completion Tasks
+
+- [x] U039 Add failing development-card effect tests in `test/domain/developmentCardEffects.test.ts` for CR-019 through CR-025, including shared per-turn limits, purchase-turn rejection, sequential Road Building, Year of Plenty bank transfers, Monopoly, phase restoration, and atomic failure.
+- [x] U040 Implement typed pending development effects and all standard card rules in `src/domain/types.ts`, `src/domain/rules/turnFlow.ts`, `src/domain/rules/developmentCards.ts`, `src/domain/rules/building.ts`, and `src/app/gameReducer.ts` until U039 passes.
+- [x] U041 Add explicit development-card and pending-effect controls in `src/ui/DevelopmentCardPanel.tsx`, `src/App.tsx`, and `src/styles/app.css`, with product tests for card counts, legal road targets, resource choices, paused actions, and phase guidance.
+- [x] U042 Add failing deterministic port topology, ownership, ratio, geometry, and presentation tests in `test/domain/portGameplay.test.ts` and `test/domain/productPolish.test.ts` for CR-026 through CR-030.
+- [x] U043 Generate nine standard coastal ports and wire them into setup/demo games in `src/domain/board.ts`, `src/domain/setup.ts`, `src/domain/rules/maritimeTrade.ts`, and `src/ui/boardGeometry.ts` until U042 domain and geometry tests pass.
+- [x] U044 Render SVG port labels/connectors and effective per-resource maritime ratios in `src/App.tsx` and `src/styles/app.css`; extend `scripts/smoke-ui.mjs` for the visible P2 contracts.
+- [x] U045 Run focused integration, implementation review, and artifact convergence for CR-019 through CR-030 without marking networking, persistence, or generalized board generation complete.
+- [x] U046 Run the complete test/build/Pages/smoke/render/diff gate, refresh handoff and private worklog records, then create one commit containing the existing CR-001 through CR-018 changes and the completed P2 work.
+
+Detailed acceptance criteria for U001-U046 live in [update-backlog.md](update-backlog.md).
 
 ## Independent Acceptance Slices
 

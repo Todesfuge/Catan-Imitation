@@ -14,6 +14,13 @@ export type Terrain = "forest" | "hill" | "pasture" | "field" | "mountain" | "de
 export type BuildingKind = "settlement" | "city";
 export type GamePhase = "setup" | "playing" | "gameOver";
 export type SetupStage = "settlement" | "road";
+export type TurnPhase =
+  | "awaitingRoll"
+  | "awaitingDiscards"
+  | "awaitingRobberPlacement"
+  | "awaitingRobberVictim"
+  | "awaitingDevelopmentEffect"
+  | "action";
 export type DevelopmentCardKind = "knight" | "victoryPoint" | "roadBuilding" | "yearOfPlenty" | "monopoly";
 export type PortKind = "generic" | "resource";
 
@@ -92,12 +99,47 @@ export interface SetupState {
   };
 }
 
+export interface PendingRobber {
+  source: "seven" | "knight";
+  resumePhase: "awaitingRoll" | "action";
+  targetHexId?: HexId;
+  eligibleVictimIds: PlayerId[];
+}
+
+export type PendingDevelopmentEffect =
+  | {
+      kind: "roadBuilding";
+      playerId: PlayerId;
+      remainingRoads: number;
+      resumePhase: "awaitingRoll" | "action";
+    }
+  | {
+      kind: "yearOfPlenty";
+      playerId: PlayerId;
+      remainingPicks: number;
+      resumePhase: "awaitingRoll" | "action";
+    }
+  | {
+      kind: "monopoly";
+      playerId: PlayerId;
+      resumePhase: "awaitingRoll" | "action";
+    };
+
+export interface TurnState {
+  phase: TurnPhase;
+  pendingDiscards: Partial<Record<PlayerId, number>>;
+  pendingRobber?: PendingRobber;
+  pendingDevelopmentEffect?: PendingDevelopmentEffect;
+  developmentCardPlayed?: boolean;
+}
+
 export interface GameState {
   phase: GamePhase;
   players: Player[];
   activePlayerId: PlayerId;
   turn: number;
   round: number;
+  turnState: TurnState;
   targetScore: number;
   board: BoardHex[];
   edges: BoardEdge[];

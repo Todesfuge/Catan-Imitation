@@ -1,7 +1,7 @@
 # Requirements Quality Checklist
 
 Feature: 001-catan-imitation
-Checked: 2026-07-08
+Checked: 2026-07-10
 
 ## Completeness
 
@@ -33,5 +33,27 @@ Checked: 2026-07-08
 
 - [x] Online multiplayer is excluded from the two-hour MVP.
 - [x] Proprietary art and branding are excluded.
-- [x] Longest road and largest army are stretch goals, not blockers for the main demo.
+- [x] Longest Road, Largest Army, all standard development-card effects, and playable standard ports are implemented classic systems.
 - [x] AI opponents are optional, not part of the first acceptance path.
+
+## Core Rule Integrity Update
+
+- [x] The active-player boundary and once-per-turn dice sequence are explicit.
+- [x] Knight timing before and after the roll has one unambiguous resume rule.
+- [x] Seven-roll discards specify player choice, exact counts, validation, ordering, and bank return.
+- [x] Robber placement specifies a different hex, eligible opponents, player-selected victim, and random resource selection.
+- [x] Normal settlement road connectivity is distinct from setup placement.
+- [x] Longest Road threshold, incumbent tie, challenger tie, recalculation, and score effects are testable.
+- [x] Commerce Guild trade, redemption, and blind-box resource movement specifies bank behavior under normal and short-stock conditions.
+- [x] Numeric inputs and invalid-command state preservation are explicit.
+- [x] Development-card completeness and playable port placement were excluded from CR-001 through CR-018 and are now separately specified as CR-019 through CR-030.
+
+## P2 Completion Review
+
+- [x] One-card-per-turn and purchase-turn restrictions cover every playable non-victory card.
+- [x] Road Building defines sequential legal choices, free placement, early completion, and Longest Road/winner recalculation.
+- [x] Year of Plenty defines player choice, same-resource selection, bank stock, conservation, and early completion.
+- [x] Monopoly defines the selected resource, all-opponent transfer, and bank exclusion.
+- [x] Development-card effects define paused commands, phase restoration, explicit UI choice, and atomic rejection.
+- [x] The standard port count, type distribution, coastal endpoints, ownership, ratios, and SVG presentation are testable.
+- [x] Networking, persistence, generalized card engines, and randomized board generation remain excluded.

@@ -8,6 +8,25 @@ describe("core gameplay rules", () => {
     const state = createInitialAppState();
     const richGame = {
       ...state.game,
+      board: [
+        {
+          id: "custom",
+          terrain: "desert" as const,
+          resource: null,
+          diceNumber: null,
+          vertexIds: ["v0", "v1", "v2"],
+          edgeIds: ["e0", "e1"],
+          q: 0,
+          r: 0
+        }
+      ],
+      edges: [
+        { id: "e0", hexId: "custom", vertexIds: ["v0", "v1"] as [string, string] },
+        { id: "e1", hexId: "custom", vertexIds: ["v1", "v2"] as [string, string] }
+      ],
+      roads: [{ id: "seed-road", ownerId: "p1", edgeId: "e0" }],
+      buildings: [],
+      robberHexId: "custom",
       players: state.game.players.map((player) =>
         player.id === "p1"
           ? {
@@ -17,20 +36,14 @@ describe("core gameplay rules", () => {
           : player
       )
     };
-    const p1City = richGame.buildings.find((building) => building.ownerId === "p1");
-    const occupiedEdgeIds = new Set(richGame.roads.map((road) => road.edgeId));
-    const connectedEdge = richGame.edges.find(
-      (edge) => edge.vertexIds.includes(p1City?.vertexId ?? "") && !occupiedEdgeIds.has(edge.id)
-    );
-    const forest = richGame.board.find((hex) => hex.id === "forest-4");
-    const settlementVertexId = forest?.vertexIds[0] ?? "";
+    const settlementVertexId = "v2";
 
-    const roadGame = buildRoad(richGame, "p1", connectedEdge?.id ?? "");
+    const roadGame = buildRoad(richGame, "p1", "e1");
     const settlementGame = buildSettlement(roadGame, "p1", settlementVertexId);
     const cityGame = buildCity(settlementGame, "p1", `built-settlement-p1-${settlementVertexId}`);
     const p1 = cityGame.players.find((player) => player.id === "p1");
 
-    expect(cityGame.roads.some((road) => road.edgeId === connectedEdge?.id)).toBe(true);
+    expect(cityGame.roads.some((road) => road.edgeId === "e1")).toBe(true);
     expect(cityGame.buildings.find((building) => building.vertexId === settlementVertexId)?.kind).toBe(
       "city"
     );
@@ -59,7 +72,7 @@ describe("core gameplay rules", () => {
   it("roll dice command applies production to player hands and records the roll", () => {
     const state = createInitialAppState();
 
-    const next = gameReducer(state, { type: "ROLL_DICE", dice: [4, 4] });
+    const next = gameReducer(state, { type: "ROLL_DICE", playerId: "p1", dice: [4, 4] });
     const p1 = next.game.players.find((player) => player.id === "p1");
     const p2 = next.game.players.find((player) => player.id === "p2");
 

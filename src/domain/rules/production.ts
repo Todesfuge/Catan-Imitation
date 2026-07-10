@@ -1,7 +1,6 @@
 import {
   emptyResources,
   resources,
-  type BoardHex,
   type GameState,
   type Player,
   type PlayerId,
@@ -65,53 +64,14 @@ function subtractResources(left: ResourceMap, right: Partial<ResourceMap>): Reso
   };
 }
 
-function totalResources(resourceMap: ResourceMap): number {
+export function totalResources(resourceMap: ResourceMap): number {
   return resources.reduce((total, resource) => total + resourceMap[resource], 0);
-}
-
-function discardOverLimit(player: Player): Player {
-  const total = totalResources(player.resources);
-  if (total <= 7) {
-    return player;
-  }
-
-  let remainingDiscard = Math.floor(total / 2);
-  const discarded = emptyResources();
-
-  for (const resource of resources) {
-    const amount = Math.min(player.resources[resource], remainingDiscard);
-    discarded[resource] = amount;
-    remainingDiscard -= amount;
-
-    if (remainingDiscard === 0) {
-      break;
-    }
-  }
-
-  return {
-    ...player,
-    resources: subtractResources(player.resources, discarded)
-  };
-}
-
-function getHex(game: GameState, hexId: string): BoardHex {
-  const hex = game.board.find((candidate) => candidate.id === hexId);
-  if (!hex) {
-    throw new Error(`Unknown robber target hex: ${hexId}`);
-  }
-  return hex;
 }
 
 function getStealableCards(player: Player): Array<keyof ResourceMap> {
   return [...resources]
     .reverse()
     .flatMap((resource) => Array.from({ length: player.resources[resource] }, () => resource));
-}
-
-function isAdjacentToHex(game: GameState, playerId: PlayerId, hex: BoardHex): boolean {
-  return game.buildings.some(
-    (building) => building.ownerId === playerId && hex.vertexIds.includes(building.vertexId)
-  );
 }
 
 export function applyProduction(
@@ -154,42 +114,53 @@ export function applyProduction(
   };
 }
 
-export function resolveSevenRoll(
+export function discardResourcesToBank(
   game: GameState,
-  targetHexId: string,
-  stealFromPlayerId?: PlayerId,
+  playerId: PlayerId,
+  discarded: ResourceMap
+): GameState {
+  return {
+    ...game,
+    players: game.players.map((player) =>
+      player.id === playerId
+        ? { ...player, resources: subtractResources(player.resources, discarded) }
+        : player
+    ),
+    bank: {
+      resources: addResources(game.bank.resources, discarded)
+    }
+  };
+}
+
+export function stealRandomResource(
+  game: GameState,
+  fromPlayerId: PlayerId,
+  toPlayerId: PlayerId,
   random: () => number = Math.random
 ): GameState {
-  const targetHex = getHex(game, targetHexId);
-  const discardedGame = {
-    ...game,
-    players: game.players.map(discardOverLimit),
-    robberHexId: targetHex.id
-  };
-
-  if (!stealFromPlayerId) {
-    return discardedGame;
+  const victim = game.players.find((player) => player.id === fromPlayerId);
+  if (!victim) {
+    throw new Error(`Unknown player: ${fromPlayerId}`);
   }
 
-  const victim = discardedGame.players.find((player) => player.id === stealFromPlayerId);
-  if (!victim || victim.id === discardedGame.activePlayerId) {
-    throw new Error("Robber steal requires an adjacent opponent.");
-  }
-
-  if (!isAdjacentToHex(discardedGame, victim.id, targetHex)) {
-    throw new Error("Robber steal target must have a building on the robber hex.");
+  if (!game.players.some((player) => player.id === toPlayerId)) {
+    throw new Error(`Unknown player: ${toPlayerId}`);
   }
 
   const stealableCards = getStealableCards(victim);
   if (stealableCards.length === 0) {
-    return discardedGame;
+    throw new Error("Robber victim has no resource cards to steal.");
   }
 
-  const stolenResource = stealableCards[Math.floor(random() * stealableCards.length)];
+  const randomValue = random();
+  if (!Number.isFinite(randomValue) || randomValue < 0 || randomValue >= 1) {
+    throw new Error("Random source must return a finite value from 0 inclusive to 1 exclusive.");
+  }
+  const stolenResource = stealableCards[Math.floor(randomValue * stealableCards.length)];
 
   return {
-    ...discardedGame,
-    players: discardedGame.players.map((player) => {
+    ...game,
+    players: game.players.map((player) => {
       if (player.id === victim.id) {
         return {
           ...player,
@@ -197,7 +168,7 @@ export function resolveSevenRoll(
         };
       }
 
-      if (player.id === discardedGame.activePlayerId) {
+      if (player.id === toPlayerId) {
         return {
           ...player,
           resources: addResources(player.resources, { [stolenResource]: 1 })

@@ -1,4 +1,4 @@
-import type { BoardEdge, BoardHex, VertexId } from "../domain/types";
+import type { BoardEdge, BoardHex, MaritimePort, VertexId } from "../domain/types";
 
 export interface BoardPoint {
   x: number;
@@ -64,5 +64,27 @@ export function edgeProjection(hexes: BoardHex[], edge: BoardEdge) {
   return {
     from: vertexProjection(hexes, edge.vertexIds[0]),
     to: vertexProjection(hexes, edge.vertexIds[1])
+  };
+}
+
+export function portProjection(hexes: BoardHex[], port: MaritimePort) {
+  const from = vertexProjection(hexes, port.vertexIds[0]);
+  const to = vertexProjection(hexes, port.vertexIds[1]);
+  const midpoint = {
+    x: (from.x + to.x) / 2,
+    y: (from.y + to.y) / 2
+  };
+  const direction = {
+    x: midpoint.x - boardViewBox.width / 2,
+    y: midpoint.y - boardViewBox.height / 2
+  };
+  const length = Math.hypot(direction.x, direction.y) || 1;
+  return {
+    from,
+    to,
+    label: {
+      x: midpoint.x + (direction.x / length) * 58,
+      y: midpoint.y + (direction.y / length) * 58
+    }
   };
 }

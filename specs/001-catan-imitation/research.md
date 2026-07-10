@@ -1,6 +1,7 @@
 # Research Notes
 
 Created: 2026-07-08
+Last updated: 2026-07-10
 
 ## Technical Choices
 
@@ -15,7 +16,46 @@ Created: 2026-07-08
 - A portfolio reviewer should see the requested innovation quickly, so the Commerce Guild and statistics controls should be first-class panels, not hidden debug tools.
 - Catan Imitation should use original visual assets. Similar layout and information hierarchy are acceptable; copying proprietary art is not.
 
-## Open Technical Unknowns
+## Historical Technical Unknowns (Resolved)
 
-- Package installation may require network approval. If dependency installation fails, request escalation instead of silently changing the technology.
-- Board interaction can be simplified with fixed node IDs if precise geometric hit testing becomes a time risk.
+- Package installation and the Vite/Vitest toolchain are available through the checked-in pnpm lockfile and current local installation.
+- Board interaction uses fixed topology ids plus a shared SVG projection, so no additional geometric hit-testing approach is needed for this update.
+
+## Core Rule Integrity Decisions
+
+- Decision: use an explicit typed turn state rather than independent booleans.
+  - Reason: discard, robber placement, victim choice, and knight resume behavior must not form contradictory combinations.
+  - Rejected: reducer-only `hasRolled` / `mustMoveRobber` flags because they distribute invariants across UI and orchestration code.
+- Decision: create one bounded `turnFlow.ts` owner and keep `gameReducer.ts` as the compatibility facade for UI commands.
+  - Reason: the reducer is already a maintainability hotspot and should not absorb new rule logic.
+  - Rejected: a generic command/event engine because there is only one current state-machine implementation and no dependency is needed.
+- Decision: model player-selected seven-roll discards before robber placement.
+  - Reason: this is observable classic behavior approved for the update and requires cross-player progress tracking.
+- Decision: reuse the same staged robber flow for seven rolls and knights, with an explicit resume phase.
+  - Reason: it prevents the two entry points from drifting while preserving pre-roll knight timing.
+- Decision: keep Commerce bank helpers local to `commerceGuild.ts` during this update.
+  - Reason: resource arithmetic is duplicated elsewhere, but a broad ledger refactor would expand the regression surface beyond CR-014 through CR-018.
+- Decision: add a bounded `TurnFlowPanel` instead of growing `App.tsx` with discard selection state and victim controls.
+  - Reason: the UI file is already the top static hotspot; the new workflow has a clear rendering responsibility.
+
+## Resolved Unknowns for This Update
+
+- The current TypeScript/Vitest stack can express the state machine and deterministic random tests without new packages.
+- Board hex and shared-vertex data already supports robber victim eligibility and settlement-road connectivity checks.
+
+## P2 Development Cards and Ports
+
+- Decision: extend the existing turn state with one discriminated pending development effect.
+  - Reason: Road Building and Year of Plenty require sequential choices and phase restoration, matching the already successful staged robber pattern.
+  - Rejected: a generic card/effect engine, because five fixed standard card kinds do not justify a new abstraction layer.
+- Decision: enforce one playable non-victory card per turn with a turn-state flag shared by Knight and the three new active effects.
+  - Reason: the limit is turn-scoped, must survive intermediate phases, and resets naturally with turn advancement.
+- Decision: reuse road legality for a cost-free Road Building placement path.
+  - Reason: connectivity, occupancy, opponent blocking, Longest Road, and winner behavior must not drift between paid and free roads.
+- Decision: resolve Year of Plenty one card at a time from live bank stock and Monopoly in one all-opponent transfer.
+  - Reason: these flows preserve explicit player choice while keeping inventory conservation observable and atomic per command.
+- Decision: derive deterministic ports from boundary topology and keep ownership computed from buildings.
+  - Reason: the board already has canonical shared vertices/edges; a second ownership store would drift.
+- Decision: render original SVG port labels and endpoint connectors through existing board projection.
+  - Reason: port gameplay should be inspectable without introducing image assets or geometry duplication.
+- Existing reducer error handling already converts thrown domain errors into recoverable toast messages.

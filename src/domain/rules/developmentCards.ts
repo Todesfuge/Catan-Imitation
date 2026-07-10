@@ -1,14 +1,23 @@
 import { buildCosts, canAfford } from "./building";
 import {
   addResourceMaps,
+  emptyResources,
+  resources,
   type DevelopmentCard,
   type DevelopmentCardKind,
   type GameState,
-  type HexId,
   type Player,
   type PlayerId,
+  type Resource,
   type ResourceMap
 } from "../types";
+import {
+  advanceYearOfPlentyEffect,
+  completePendingDevelopmentEffect,
+  getDevelopmentCardResumePhase,
+  getPendingDevelopmentEffect,
+  markDevelopmentCardPlayed
+} from "./turnFlow";
 
 const standardDevelopmentCardKinds: DevelopmentCardKind[] = [
   ...Array.from({ length: 14 }, () => "knight" as const),
@@ -137,35 +146,125 @@ export function updateLargestArmyAward(game: GameState, candidatePlayerId: Playe
   };
 }
 
+export function playDevelopmentCard(
+  game: GameState,
+  playerId: PlayerId,
+  cardId: string
+): {
+  game: GameState;
+  card: DevelopmentCard & {
+    kind: Exclude<DevelopmentCardKind, "victoryPoint">;
+  };
+  resumePhase: "awaitingRoll" | "action";
+} {
+  const resumePhase = getDevelopmentCardResumePhase(game, playerId);
+  const player = getPlayer(game, playerId);
+  const card = player.developmentCards.find((candidate) => candidate.id === cardId);
+  if (!card) {
+    throw new Error("The selected development card is not owned by this player.");
+  }
+  if (card.kind === "victoryPoint") {
+    throw new Error("Victory-point development cards remain hidden and are not played.");
+  }
+  if (card.purchasedTurn === game.turn) {
+    throw new Error("Non-victory development cards cannot be played on the same turn they were purchased.");
+  }
+  const playableCard = { ...card, kind: card.kind };
+
+  const consumedGame = markDevelopmentCardPlayed(
+    updatePlayer(game, playerId, (candidate) => ({
+      ...candidate,
+      developmentCards: candidate.developmentCards.filter(
+        (candidateCard) => candidateCard.id !== cardId
+      )
+    }))
+  );
+  const resolvedGame =
+    card.kind === "knight"
+      ? updateLargestArmyAward(
+          updatePlayer(consumedGame, playerId, (candidate) => ({
+            ...candidate,
+            knightsPlayed: candidate.knightsPlayed + 1
+          })),
+          playerId
+        )
+      : consumedGame;
+
+  return {
+    card: playableCard,
+    resumePhase,
+    game: resolvedGame
+  };
+}
+
 export function playKnightCard(
   game: GameState,
   playerId: PlayerId,
-  cardId: string,
-  targetHexId: HexId
+  cardId: string
 ): GameState {
   const player = getPlayer(game, playerId);
   const card = player.developmentCards.find((candidate) => candidate.id === cardId);
   if (!card || card.kind !== "knight") {
     throw new Error("A knight card is required.");
   }
+  return playDevelopmentCard(game, playerId, cardId).game;
+}
 
-  if (card.purchasedTurn === game.turn) {
-    throw new Error("Non-victory development cards cannot be played on the same turn they were purchased.");
+export function chooseYearOfPlentyResource(
+  game: GameState,
+  playerId: PlayerId,
+  resource: Resource
+): GameState {
+  getPendingDevelopmentEffect(game, playerId, "yearOfPlenty");
+  if (!resources.includes(resource)) {
+    throw new Error(`Unknown Year of Plenty resource: ${resource}`);
+  }
+  if (game.bank.resources[resource] < 1) {
+    throw new Error(`The bank has no ${resource} available for Year of Plenty.`);
   }
 
-  const playedGame = updatePlayer(game, playerId, (candidate) => ({
-    ...candidate,
-    knightsPlayed: candidate.knightsPlayed + 1,
-    developmentCards: candidate.developmentCards.filter((candidateCard) => candidateCard.id !== cardId)
-  }));
-
-  return updateLargestArmyAward(
-    {
-      ...playedGame,
-      robberHexId: targetHexId
-    },
-    playerId
+  const gained = { ...emptyResources(), [resource]: 1 };
+  const transferredGame = {
+    ...updatePlayer(game, playerId, (player) => ({
+      ...player,
+      resources: addResourceMaps(player.resources, gained)
+    })),
+    bank: {
+      resources: subtractResources(game.bank.resources, gained)
+    }
+  };
+  const hasBankStock = resources.some(
+    (candidateResource) => transferredGame.bank.resources[candidateResource] > 0
   );
+  return advanceYearOfPlentyEffect(transferredGame, playerId, hasBankStock);
+}
+
+export function chooseMonopolyResource(
+  game: GameState,
+  playerId: PlayerId,
+  resource: Resource
+): GameState {
+  getPendingDevelopmentEffect(game, playerId, "monopoly");
+  if (!resources.includes(resource)) {
+    throw new Error(`Unknown Monopoly resource: ${resource}`);
+  }
+
+  const collected = game.players.reduce(
+    (total, player) =>
+      player.id === playerId ? total : total + player.resources[resource],
+    0
+  );
+  const transferredGame = {
+    ...game,
+    players: game.players.map((player) => ({
+      ...player,
+      resources: {
+        ...player.resources,
+        [resource]: player.id === playerId ? player.resources[resource] + collected : 0
+      }
+    }))
+  };
+  return completePendingDevelopmentEffect(transferredGame);
 }
 
 export function createGuildDevelopmentCard(

@@ -5,7 +5,9 @@ TypeScript portfolio prototype for a Catan-like online board-game table with an 
 ## Current Scope
 
 - Local hot-seat browser prototype.
-- Catan-like 19-hex board, dice production, robber blocking/movement, build costs, scoring, and turn progression.
+- Catan-like 19-hex board, dice production, staged robber flow, build costs, scoring, and enforced turn progression.
+- All standard development-card effects with explicit player choices and one non-victory card per turn.
+- Nine deterministic coastal ports with building-derived 4:1, 3:1, and 2:1 maritime ratios.
 - Statistics panel:
   - player income by dice total
   - dice-total distribution across players
@@ -35,7 +37,7 @@ The app is designed for `http://127.0.0.1:5173/` during local development.
 
 GitHub Pages deployment target: [https://todesfuge.github.io/Catan-Imitation/](https://todesfuge.github.io/Catan-Imitation/)
 
-The deployment workflow runs `pnpm build:pages`, which builds the Vite app with the `/Catan-Imitation/` base path and publishes the `dist` artifact from `master`.
+The deployment workflow runs `pnpm build:pages`, which builds the Vite app with the `/Catan-Imitation/` base path and publishes the `dist` artifact from `main`.
 
 ## Documentation Map
 

@@ -25,11 +25,12 @@ describe("Commerce Guild polish", () => {
       game: {
         ...state.game,
         activePlayerId: "p4",
-        round: 5
+        round: 5,
+        turnState: { phase: "action" as const, pendingDiscards: {} }
       }
     };
 
-    const stillIdle = gameReducer(beforeInterval, { type: "END_TURN" });
+    const stillIdle = gameReducer(beforeInterval, { type: "END_TURN", playerId: "p4" });
     expect(stillIdle.game.round).toBe(6);
     expect(stillIdle.guild.gathering.phase).toBe("idle");
 
@@ -38,10 +39,11 @@ describe("Commerce Guild polish", () => {
       game: {
         ...stillIdle.game,
         activePlayerId: "p4",
-        round: 6
+        round: 6,
+        turnState: { phase: "action" as const, pendingDiscards: {} }
       }
     };
-    const triggered = gameReducer(intervalBoundary, { type: "END_TURN" });
+    const triggered = gameReducer(intervalBoundary, { type: "END_TURN", playerId: "p4" });
 
     expect(triggered.game.round).toBe(7);
     expect(triggered.guild.gathering.phase).toBe("redemption");
@@ -105,10 +107,13 @@ describe("Commerce Guild polish", () => {
   it("uses display names in token transfer logs and rejects self transfers", () => {
     const state = {
       ...createInitialAppState(),
-      game: withPlayer(createInitialAppState().game, "p1", (player) => ({
-        ...player,
-        guildTokens: 3
-      }))
+      game: {
+        ...withPlayer(createInitialAppState().game, "p1", (player) => ({
+          ...player,
+          guildTokens: 3
+        })),
+        turnState: { phase: "action" as const, pendingDiscards: {} }
+      }
     };
 
     const transferred = gameReducer(state, {

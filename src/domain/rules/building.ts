@@ -99,6 +99,19 @@ function hasAdjacentBuilding(game: GameState, vertexId: VertexId): boolean {
   return game.buildings.some((building) => adjacent.has(building.vertexId));
 }
 
+function isConnectedToOwnedRoad(
+  game: GameState,
+  playerId: PlayerId,
+  vertexId: VertexId
+): boolean {
+  return game.roads.some((road) => {
+    if (road.ownerId !== playerId) {
+      return false;
+    }
+    return getEdge(game, road.edgeId)?.vertexIds.includes(vertexId) ?? false;
+  });
+}
+
 function assertSettlementLocation(game: GameState, vertexId: VertexId): void {
   if (!isBoardVertex(game, vertexId)) {
     throw new Error(`Settlement must be placed on a board vertex: ${vertexId}`);
@@ -128,7 +141,15 @@ function edgeConnectsToOwnedPiece(game: GameState, playerId: PlayerId, edge: Boa
     }
 
     const ownedEdge = getEdge(game, road.edgeId);
-    return ownedEdge?.vertexIds.some((vertexId) => endpointIds.has(vertexId)) ?? false;
+    return (
+      ownedEdge?.vertexIds.some(
+        (vertexId) =>
+          endpointIds.has(vertexId) &&
+          !game.buildings.some(
+            (building) => building.vertexId === vertexId && building.ownerId !== playerId
+          )
+      ) ?? false
+    );
   });
 }
 
@@ -189,12 +210,35 @@ export function buildRoad(game: GameState, playerId: PlayerId, edgeId: EdgeId): 
   return addRoad(paidGame, playerId, edgeId);
 }
 
+export function getLegalRoadEdgeIds(game: GameState, playerId: PlayerId): EdgeId[] {
+  getPlayer(game, playerId);
+  return game.edges
+    .filter(
+      (edge) =>
+        !game.roads.some((road) => road.edgeId === edge.id) &&
+        edgeConnectsToOwnedPiece(game, playerId, edge)
+    )
+    .map((edge) => edge.id);
+}
+
+export function placeFreeRoad(game: GameState, playerId: PlayerId, edgeId: EdgeId): GameState {
+  if (game.phase !== "playing") {
+    throw new Error("A free road can only be placed during normal play.");
+  }
+  getPlayer(game, playerId);
+  assertRoadLocation(game, playerId, edgeId);
+  return addRoad(game, playerId, edgeId, "free-road");
+}
+
 export function buildSettlement(game: GameState, playerId: PlayerId, vertexId: VertexId): GameState {
   if (game.phase === "setup") {
     throw new Error("Use setup placement during setup.");
   }
   getPlayer(game, playerId);
   assertSettlementLocation(game, vertexId);
+  if (!isConnectedToOwnedRoad(game, playerId, vertexId)) {
+    throw new Error("A normal settlement must connect to one of the player's roads.");
+  }
 
   const paidGame = payBuildCost(game, playerId, buildCosts.settlement);
   return addSettlement(paidGame, playerId, vertexId);

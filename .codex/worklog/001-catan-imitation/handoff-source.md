@@ -1,24 +1,31 @@
 # Handoff Source: 001-catan-imitation
 
-Current phase: Ordered backlog implementation
+Current phase: CR-001 through CR-030 implemented and verified through U046; ready for the requested single local commit
 
-The project was initialized from an empty workspace. The user requested a from-scratch TypeScript portfolio project named Catan Imitation that recreates a Catan-like online game UI and adds a Commerce Guild expansion plus statistics panel. Work synchronizes to `https://github.com/Todesfuge/Catan-Imitation`. Spec Kit tools are not available in this environment, so the workflow is being followed manually through `.specify/` and `specs/001-catan-imitation/` artifacts.
+The project is a local hot-seat React and TypeScript Catan-style prototype with a Commerce Guild expansion and statistics panel. Work synchronizes to `https://github.com/Todesfuge/Catan-Imitation`. Spec Kit CLI tools are unavailable, so the workflow is represented manually by `.specify/`, `specs/001-catan-imitation/`, and this private worklog.
 
-Completed through U024:
+Completed and verified:
 
 - MVP T001-T026.
-- Core rules U001-U006.
-- Classic systems U007-U010.
-- Commerce Guild polish U011-U014.
-- Product polish U015-U019.
-- Delivery automation U020-U024.
+- Updates U001-U046, including core rule integrity CR-001 through CR-018 and P2 CR-019 through CR-030.
+- Baseline: `pnpm test` 15 files / 93 tests; production build, Pages build, UI smoke, rendered desktop/mobile checks, and `git diff --check` passed.
 
-Current verification baseline:
+Completed P2 scope:
 
-- `pnpm test`: 9 test files, 31 tests passed.
-- `pnpm build`: passed.
-- `pnpm build:pages`: passed.
-- `pnpm smoke:ui`: passed.
-- Browser smoke: desktop 1280x720, utility modal, mobile 390x844, tablet 768x1024.
+- CR-019-CR-025 / U039-U041: one playable non-victory development card per turn; sequential Road Building; bank-aware Year of Plenty; all-opponent Monopoly; phase restoration; explicit choice UI.
+- CR-026-CR-030 / U042-U044: nine deterministic standard coastal ports; derived endpoint ownership; 4:1/3:1/2:1 rules; SVG labels/connectors; visible effective ratios.
+- U045-U046: review, convergence, full verification, record refresh, and one commit containing both the existing CR update and P2 as requested.
 
-Next action: push delivery automation and inspect GitHub Actions / Pages results on `master`.
+Boundary decisions:
+
+- Extend `TurnState` with one discriminated pending development effect; no generic effect engine.
+- Reuse normal road legality for free Road Building placement.
+- Derive port ownership from current buildings; no mutable ownership cache.
+- Generate ports from canonical coastal topology and render them through shared SVG projection.
+
+Still out of scope:
+
+- Networking, persistence, generalized/randomized board generation, and unrelated UI redesign.
+- Browser-level click-flow automation beyond built-bundle smoke and rendered manual inspection.
+
+Next action: create the requested single local commit; do not push without explicit authorization.

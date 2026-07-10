@@ -4,8 +4,239 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import App from "../../src/App";
 import { createDemoGame } from "../../src/domain/setup";
+import { getLegalRoadEdgeIds } from "../../src/domain/rules/building";
+import {
+  DevelopmentCardPanel,
+  RoadBuildingTargets
+} from "../../src/ui/DevelopmentCardPanel";
+import { TurnFlowPanel } from "../../src/ui/TurnFlowPanel";
 
 describe("product polish UI", () => {
+  it("gates initial turn actions until the active player rolls", () => {
+    const html = renderToString(createElement(App));
+    const actionTag = (action: string) =>
+      html.match(new RegExp(`<button[^>]*data-action="${action}"[^>]*>`))?.[0] ?? "";
+
+    expect(actionTag("roll-dice")).not.toContain("disabled");
+    for (const action of ["build-road", "build-settlement", "build-city", "buy-development", "maritime", "end-turn"]) {
+      expect(actionTag(action), action).toContain("disabled");
+    }
+  });
+
+  it("renders player-selected seven-roll discard controls", () => {
+    const game = {
+      ...createDemoGame(),
+      players: createDemoGame().players.map((player) =>
+        player.id === "p2"
+          ? { ...player, resources: { ...player.resources, wood: 4, brick: 4 } }
+          : player
+      ),
+      turnState: {
+        phase: "awaitingDiscards" as const,
+        pendingDiscards: { p2: 4 }
+      }
+    };
+    const html = renderToString(
+      createElement(TurnFlowPanel, { game, dispatch: () => undefined })
+    );
+    const visibleHtml = html.replaceAll("<!-- -->", "");
+
+    expect(html).toContain('data-turn-flow="discard"');
+    expect(visibleHtml).toContain("Loss must discard 4");
+    expect(html).toContain('aria-label="Loss wood discard"');
+    expect(html).toContain('aria-label="Loss brick discard"');
+    expect(html).toContain("Submit Discard");
+  });
+
+  it("renders robber placement guidance and eligible victim controls", () => {
+    const placementGame = {
+      ...createDemoGame(),
+      turnState: {
+        phase: "awaitingRobberPlacement" as const,
+        pendingDiscards: {},
+        pendingRobber: {
+          source: "seven" as const,
+          resumePhase: "action" as const,
+          eligibleVictimIds: []
+        }
+      }
+    };
+    const placementHtml = renderToString(
+      createElement(TurnFlowPanel, { game: placementGame, dispatch: () => undefined })
+    );
+    expect(placementHtml).toContain('data-turn-flow="robber-placement"');
+    expect(placementHtml).toContain("Move the robber to a different hex");
+
+    const victimGame = {
+      ...placementGame,
+      players: placementGame.players.map((player) =>
+        player.id === "p2" ? { ...player, resources: { ...player.resources, ore: 1 } } : player
+      ),
+      turnState: {
+        phase: "awaitingRobberVictim" as const,
+        pendingDiscards: {},
+        pendingRobber: {
+          source: "seven" as const,
+          resumePhase: "action" as const,
+          targetHexId: "mountain-8",
+          eligibleVictimIds: ["p2"]
+        }
+      }
+    };
+    const victimHtml = renderToString(
+      createElement(TurnFlowPanel, { game: victimGame, dispatch: () => undefined })
+    );
+    expect(victimHtml).toContain('data-turn-flow="robber-victim"');
+    expect(victimHtml).toContain("Choose a player to steal from");
+    expect(victimHtml).toContain("Loss");
+  });
+
+  it("renders active-player development card kinds and playable counts", () => {
+    const game = {
+      ...createDemoGame(),
+      turn: 2,
+      turnState: { phase: "action" as const, pendingDiscards: {}, developmentCardPlayed: false },
+      players: createDemoGame().players.map((player) =>
+        player.id === "p1"
+          ? {
+              ...player,
+              developmentCards: [
+                { id: "knight", kind: "knight" as const, purchasedTurn: 1, revealed: false },
+                { id: "roads", kind: "roadBuilding" as const, purchasedTurn: 1, revealed: false },
+                { id: "plenty", kind: "yearOfPlenty" as const, purchasedTurn: 2, revealed: false },
+                { id: "monopoly", kind: "monopoly" as const, purchasedTurn: 1, revealed: false },
+                { id: "point", kind: "victoryPoint" as const, purchasedTurn: 2, revealed: false }
+              ]
+            }
+          : player
+      )
+    };
+    const html = renderToString(
+      createElement(DevelopmentCardPanel, { game, dispatch: () => undefined })
+    ).replaceAll("<!-- -->", "");
+
+    expect(html).toContain('data-development-cards="hand"');
+    expect(html).toContain("Knight ×1");
+    expect(html).toContain("Road Building ×1");
+    expect(html).toContain("Year of Plenty ×1");
+    expect(html).toContain("Monopoly ×1");
+    expect(html).toContain("Victory Point ×1");
+    expect(html.match(/data-card-kind="yearOfPlenty"[^>]*disabled/)).not.toBeNull();
+    expect(html.match(/data-card-kind="monopoly"[^>]*disabled/)).toBeNull();
+  });
+
+  it("renders explicit Year of Plenty and Monopoly resource choices", () => {
+    const base = createDemoGame();
+    const plentyGame = {
+      ...base,
+      bank: { resources: { wood: 1, brick: 0, wool: 0, grain: 0, ore: 0 } },
+      turnState: {
+        phase: "awaitingDevelopmentEffect" as const,
+        pendingDiscards: {},
+        developmentCardPlayed: true,
+        pendingDevelopmentEffect: {
+          kind: "yearOfPlenty" as const,
+          playerId: "p1",
+          remainingPicks: 2,
+          resumePhase: "action" as const
+        }
+      }
+    };
+    const plentyHtml = renderToString(
+      createElement(DevelopmentCardPanel, { game: plentyGame, dispatch: () => undefined })
+    );
+    expect(plentyHtml).toContain('data-development-effect="yearOfPlenty"');
+    expect(plentyHtml).toContain("Choose 2 resources");
+    expect(plentyHtml.match(/data-resource-choice="wood"[^>]*disabled/)).toBeNull();
+    expect(plentyHtml.match(/data-resource-choice="brick"[^>]*disabled/)).not.toBeNull();
+
+    const monopolyGame = {
+      ...base,
+      turnState: {
+        phase: "awaitingDevelopmentEffect" as const,
+        pendingDiscards: {},
+        developmentCardPlayed: true,
+        pendingDevelopmentEffect: {
+          kind: "monopoly" as const,
+          playerId: "p1",
+          resumePhase: "awaitingRoll" as const
+        }
+      }
+    };
+    const monopolyHtml = renderToString(
+      createElement(DevelopmentCardPanel, { game: monopolyGame, dispatch: () => undefined })
+    );
+    expect(monopolyHtml).toContain('data-development-effect="monopoly"');
+    expect(monopolyHtml).toContain("Choose a resource to monopolize");
+    expect(monopolyHtml).toContain('data-resource-choice="ore"');
+  });
+
+  it("renders accessible legal road targets during Road Building", () => {
+    const base = createDemoGame();
+    const game = {
+      ...base,
+      turnState: {
+        phase: "awaitingDevelopmentEffect" as const,
+        pendingDiscards: {},
+        developmentCardPlayed: true,
+        pendingDevelopmentEffect: {
+          kind: "roadBuilding" as const,
+          playerId: "p1",
+          remainingRoads: 2,
+          resumePhase: "action" as const
+        }
+      }
+    };
+    const legalEdges = getLegalRoadEdgeIds(game, "p1");
+    const html = renderToString(
+      createElement(
+        "svg",
+        null,
+        createElement(RoadBuildingTargets, { game, dispatch: () => undefined })
+      )
+    );
+
+    expect(legalEdges.length).toBeGreaterThan(0);
+    expect(html.match(/data-road-building-target=/g)).toHaveLength(legalEdges.length);
+    expect(html).toContain(`aria-label="Place free road ${legalEdges[0]}"`);
+  });
+
+  it("integrates the development-card controls and road targets into the app", () => {
+    const html = renderToString(createElement(App));
+    const source = readFileSync("src/App.tsx", "utf8");
+
+    expect(html).toContain('data-development-cards="hand"');
+    expect(source).toContain("<DevelopmentCardPanel");
+    expect(source).toContain("<RoadBuildingTargets");
+    expect(html).not.toContain('data-action="play-knight"');
+  });
+
+  it("renders standard ports and effective maritime ratios", () => {
+    const html = renderToString(createElement(App)).replaceAll("<!-- -->", "");
+    const css = readFileSync("src/styles/app.css", "utf8");
+
+    expect(html.match(/data-port-id=/g)).toHaveLength(9);
+    expect(html).toContain("3:1");
+    expect(html).toContain("2:1 Wood");
+    for (const label of ["Wood 4:1", "Brick 4:1", "Wool 4:1", "Grain 4:1", "Ore 4:1"]) {
+      expect(html).toContain(label);
+    }
+    expect(css).toContain(".port-marker");
+    expect(css).toContain(".maritime-ratio-guide");
+  });
+
+  it("keeps robber targets accessible and disables actions outside live play", () => {
+    const html = renderToString(createElement(App));
+    const source = readFileSync("src/App.tsx", "utf8");
+    const liveActionPredicates = source.match(
+      /state\.game\.phase === "playing" && state\.game\.turnState\.phase === "action"/g
+    );
+
+    expect(html).toContain('class="board-svg" role="group"');
+    expect(liveActionPredicates).toHaveLength(2);
+    expect(source).toContain("canPlaceRobber && hex.id !== state.game.robberHexId");
+  });
+
   it("renders connected utility actions, phase guidance, and activity instead of fake chat", () => {
     const html = renderToString(createElement(App));
 
@@ -13,7 +244,7 @@ describe("product polish UI", () => {
     expect(html).toContain('aria-label="Open rulebook"');
     expect(html).toContain('aria-label="Toggle fullscreen"');
     expect(html).toContain('aria-label="Open info"');
-    expect(html).toContain("Place the next settlement");
+    expect(html).toContain("must roll or play a development card");
     expect(html).toContain("Activity");
     expect(html).not.toContain(">Chat<");
     expect(html).not.toContain("Local hot-seat demo");
@@ -26,6 +257,15 @@ describe("product polish UI", () => {
     expect(html).toContain("dice-pips");
     expect(html).toContain("Forest");
     expect(html).toContain("Mountain");
+  });
+
+  it("formats fractional yield values for readable tables", () => {
+    const html = renderToString(createElement(App));
+
+    expect(html).toContain("Grain 0.11");
+    expect(html).toContain("Wool 0.28");
+    expect(html).not.toContain("Grain 0.111111");
+    expect(html).not.toContain("Wool 0.277777");
   });
 
   it("shows actual built roads without drawing every possible edge", () => {
@@ -68,6 +308,9 @@ describe("product polish UI", () => {
     expect(css).toContain(".utility-modal");
     expect(css).toContain(".phase-guidance");
     expect(css).toContain(".activity-shell");
+    expect(css).toContain(".development-card-controls");
+    expect(css).toContain(".development-resource-buttons");
+    expect(css).toContain(".road-building-target");
     expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
   });
 });
