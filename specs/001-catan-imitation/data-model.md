@@ -155,3 +155,39 @@ Port invariants:
 - exactly eighteen distinct endpoint vertices;
 - every endpoint belongs to the coastal boundary;
 - ownership is derived from current buildings and is not stored separately.
+
+## Frontend Recovery and Interaction State
+
+```ts
+interface AppState {
+  game: GameState;
+  guild: CommerceGuildState;
+  lastDice: DiceRoll | null;
+  selectedDiceTotal: number;
+  selectedPlayerId: PlayerId;
+  notice: string | null;
+}
+
+type BoardInteractionMode =
+  | { kind: "road" }
+  | { kind: "settlement" }
+  | { kind: "city" }
+  | { kind: "setupSettlement" }
+  | { kind: "setupRoad" }
+  | null;
+
+interface ActionAvailability<TTarget = never> {
+  enabled: boolean;
+  reason?: string;
+  targets: TTarget[];
+}
+```
+
+Frontend invariants:
+
+- A rejected command changes only `notice`; gameplay, guild, dice, and selection data retain their previous references and values.
+- A successful command clears `notice`.
+- Interaction mode is transient UI state and resets when the active player, turn phase, setup stage, or selected command changes.
+- Targets are derived from current domain state and are never cached as game state.
+- Setup interaction mode matches `game.setup.stage`; normal build modes exist only during the normal action phase.
+- Maritime give/receive selections are distinct and do not dispatch until the selected ratio, player inventory, and bank stock are legal.

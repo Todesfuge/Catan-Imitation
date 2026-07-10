@@ -29,11 +29,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Run unit tests
         run: pnpm test
 
       - name: Build production bundle
         run: pnpm build
+
+      - name: Run browser interaction tests
+        run: pnpm test:e2e
 
       - name: Run UI smoke test
         run: pnpm smoke:ui

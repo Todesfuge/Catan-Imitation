@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createInitialAppState,
-  gameReducer,
+  unsafeExecuteGameCommandForTests as gameReducer,
   type AppState,
   type GameCommand
 } from "../../src/app/gameReducer";

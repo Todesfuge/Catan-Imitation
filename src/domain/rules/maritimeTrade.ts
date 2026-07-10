@@ -1,4 +1,4 @@
-import {
+﻿import {
   addResourceMaps,
   emptyResources,
   resources,
@@ -9,6 +9,7 @@ import {
   type Resource,
   type ResourceMap
 } from "../types";
+import { RuleViolationError } from "../errors";
 
 function subtractResources(left: ResourceMap, right: ResourceMap): ResourceMap {
   return {
@@ -23,7 +24,7 @@ function subtractResources(left: ResourceMap, right: ResourceMap): ResourceMap {
 function getPlayer(game: GameState, playerId: PlayerId): Player {
   const player = game.players.find((candidate) => candidate.id === playerId);
   if (!player) {
-    throw new Error(`Unknown player: ${playerId}`);
+    throw new RuleViolationError(`Unknown player: ${playerId}`);
   }
   return player;
 }
@@ -52,20 +53,20 @@ export function maritimeTrade(
   receive: Resource
 ): GameState {
   if (give === receive) {
-    throw new Error("Maritime trade must exchange two different resources.");
+    throw new RuleViolationError("Maritime trade must exchange two different resources.");
   }
 
   const player = getPlayer(game, playerId);
   const ratio = getTradeRatio(game, playerId, give);
   if (player.resources[give] < ratio) {
     if (ratio === 4 && player.resources[give] >= 2) {
-      throw new Error("A better maritime trade ratio requires an owned port.");
+      throw new RuleViolationError("A better maritime trade ratio requires an owned port.");
     }
-    throw new Error("Player does not have enough resources for this maritime trade.");
+    throw new RuleViolationError("Player does not have enough resources for this maritime trade.");
   }
 
   if (game.bank.resources[receive] < 1) {
-    throw new Error(`Bank has no ${receive} available for maritime trade.`);
+    throw new RuleViolationError(`Bank has no ${receive} available for maritime trade.`);
   }
 
   const paid = { ...emptyResources(), [give]: ratio };
@@ -89,7 +90,7 @@ export function maritimeTrade(
 
 export function getMaritimeTradeRatio(game: GameState, playerId: PlayerId, give: Resource): number {
   if (!resources.includes(give)) {
-    throw new Error(`Unknown resource: ${give}`);
+    throw new RuleViolationError(`Unknown resource: ${give}`);
   }
   getPlayer(game, playerId);
   return getTradeRatio(game, playerId, give);

@@ -3,7 +3,7 @@
 Created: 2026-07-08
 Workflow phase: Technical Plan
 Last updated: 2026-07-10
-Status: Implemented and verified through U046
+Status: Frontend repair implemented and verified through U059
 
 ## Recommended Approach
 
@@ -267,3 +267,72 @@ scripts/smoke-ui.mjs                         # built-bundle P2 contracts
 - No dependency, generic effect engine, port-ownership cache, or randomized board generator is added.
 - Game rules remain pure TypeScript and React remains a state renderer/command dispatcher.
 - Every P2 requirement maps to a focused test before implementation.
+
+## Current Update Plan: Frontend Completeness and Recovery
+
+### Scope
+
+Implement CR-031 through CR-042 in priority order: recoverable command execution first; shared action availability and explicit choices second; setup, game-over, and Commerce Guild completion third; accessibility and responsive repair fourth; browser regression coverage and visual convergence last. Networking, persistence, AI players, randomized boards, and a global state-machine rewrite remain out of scope.
+
+### Boundary Decision
+
+- Keep existing domain rule modules authoritative and throwing on invalid direct calls. Split `gameReducer.ts` into an exported safe reducer boundary and one internal command executor so React receives unchanged state plus a notice instead of an exception.
+- Add one bounded application selector for availability, reasons, costs/ratios, and legal targets. It composes existing domain functions and does not reimplement rules.
+- Extract the current action bar, Commerce Guild panel, board target overlay, and utility modal from `App.tsx`. `App.tsx` retains shell composition and short-lived interaction-mode wiring only.
+- Use a discriminated UI interaction mode for road, settlement, city, maritime, and setup choices. Game legality and committed state remain in domain/reducer state.
+- Reuse `createSetupGame`, setup placement rules, board projection helpers, and the existing Commerce Guild accounting functions.
+- Use the native dialog platform behavior for focus containment, Escape, and restoration rather than adding a component framework.
+- Add `@playwright/test` as the only new dependency because the reproduced failure occurs specifically across the React/browser reducer boundary and cannot be proven by server rendering or bundle text inspection.
+
+### Planned File Map
+
+```text
+src/app/gameReducer.ts                    # safe command boundary, new-game/setup commands
+src/app/actionAvailability.ts             # composed UI availability and legal-target selector
+src/domain/rules/building.ts              # reusable legal settlement/city/setup target queries
+src/ui/ActionDock.tsx                     # action modes, costs, reasons, explicit maritime choices
+src/ui/BoardActionTargets.tsx             # normal and setup SVG edge/vertex/building targets
+src/ui/CommercePanel.tsx                  # valid recipients and per-player gathering redemption
+src/ui/UtilityDialog.tsx                  # native dialog and New Game control
+src/App.tsx                               # shell composition and interaction-mode wiring
+src/styles/app.css                        # disabled/touch/focus/live/responsive/board polish
+test/domain/frontendRecovery.test.ts      # CR-031-CR-037 reducer/selector regression tests
+test/domain/productPolish.test.ts         # CR-038-CR-041 source/render contracts
+test/e2e/frontend-recovery.spec.ts        # CR-031/033-042 real browser flows
+playwright.config.ts                      # local/CI web-server and viewport configuration
+.github/workflows/ci.yml                  # Playwright browser install and test command
+scripts/smoke-ui.mjs                      # stable built-bundle contracts
+```
+
+### State and Data Flow
+
+1. `gameReducer` invokes the internal command executor. Success returns the next application state with no notice; a caught rule error returns the original gameplay/guild data with a normalized notice.
+2. `actionAvailability` derives all visible action states from the current game, active player, bank, ports, guild state, and reusable domain target queries.
+3. Selecting an enabled action changes only the local interaction mode. The board overlay renders its legal targets; selecting one dispatches the typed command and clears the mode after success or phase/turn change.
+4. Maritime selection stays local until both resources form a legal trade, then dispatches the existing command with the explicit pair.
+5. New Game replaces demo state with `createSetupGame`, resets Commerce Guild and UI selection data, and exposes setup targets until the existing snake-order domain flow reaches normal play.
+6. Commerce controls derive valid recipients and the selected gathering participant from current players, resetting local selections whenever their source state becomes invalid.
+7. Dialog, notice, log, labels, and selected-mode semantics expose the same visible state to keyboard and assistive-technology users.
+
+### Error Handling
+
+- Catch only expected command/rule errors at the reducer boundary; do not use an Error Boundary to hide them.
+- Preserve all caller-owned gameplay and guild structures after rejection and keep the notice outside rule calculations.
+- Disable known-invalid actions before dispatch while retaining reducer validation as the final authority.
+- Reserve an Error Boundary for unknown rendering faults only if a separate reproduced need appears; it is not part of this update.
+
+### Test Strategy
+
+- U047-U048: reproduce and fix the blank-root command failure with a focused reducer test, then confirm it in Playwright.
+- U049-U051: write availability/target tests before the selector and explicit ActionDock/board/maritime UI.
+- U052-U053: write setup/new-game/game-over tests before reducer and target integration.
+- U054-U055: write Commerce, accessibility, guidance, and responsive tests before component/CSS changes.
+- U056: add Playwright configuration and critical flows; confirm each new browser test fails for the expected pre-fix reason before its production slice.
+- Final gate: `pnpm test`, `pnpm test:e2e`, `pnpm build`, `pnpm build:pages`, `pnpm smoke:ui`, rendered 1280/768/390 review, and `git diff --check`.
+
+### Minimalism and Constitution Check
+
+- Rung: reuse existing domain rules and native dialog behavior, then add direct bounded application/UI modules where the current monolith cannot safely absorb more responsibility.
+- One justified dependency is added for a reproduced browser-only regression and approved responsive interaction coverage.
+- No generic event bus, form framework, UI kit, state-machine library, or duplicated rule engine is introduced.
+- `App.tsx` must lose responsibilities overall; it may not gain new rule or Commerce Guild business logic.

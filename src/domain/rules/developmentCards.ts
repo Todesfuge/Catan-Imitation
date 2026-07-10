@@ -1,4 +1,5 @@
-import { buildCosts, canAfford } from "./building";
+﻿import { buildCosts, canAfford } from "./building";
+import { RuleViolationError } from "../errors";
 import {
   addResourceMaps,
   emptyResources,
@@ -43,7 +44,7 @@ function subtractResources(left: ResourceMap, right: ResourceMap): ResourceMap {
 function getPlayer(game: GameState, playerId: PlayerId): Player {
   const player = game.players.find((candidate) => candidate.id === playerId);
   if (!player) {
-    throw new Error(`Unknown player: ${playerId}`);
+    throw new RuleViolationError(`Unknown player: ${playerId}`);
   }
   return player;
 }
@@ -69,12 +70,12 @@ export function buyDevelopmentCard(
   playerId: PlayerId
 ): { game: GameState; card: DevelopmentCard } {
   if (game.developmentDeck.length === 0) {
-    throw new Error("Development card deck is empty.");
+    throw new RuleViolationError("Development card deck is empty.");
   }
 
   const player = getPlayer(game, playerId);
   if (!canAfford(player, buildCosts.developmentCard)) {
-    throw new Error(`${player.name} cannot afford a development card.`);
+    throw new RuleViolationError(`${player.name} cannot afford a development card.`);
   }
 
   const [drawn, ...remainingDeck] = game.developmentDeck;
@@ -105,7 +106,7 @@ export function awardDevelopmentCardFromDeck(
   playerId: PlayerId
 ): { game: GameState; card: DevelopmentCard } {
   if (game.developmentDeck.length === 0) {
-    throw new Error("Development card deck is empty.");
+    throw new RuleViolationError("Development card deck is empty.");
   }
 
   const [drawn, ...remainingDeck] = game.developmentDeck;
@@ -161,13 +162,13 @@ export function playDevelopmentCard(
   const player = getPlayer(game, playerId);
   const card = player.developmentCards.find((candidate) => candidate.id === cardId);
   if (!card) {
-    throw new Error("The selected development card is not owned by this player.");
+    throw new RuleViolationError("The selected development card is not owned by this player.");
   }
   if (card.kind === "victoryPoint") {
-    throw new Error("Victory-point development cards remain hidden and are not played.");
+    throw new RuleViolationError("Victory-point development cards remain hidden and are not played.");
   }
   if (card.purchasedTurn === game.turn) {
-    throw new Error("Non-victory development cards cannot be played on the same turn they were purchased.");
+    throw new RuleViolationError("Non-victory development cards cannot be played on the same turn they were purchased.");
   }
   const playableCard = { ...card, kind: card.kind };
 
@@ -205,7 +206,7 @@ export function playKnightCard(
   const player = getPlayer(game, playerId);
   const card = player.developmentCards.find((candidate) => candidate.id === cardId);
   if (!card || card.kind !== "knight") {
-    throw new Error("A knight card is required.");
+    throw new RuleViolationError("A knight card is required.");
   }
   return playDevelopmentCard(game, playerId, cardId).game;
 }
@@ -217,10 +218,10 @@ export function chooseYearOfPlentyResource(
 ): GameState {
   getPendingDevelopmentEffect(game, playerId, "yearOfPlenty");
   if (!resources.includes(resource)) {
-    throw new Error(`Unknown Year of Plenty resource: ${resource}`);
+    throw new RuleViolationError(`Unknown Year of Plenty resource: ${resource}`);
   }
   if (game.bank.resources[resource] < 1) {
-    throw new Error(`The bank has no ${resource} available for Year of Plenty.`);
+    throw new RuleViolationError(`The bank has no ${resource} available for Year of Plenty.`);
   }
 
   const gained = { ...emptyResources(), [resource]: 1 };
@@ -246,7 +247,7 @@ export function chooseMonopolyResource(
 ): GameState {
   getPendingDevelopmentEffect(game, playerId, "monopoly");
   if (!resources.includes(resource)) {
-    throw new Error(`Unknown Monopoly resource: ${resource}`);
+    throw new RuleViolationError(`Unknown Monopoly resource: ${resource}`);
   }
 
   const collected = game.players.reduce(

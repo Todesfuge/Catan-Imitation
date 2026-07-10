@@ -1,4 +1,4 @@
-import {
+﻿import {
   resources,
   type GameState,
   type HexId,
@@ -7,6 +7,7 @@ import {
   type ResourceMap,
   type TurnState
 } from "../types";
+import { RuleViolationError } from "../errors";
 import { discardResourcesToBank, stealRandomResource, totalResources } from "./production";
 
 export function createAwaitingRollTurnState(): TurnState {
@@ -15,32 +16,32 @@ export function createAwaitingRollTurnState(): TurnState {
 
 export function assertGameInProgress(game: GameState): void {
   if (game.phase === "setup") {
-    throw new Error("This action is unavailable during setup.");
+    throw new RuleViolationError("This action is unavailable during setup.");
   }
 
   if (game.phase === "gameOver") {
-    throw new Error("The game is already over.");
+    throw new RuleViolationError("The game is already over.");
   }
 }
 
 export function assertActivePlayer(game: GameState, playerId: PlayerId): void {
   assertGameInProgress(game);
   if (game.activePlayerId !== playerId) {
-    throw new Error("Only the active player may perform this action.");
+    throw new RuleViolationError("Only the active player may perform this action.");
   }
 }
 
 export function assertCanRoll(game: GameState, playerId: PlayerId): void {
   assertActivePlayer(game, playerId);
   if (game.turnState.phase !== "awaitingRoll") {
-    throw new Error("The active player has already rolled this turn.");
+    throw new RuleViolationError("The active player has already rolled this turn.");
   }
 }
 
 export function assertCanUseTurnAction(game: GameState, playerId: PlayerId): void {
   assertActivePlayer(game, playerId);
   if (game.turnState.phase !== "action") {
-    throw new Error("Roll the dice before using normal turn actions.");
+    throw new RuleViolationError("Roll the dice before using normal turn actions.");
   }
 }
 
@@ -51,10 +52,10 @@ export function assertCanPlayKnight(game: GameState, playerId: PlayerId): void {
 export function assertCanPlayDevelopmentCard(game: GameState, playerId: PlayerId): void {
   assertActivePlayer(game, playerId);
   if (game.turnState.phase !== "awaitingRoll" && game.turnState.phase !== "action") {
-    throw new Error("A development card cannot be played during the current turn phase.");
+    throw new RuleViolationError("A development card cannot be played during the current turn phase.");
   }
   if (game.turnState.developmentCardPlayed) {
-    throw new Error("Only one non-victory development card may be played per turn.");
+    throw new RuleViolationError("Only one non-victory development card may be played per turn.");
   }
 }
 
@@ -140,29 +141,29 @@ export function submitSevenDiscard(
 ): GameState {
   assertGameInProgress(game);
   if (game.turnState.phase !== "awaitingDiscards") {
-    throw new Error("No seven-roll discards are currently pending.");
+    throw new RuleViolationError("No seven-roll discards are currently pending.");
   }
 
   const required = game.turnState.pendingDiscards[playerId];
   if (!required) {
-    throw new Error("This player does not owe a seven-roll discard.");
+    throw new RuleViolationError("This player does not owe a seven-roll discard.");
   }
 
   const player = game.players.find((candidate) => candidate.id === playerId);
   if (!player) {
-    throw new Error(`Unknown player: ${playerId}`);
+    throw new RuleViolationError(`Unknown player: ${playerId}`);
   }
 
   if (resources.some((resource) => !Number.isInteger(discarded[resource]) || discarded[resource] < 0)) {
-    throw new Error("Discard quantities must be non-negative whole numbers.");
+    throw new RuleViolationError("Discard quantities must be non-negative whole numbers.");
   }
 
   if (resources.some((resource) => discarded[resource] > player.resources[resource])) {
-    throw new Error("A player cannot discard more resources than they hold.");
+    throw new RuleViolationError("A player cannot discard more resources than they hold.");
   }
 
   if (totalResources(discarded) !== required) {
-    throw new Error(`This player must discard exactly ${required} resource cards.`);
+    throw new RuleViolationError(`This player must discard exactly ${required} resource cards.`);
   }
 
   const discardedGame = discardResourcesToBank(game, playerId, discarded);
@@ -191,7 +192,7 @@ export function beginKnightRobber(
 function resumeAfterRobber(game: GameState): GameState {
   const resumePhase = game.turnState.pendingRobber?.resumePhase;
   if (!resumePhase) {
-    throw new Error("No robber interaction is pending.");
+    throw new RuleViolationError("No robber interaction is pending.");
   }
   return resumeTurnPhase(game, resumePhase);
 }
@@ -243,7 +244,7 @@ export function getPendingDevelopmentEffect(
     effect.playerId !== playerId ||
     effect.kind !== kind
   ) {
-    throw new Error(`No ${kind} development-card effect is pending.`);
+    throw new RuleViolationError(`No ${kind} development-card effect is pending.`);
   }
   return effect;
 }
@@ -251,7 +252,7 @@ export function getPendingDevelopmentEffect(
 export function completePendingDevelopmentEffect(game: GameState): GameState {
   const effect = game.turnState.pendingDevelopmentEffect;
   if (game.turnState.phase !== "awaitingDevelopmentEffect" || !effect) {
-    throw new Error("No development-card effect is pending.");
+    throw new RuleViolationError("No development-card effect is pending.");
   }
   return resumeTurnPhase(game, effect.resumePhase);
 }
@@ -263,7 +264,7 @@ export function advanceRoadBuildingEffect(
 ): GameState {
   const effect = getPendingDevelopmentEffect(game, playerId, "roadBuilding");
   if (effect.kind !== "roadBuilding") {
-    throw new Error("No Road Building effect is pending.");
+    throw new RuleViolationError("No Road Building effect is pending.");
   }
   if (effect.remainingRoads <= 1 || !hasAnotherLegalRoad) {
     return completePendingDevelopmentEffect(game);
@@ -287,7 +288,7 @@ export function advanceYearOfPlentyEffect(
 ): GameState {
   const effect = getPendingDevelopmentEffect(game, playerId, "yearOfPlenty");
   if (effect.kind !== "yearOfPlenty") {
-    throw new Error("No Year of Plenty effect is pending.");
+    throw new RuleViolationError("No Year of Plenty effect is pending.");
   }
   if (effect.remainingPicks <= 1 || !hasBankStock) {
     return completePendingDevelopmentEffect(game);
@@ -307,15 +308,15 @@ export function advanceYearOfPlentyEffect(
 export function placePendingRobber(game: GameState, playerId: PlayerId, hexId: HexId): GameState {
   assertActivePlayer(game, playerId);
   if (game.turnState.phase !== "awaitingRobberPlacement" || !game.turnState.pendingRobber) {
-    throw new Error("The robber cannot be moved during the current turn phase.");
+    throw new RuleViolationError("The robber cannot be moved during the current turn phase.");
   }
 
   const targetHex = game.board.find((hex) => hex.id === hexId);
   if (!targetHex) {
-    throw new Error(`Unknown robber target hex: ${hexId}`);
+    throw new RuleViolationError(`Unknown robber target hex: ${hexId}`);
   }
   if (hexId === game.robberHexId) {
-    throw new Error("The robber must move to a different hex.");
+    throw new RuleViolationError("The robber must move to a different hex.");
   }
 
   const eligibleVictimIds = game.players
@@ -357,10 +358,10 @@ export function stealPendingRobberResource(
 ): GameState {
   assertActivePlayer(game, playerId);
   if (game.turnState.phase !== "awaitingRobberVictim" || !game.turnState.pendingRobber) {
-    throw new Error("No robber victim selection is pending.");
+    throw new RuleViolationError("No robber victim selection is pending.");
   }
   if (!game.turnState.pendingRobber.eligibleVictimIds.includes(victimId)) {
-    throw new Error("The selected player is not an eligible robber victim.");
+    throw new RuleViolationError("The selected player is not an eligible robber victim.");
   }
 
   return resumeAfterRobber(stealRandomResource(game, victimId, playerId, random));

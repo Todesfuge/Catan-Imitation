@@ -1,4 +1,4 @@
-import {
+﻿import {
   addResourceMaps,
   emptyResources,
   resources,
@@ -9,6 +9,7 @@ import {
   type Resource,
   type ResourceMap
 } from "../types";
+import { RuleViolationError } from "../errors";
 import { awardDevelopmentCardFromDeck } from "../rules/developmentCards";
 
 export type ResourceCost = Partial<Record<Resource, number>>;
@@ -70,7 +71,7 @@ function createIdleGathering(): GatheringState {
 
 export function createCommerceGuild(tradeSlots: TradeSlot[] = defaultTradeSlots): CommerceGuildState {
   if (tradeSlots.length !== 3) {
-    throw new Error("Commerce Guild requires exactly three trade slots.");
+    throw new RuleViolationError("Commerce Guild requires exactly three trade slots.");
   }
 
   return {
@@ -90,7 +91,7 @@ function updatePlayer(game: GameState, playerId: PlayerId, update: (player: Play
 function getPlayer(game: GameState, playerId: PlayerId): Player {
   const player = game.players.find((candidate) => candidate.id === playerId);
   if (!player) {
-    throw new Error(`Unknown player: ${playerId}`);
+    throw new RuleViolationError(`Unknown player: ${playerId}`);
   }
   return player;
 }
@@ -101,7 +102,7 @@ function canPay(resourcesMap: ResourceMap, cost: ResourceCost): boolean {
 
 function assertWholeNumber(value: number, label: string, allowZero = true): void {
   if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0 || (!allowZero && value === 0)) {
-    throw new Error(`${label} must be a ${allowZero ? "non-negative" : "positive"} finite whole number.`);
+    throw new RuleViolationError(`${label} must be a ${allowZero ? "non-negative" : "positive"} finite whole number.`);
   }
 }
 
@@ -110,7 +111,7 @@ function assertResourceCost(cost: ResourceCost, label: string, requirePositive =
     assertWholeNumber(cost[resource] ?? 0, `${label} ${resource}`);
   }
   if (requirePositive && resources.every((resource) => (cost[resource] ?? 0) === 0)) {
-    throw new Error(`${label} must include at least one resource.`);
+    throw new RuleViolationError(`${label} must include at least one resource.`);
   }
 }
 
@@ -122,7 +123,7 @@ function assertTradeSlot(slot: TradeSlot): void {
 function sampleRandom(random: () => number): number {
   const value = random();
   if (!Number.isFinite(value) || value < 0 || value >= 1) {
-    throw new Error("Random source must return a finite value in the range [0, 1).");
+    throw new RuleViolationError("Random source must return a finite value in the range [0, 1).");
   }
   return value;
 }
@@ -155,12 +156,12 @@ export function completeTradeSlot(
   nextSlot: TradeSlot = defaultTradeSlots[0]
 ): GuildResult {
   if (guild.usedTradePlayerIds.includes(playerId)) {
-    throw new Error("A player may complete a Commerce Guild trade only once per turn.");
+    throw new RuleViolationError("A player may complete a Commerce Guild trade only once per turn.");
   }
 
   const slotIndex = guild.tradeSlots.findIndex((slot) => slot.id === slotId);
   if (slotIndex === -1) {
-    throw new Error(`Unknown trade slot: ${slotId}`);
+    throw new RuleViolationError(`Unknown trade slot: ${slotId}`);
   }
 
   const player = getPlayer(game, playerId);
@@ -168,7 +169,7 @@ export function completeTradeSlot(
   assertTradeSlot(slot);
   assertTradeSlot(nextSlot);
   if (!canPay(player.resources, slot.requires)) {
-    throw new Error("Player does not have the required resources for this trade.");
+    throw new RuleViolationError("Player does not have the required resources for this trade.");
   }
 
   const normalizedCost = normalizeCost(slot.requires);
@@ -205,7 +206,7 @@ export function transferGuildTokens(
   amount: number
 ): GameState {
   if (fromPlayerId === toPlayerId) {
-    throw new Error("Token transfer requires two different players.");
+    throw new RuleViolationError("Token transfer requires two different players.");
   }
 
   assertWholeNumber(amount, "Token transfer amount", false);
@@ -213,7 +214,7 @@ export function transferGuildTokens(
   const from = getPlayer(game, fromPlayerId);
   getPlayer(game, toPlayerId);
   if (from.guildTokens < amount) {
-    throw new Error("Player does not have enough guild tokens.");
+    throw new RuleViolationError("Player does not have enough guild tokens.");
   }
 
   return {
@@ -280,7 +281,7 @@ export function redeemGatheringResources(
   requested: ResourceCost
 ): GuildResult {
   if (guild.gathering.phase !== "redemption") {
-    throw new Error("Guild gathering is not in resource redemption phase.");
+    throw new RuleViolationError("Guild gathering is not in resource redemption phase.");
   }
 
   assertResourceCost(requested, "Gathering redemption");
@@ -289,10 +290,10 @@ export function redeemGatheringResources(
   const alreadyRedeemed = guild.gathering.redemptions[playerId] ?? 0;
   const remainingGatheringCap = Math.max(0, 4 - alreadyRedeemed);
   if (remainingGatheringCap === 0) {
-    throw new Error("The gathering redemption cap has already been reached.");
+    throw new RuleViolationError("The gathering redemption cap has already been reached.");
   }
   if (player.guildTokens === 0) {
-    throw new Error("The player has no guild tokens available for redemption.");
+    throw new RuleViolationError("The player has no guild tokens available for redemption.");
   }
   const redeemable = Math.min(remainingGatheringCap, player.guildTokens);
   let remaining = redeemable;
@@ -312,7 +313,7 @@ export function redeemGatheringResources(
   }
 
   if (resources.some((resource) => gained[resource] > game.bank.resources[resource])) {
-    throw new Error("The bank does not have enough stock for this gathering redemption.");
+    throw new RuleViolationError("The bank does not have enough stock for this gathering redemption.");
   }
 
   const redeemedGame = updatePlayer(game, playerId, (candidate) => ({
@@ -356,13 +357,13 @@ function pickAuctionWinner(
     assertWholeNumber(bid, "Auction bid");
     const player = getPlayer(game, playerId);
     if (bid > player.guildTokens) {
-      throw new Error(`${player.name} bid exceeds available guild tokens.`);
+      throw new RuleViolationError(`${player.name} bid exceeds available guild tokens.`);
     }
     return bid > 0 && player.guildTokens >= bid;
   });
 
   if (validBids.length === 0) {
-    throw new Error("Auction requires at least one affordable positive bid.");
+    throw new RuleViolationError("Auction requires at least one affordable positive bid.");
   }
 
   validBids.sort((left, right) => {
@@ -483,7 +484,7 @@ export function resolveAuctionRound(
   random: () => number = Math.random
 ): AuctionResult {
   if (guild.gathering.phase !== "auction") {
-    throw new Error("Guild gathering is not in auction phase.");
+    throw new RuleViolationError("Guild gathering is not in auction phase.");
   }
 
   const { winnerId, winningBid } = pickAuctionWinner(game, bids);

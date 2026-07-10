@@ -2,8 +2,8 @@
 
 Created: 2026-07-08
 Last updated: 2026-07-10
-Status: Implemented and verified through CR-030
-Workflow phase: P2 complete
+Status: Frontend repair specification approved through CR-042
+Workflow phase: Implementation verified through U059
 
 ## Feature Goal
 
@@ -121,6 +121,39 @@ This update completes the two previously deferred gameplay areas without adding 
 - The fixed board exposes nine usable ports with the required 4+5 distribution and eighteen valid coastal endpoints.
 - Building on either port endpoint changes the relevant maritime ratio and the visible UI agrees with the domain rule.
 - Focused development-card, port-geometry, reducer, and product tests pass together with the full delivery gate.
+
+## Current Update: Frontend Completeness and Recovery
+
+This update turns the existing feature-rich demo into a complete, recoverable local-game interface. It preserves the verified CR-001 through CR-030 domain rules while closing the browser-level gaps found during rendered desktop, tablet, mobile, keyboard, and invalid-command review.
+
+### Recoverable Commands and Action Availability
+
+- CR-031: Any invalid UI command leaves all gameplay and expansion data unchanged, keeps the React application mounted, and exposes a recoverable notice. The next successful command clears the notice.
+- CR-032: Every turn-owned action derives its enabled state, unavailable reason, actual cost or ratio, and legal targets from one shared application selector backed by domain rules. UI heuristics must not create a second legality path.
+- CR-033: Normal Road, Settlement, and City actions require an explicit player-selected legal edge, vertex, or owned settlement. Entering a selection mode highlights only legal targets and Escape or reselecting the action cancels it.
+- CR-034: Maritime trade requires explicit give and receive resource choices, shows the active ratio and bank availability, and disables submission until the selected exchange is legal.
+
+### Complete Local Game and Commerce Flows
+
+- CR-035: New Game starts the existing snake-order setup flow. The UI exposes each legal setup settlement and connected road choice, advances every placement pair, and enters the first normal turn after the final setup road. The initial application may continue to open the demo preset.
+- CR-036: A finished game keeps the winner visible and exposes New Game without requiring a page reload.
+- CR-037: Commerce Guild transfer controls always select a valid non-active recipient after turn changes. Gathering redemption lets the user select each participating player and reflects that player's tokens, remaining allowance, and current bank stock.
+
+### Accessibility, Responsive Layout, and Guidance
+
+- CR-038: Utility content uses a modal dialog with initial focus, Escape closing, background focus containment, and focus restoration. The Settings entry either performs a real game control action or is named according to its actual content.
+- CR-039: Form controls have programmatic labels; selected modes expose state semantics; notices and relevant log changes use live regions; disabled controls are visually distinct; touch targets are at least 44 CSS pixels; Wood and Wool remain distinguishable without color alone.
+- CR-040: At 1280 desktop, 768 tablet, and 390 mobile widths, the board and action workflow have no horizontal overflow, clipped text, overlapping controls, or action content outside its panel. On narrow layouts the action area follows the board before secondary information.
+- CR-041: Phase guidance describes the current legal decision only and never tells a player to roll after a successful non-seven roll.
+- CR-042: A real-browser regression suite runs the critical click paths for invalid-command recovery, explicit building and maritime choices, setup completion, modal keyboard behavior, and the three responsive widths. It runs alongside the existing Vitest, build, Pages, and bundle-smoke gates.
+
+### Frontend Repair Acceptance Signals
+
+- Reproducing the former zero-resource Road click leaves the board mounted and shows a recoverable notice.
+- No normal build or maritime trade silently chooses a strategic target or resource for the player.
+- A reviewer can start New Game, complete setup, play a normal turn, and start another game after victory.
+- Commerce Guild redemption can be completed for more than the active player without stale recipient state.
+- Keyboard and responsive browser checks pass at the approved widths, and automated browser coverage fails if the React root becomes empty.
 
 ## Core Catan Rule Understanding
 

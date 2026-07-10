@@ -24,6 +24,18 @@
   box-sizing: border-box;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -48,7 +60,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0.45rem 0.7rem;
   color: var(--ink);
   background: #fbf8ef;
@@ -65,6 +77,17 @@ button:hover {
   background: #ffffff;
 }
 
+button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  transform: none;
+}
+
+button:disabled:hover {
+  border-color: var(--line);
+  background: #fbf8ef;
+}
+
 button:focus-visible,
 select:focus-visible,
 input:focus-visible {
@@ -74,7 +97,7 @@ input:focus-visible {
 
 select,
 input {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0.35rem 0.5rem;
   background: #fffdf7;
 }
@@ -476,6 +499,11 @@ input {
   overflow: hidden;
 }
 
+.commerce-panel {
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -493,7 +521,7 @@ input {
 }
 
 .segmented button {
-  min-height: 30px;
+  min-height: 44px;
   padding: 0.22rem 0.55rem;
   border: 0;
   background: transparent;
@@ -590,6 +618,12 @@ th {
   color: var(--muted-ink);
 }
 
+.gathering-summary {
+  margin: 0;
+  color: var(--muted-ink);
+  font-size: 0.78rem;
+}
+
 .resource-buttons,
 .auction-grid {
   display: grid;
@@ -598,7 +632,7 @@ th {
 }
 
 .resource-buttons button {
-  min-height: 32px;
+  min-height: 44px;
   padding: 0.25rem;
   font-size: 0.74rem;
 }
@@ -675,15 +709,36 @@ button.primary {
 
 .maritime-action-group {
   display: grid;
+  grid-template-areas:
+    "ratios submit"
+    "selectors selectors";
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px;
+  min-width: 260px;
+}
+
+.maritime-selectors {
+  grid-area: selectors;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.maritime-selectors select {
   min-width: 0;
+  font-size: 0.7rem;
 }
 
 .maritime-ratio-guide {
+  grid-area: ratios;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  max-width: 190px;
+  max-width: none;
+}
+
+.maritime-action-group > button {
+  grid-area: submit;
 }
 
 .maritime-ratio-guide span {
@@ -714,25 +769,24 @@ button.primary {
   position: fixed;
   inset: 0;
   z-index: 20;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.utility-modal[open] {
   display: grid;
   place-items: center;
   padding: 1rem;
 }
 
-.modal-backdrop {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
+.utility-modal::backdrop {
   background: rgba(10, 24, 35, 0.42);
-}
-
-.modal-backdrop:hover {
-  transform: none;
-  background: rgba(10, 24, 35, 0.5);
 }
 
 .modal-card {
@@ -762,8 +816,8 @@ button.primary {
 }
 
 .modal-close {
-  width: 34px;
-  min-height: 34px;
+  width: 44px;
+  min-height: 44px;
   padding: 0;
   border-radius: 50%;
 }
@@ -809,12 +863,38 @@ button.primary {
   font-weight: 900;
 }
 
+@media (min-width: 1181px) and (max-width: 1400px) {
+  .action-bar {
+    grid-template-columns: minmax(220px, 1fr) repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .development-card-controls {
+    grid-column: 1;
+    max-width: none;
+  }
+
+  .maritime-action-group {
+    grid-column: 2 / 5;
+  }
+
+  .action-bar > .primary {
+    grid-column: 5;
+  }
+
+  .dice-readout {
+    grid-column: 6;
+    justify-self: end;
+    align-self: center;
+  }
+}
+
 @media (max-width: 1180px) {
   .game-shell {
     height: auto;
     min-height: 100vh;
     grid-template-columns: 1fr;
-    grid-template-rows: 520px auto auto 76px;
+    grid-template-rows: 520px auto auto auto;
     overflow: auto;
   }
 
@@ -824,19 +904,32 @@ button.primary {
     grid-column: 1;
   }
 
+  .action-bar > .primary {
+    grid-column: auto;
+  }
+
   .right-rail {
-    grid-row: 2;
+    grid-row: 3;
     grid-template-rows: 180px 52px auto auto;
   }
 
   .bottom-dock {
-    grid-row: 3;
+    grid-row: 4;
     grid-template-columns: 1fr;
   }
 
   .action-bar {
-    grid-row: 4;
-    grid-template-columns: 1fr;
+    grid-row: 2;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .turn-status,
+  .development-card-controls,
+  .maritime-action-group,
+  .dice-readout {
+    grid-column: 1 / -1;
+    max-width: none;
   }
 
   .hex-resource {
@@ -871,8 +964,8 @@ button.primary {
   }
 
   .utility-rail button {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
   }
 
   .island {
@@ -995,6 +1088,7 @@ button.primary {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 72px;
   max-width: 280px;
   overflow-x: auto;
 }
@@ -1008,7 +1102,7 @@ button.primary {
 
 .development-card-controls button {
   flex: 0 0 auto;
-  min-height: 34px;
+  min-height: 44px;
   padding: 0.35rem 0.5rem;
   font-size: 0.74rem;
   white-space: nowrap;
@@ -1051,6 +1145,44 @@ button.primary {
   outline: none;
 }
 
+.board-action-target {
+  cursor: pointer;
+  vector-effect: non-scaling-stroke;
+}
+
+.board-action-hit-target {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 44;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+.board-action-target.road-target {
+  stroke: #f4d35e;
+  stroke-linecap: round;
+  stroke-width: 12;
+  filter: drop-shadow(0 0 4px rgba(244, 211, 94, 0.8));
+}
+
+.board-action-target:not(.road-target) {
+  fill: rgba(244, 211, 94, 0.32);
+  stroke: #f4d35e;
+  stroke-width: 5;
+  filter: drop-shadow(0 0 4px rgba(244, 211, 94, 0.8));
+}
+
+.board-action-target:hover,
+.board-action-target:focus-visible {
+  stroke: #fff3a6;
+  outline: none;
+}
+
+.board-action-hit-target:focus-visible {
+  stroke: rgba(255, 243, 166, 0.45);
+  outline: none;
+}
+
 @media (max-width: 640px) {
   .development-card-controls {
     grid-column: 1 / -1;
@@ -1059,6 +1191,12 @@ button.primary {
 
   .maritime-action-group {
     grid-column: 1 / -1;
+    grid-template-areas:
+      "ratios"
+      "selectors"
+      "submit";
+    grid-template-columns: 1fr;
+    min-width: 0;
   }
 
   .maritime-ratio-guide {

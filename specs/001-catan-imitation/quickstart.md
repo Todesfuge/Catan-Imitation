@@ -8,6 +8,7 @@ Status: Verified through U046.
 pnpm install
 pnpm dev -- --port 5173
 pnpm test
+pnpm test:e2e
 pnpm build
 pnpm build:pages
 pnpm smoke:ui
@@ -39,5 +40,15 @@ pnpm smoke:ui
 11. Play Monopoly, choose one resource, and confirm every opponent transfers all matching cards while the bank stays unchanged.
 12. Confirm a second non-victory development card cannot be played in the same turn and a newly acquired card cannot be played immediately.
 13. Inspect the nine visible coastal ports, build on either endpoint of a generic and resource port, and confirm Maritime ratios change from 4:1 to 3:1 or 2:1 as applicable.
-9. Attempt a normal settlement away from the active player's roads and confirm a recoverable error.
-10. Exercise a Commerce Guild trade, gathering redemption, and resource blind box while watching bank totals remain conserved.
+14. Attempt a normal settlement away from the active player's roads and confirm a recoverable error.
+15. Exercise a Commerce Guild trade, gathering redemption, and resource blind box while watching bank totals remain conserved.
+
+## Frontend Recovery Manual Path
+
+1. Roll a non-seven with an active player who cannot afford a Road, attempt the unavailable action only through a prepared regression state, and confirm the board remains mounted with a recoverable notice.
+2. Give the active player build resources, choose Road, Settlement, and City targets directly on the board, and cancel one selection with Escape.
+3. Choose both Maritime resources explicitly and confirm the displayed ratio matches the transferred cards.
+4. Open Game Controls, start New Game, and complete all snake-order setup settlement-road pairs.
+5. During a gathering, switch among participating players and confirm token allowance and bank availability update.
+6. Verify dialog focus/Escape behavior and live notices using keyboard navigation.
+7. Run the same core path at 1280 desktop, 768 tablet, and 390 mobile widths without horizontal overflow or detached action controls.

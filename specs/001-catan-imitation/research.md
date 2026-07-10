@@ -58,4 +58,20 @@ Last updated: 2026-07-10
   - Reason: the board already has canonical shared vertices/edges; a second ownership store would drift.
 - Decision: render original SVG port labels and endpoint connectors through existing board projection.
   - Reason: port gameplay should be inspectable without introducing image assets or geometry duplication.
-- Existing reducer error handling already converts thrown domain errors into recoverable toast messages.
+- Finding: the former React-level `try/catch` around `dispatchBase` could not catch errors thrown when `useReducer` processed the update. A reproduced zero-resource Road click unmounted the production React root.
+
+## Frontend Completeness Decisions
+
+- Decision: catch expected rule errors inside the exported reducer boundary and retain throwing domain APIs.
+  - Reason: direct domain tests keep strong failure contracts while React always receives a valid next state.
+  - Rejected: an Error Boundary, because it would replace the game after the error instead of preserving the prior state.
+- Decision: compose one application-level action-availability selector from current domain functions.
+  - Reason: action buttons, reasons, and board targets must agree without moving UI concerns into domain entities.
+  - Rejected: independent React predicates, which caused the zero-resource Road button and illegal first-target heuristics.
+- Decision: preserve the demo as the initial portfolio view and add New Game as the entry to existing setup rules.
+  - Reason: this keeps the fast review path while making a complete local game reachable.
+- Decision: add Playwright despite the new dependency.
+  - Reason: the blocker exists specifically in real React scheduling and produced a blank browser root while all Vitest and bundle-smoke checks passed.
+  - Rejected: source-string smoke alone, because it cannot prove click behavior, focus, or responsive layout.
+- Decision: reorder narrow layouts to board, actions, then secondary panels.
+  - Reason: road/setup/robber choices require the action prompt and board to remain adjacent.

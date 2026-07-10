@@ -91,6 +91,9 @@ try {
     "Year of Plenty",
     "Monopoly",
     "Effective maritime trade ratios",
+    "Token recipient",
+    "Gathering player",
+    "Start New Game",
     "Standard maritime ports",
     "2:1 "
   ]) {
@@ -108,7 +111,9 @@ try {
     ".development-card-controls",
     ".road-building-target",
     ".port-marker",
-    ".maritime-ratio-guide"
+    ".maritime-ratio-guide",
+    ".board-action-target",
+    ".utility-modal"
   ]) {
     assert(css.includes(text), `Expected CSS bundle to include ${text}.`);
   }

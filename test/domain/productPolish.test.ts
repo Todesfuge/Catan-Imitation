@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import App from "../../src/App";
+import { createInitialAppState } from "../../src/app/gameReducer";
 import { createDemoGame } from "../../src/domain/setup";
 import { getLegalRoadEdgeIds } from "../../src/domain/rules/building";
 import {
@@ -112,7 +113,10 @@ describe("product polish UI", () => {
       )
     };
     const html = renderToString(
-      createElement(DevelopmentCardPanel, { game, dispatch: () => undefined })
+      createElement(DevelopmentCardPanel, {
+        state: { ...createInitialAppState(), game },
+        dispatch: () => undefined
+      })
     ).replaceAll("<!-- -->", "");
 
     expect(html).toContain('data-development-cards="hand"');
@@ -143,7 +147,10 @@ describe("product polish UI", () => {
       }
     };
     const plentyHtml = renderToString(
-      createElement(DevelopmentCardPanel, { game: plentyGame, dispatch: () => undefined })
+      createElement(DevelopmentCardPanel, {
+        state: { ...createInitialAppState(), game: plentyGame },
+        dispatch: () => undefined
+      })
     );
     expect(plentyHtml).toContain('data-development-effect="yearOfPlenty"');
     expect(plentyHtml).toContain("Choose 2 resources");
@@ -164,7 +171,10 @@ describe("product polish UI", () => {
       }
     };
     const monopolyHtml = renderToString(
-      createElement(DevelopmentCardPanel, { game: monopolyGame, dispatch: () => undefined })
+      createElement(DevelopmentCardPanel, {
+        state: { ...createInitialAppState(), game: monopolyGame },
+        dispatch: () => undefined
+      })
     );
     expect(monopolyHtml).toContain('data-development-effect="monopoly"');
     expect(monopolyHtml).toContain("Choose a resource to monopolize");
@@ -204,9 +214,10 @@ describe("product polish UI", () => {
   it("integrates the development-card controls and road targets into the app", () => {
     const html = renderToString(createElement(App));
     const source = readFileSync("src/App.tsx", "utf8");
+    const actionDockSource = readFileSync("src/ui/ActionDock.tsx", "utf8");
 
     expect(html).toContain('data-development-cards="hand"');
-    expect(source).toContain("<DevelopmentCardPanel");
+    expect(actionDockSource).toContain("<DevelopmentCardPanel");
     expect(source).toContain("<RoadBuildingTargets");
     expect(html).not.toContain('data-action="play-knight"');
   });
@@ -228,12 +239,11 @@ describe("product polish UI", () => {
   it("keeps robber targets accessible and disables actions outside live play", () => {
     const html = renderToString(createElement(App));
     const source = readFileSync("src/App.tsx", "utf8");
-    const liveActionPredicates = source.match(
-      /state\.game\.phase === "playing" && state\.game\.turnState\.phase === "action"/g
-    );
+    const actionDockSource = readFileSync("src/ui/ActionDock.tsx", "utf8");
 
     expect(html).toContain('class="board-svg" role="group"');
-    expect(liveActionPredicates).toHaveLength(2);
+    expect(actionDockSource).toContain("getActionAvailability");
+    expect(source).toContain("<BoardActionTargets");
     expect(source).toContain("canPlaceRobber && hex.id !== state.game.robberHexId");
   });
 

@@ -1,5 +1,6 @@
 import React from "react";
-import type { GameCommand } from "../app/gameReducer";
+import { getActionAvailability } from "../app/actionAvailability";
+import type { AppState, GameCommand } from "../app/gameReducer";
 import { getLegalRoadEdgeIds } from "../domain/rules/building";
 import {
   resources,
@@ -25,20 +26,14 @@ const resourceLabels: Record<Resource, string> = {
   ore: "Ore"
 };
 
-const playableKinds: Exclude<DevelopmentCardKind, "victoryPoint">[] = [
-  "knight",
-  "roadBuilding",
-  "yearOfPlenty",
-  "monopoly"
-];
-
 export function DevelopmentCardPanel({
-  game,
+  state,
   dispatch
 }: {
-  game: GameState;
+  state: AppState;
   dispatch: (command: GameCommand) => void;
 }) {
+  const game = state.game;
   const effect = game.turnState.pendingDevelopmentEffect;
   if (game.turnState.phase === "awaitingDevelopmentEffect" && effect) {
     if (effect.kind === "roadBuilding") {
@@ -91,38 +86,35 @@ export function DevelopmentCardPanel({
   if (!activePlayer) {
     return null;
   }
-  const canStartEffect =
-    game.phase === "playing" &&
-    (game.turnState.phase === "awaitingRoll" || game.turnState.phase === "action") &&
-    !game.turnState.developmentCardPlayed;
+  const availability = getActionAvailability(state, activePlayer.id);
   const victoryPointCount = activePlayer.developmentCards.filter(
     (card) => card.kind === "victoryPoint"
   ).length;
 
   return (
     <div className="development-card-controls" data-development-cards="hand">
-      {playableKinds.map((kind) => {
-        const cards = activePlayer.developmentCards.filter((card) => card.kind === kind);
-        if (cards.length === 0) {
+      {availability.developmentCards.map((cardAvailability) => {
+        if (cardAvailability.count === 0) {
           return null;
         }
-        const playableCard = cards.find((card) => card.purchasedTurn < game.turn);
         return (
           <button
-            data-card-kind={kind}
-            disabled={!canStartEffect || !playableCard}
-            key={kind}
+            aria-describedby={`development-${cardAvailability.kind}-unavailable-reason`}
+            data-card-kind={cardAvailability.kind}
+            disabled={!cardAvailability.enabled}
+            key={cardAvailability.kind}
             onClick={() =>
-              playableCard &&
+              cardAvailability.cardId &&
               dispatch({
                 type: "PLAY_DEVELOPMENT_CARD",
                 playerId: activePlayer.id,
-                cardId: playableCard.id
+                cardId: cardAvailability.cardId
               })
             }
+            title={cardAvailability.reason}
             type="button"
           >
-            {cardLabels[kind]} ×{cards.length}
+            {cardLabels[cardAvailability.kind]} ×{cardAvailability.count}
           </button>
         );
       })}
@@ -131,6 +123,16 @@ export function DevelopmentCardPanel({
           {cardLabels.victoryPoint} ×{victoryPointCount}
         </span>
       ) : null}
+      <div className="sr-only">
+        {availability.developmentCards.map((cardAvailability) => (
+          <span
+            id={`development-${cardAvailability.kind}-unavailable-reason`}
+            key={cardAvailability.kind}
+          >
+            {cardAvailability.reason}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -150,22 +152,23 @@ export function RoadBuildingTargets({
     return null;
   }
 
+  const legalEdges = getLegalRoadEdgeIds(game, game.activePlayerId).flatMap((edgeId) => {
+    const edge = game.edges.find((candidate) => candidate.id === edgeId);
+    if (!edge) return [];
+    return [{ edgeId, position: edgeProjection(game.board, edge) }];
+  });
+
   return (
     <g className="road-building-target-layer">
-      {getLegalRoadEdgeIds(game, game.activePlayerId).map((edgeId) => {
-        const edge = game.edges.find((candidate) => candidate.id === edgeId);
-        if (!edge) {
-          return null;
-        }
-        const position = edgeProjection(game.board, edge);
+      {legalEdges.map(({ edgeId, position }) => {
         const placeRoad = () =>
           dispatch({ type: "PLACE_FREE_ROAD", playerId: game.activePlayerId, edgeId });
         return (
           <line
             aria-label={`Place free road ${edgeId}`}
-            className="road-building-target"
+            className="board-action-hit-target road-building-hit-target"
             data-road-building-target={edgeId}
-            key={edgeId}
+            key={`hit-${edgeId}`}
             onClick={placeRoad}
             onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") {
@@ -182,6 +185,20 @@ export function RoadBuildingTargets({
           />
         );
       })}
+      {legalEdges.map(({ edgeId, position }) => (
+        <line
+          aria-hidden="true"
+          className="road-building-target"
+          key={`visible-${edgeId}`}
+          onClick={() =>
+            dispatch({ type: "PLACE_FREE_ROAD", playerId: game.activePlayerId, edgeId })
+          }
+          x1={position.from.x}
+          x2={position.to.x}
+          y1={position.from.y}
+          y2={position.to.y}
+        />
+      ))}
     </g>
   );
 }

@@ -1,7 +1,7 @@
 # Tasks: Catan Imitation With Commerce Guild Expansion
 
 Feature: 001-catan-imitation
-Status: Implemented and verified through U046
+Status: Complete through CR-042 / U059; verified and authorized for GitHub delivery
 
 ## MVP Task List
 
@@ -88,6 +88,24 @@ Status: Implemented and verified through U046
 - [x] U046 Run the complete test/build/Pages/smoke/render/diff gate, refresh handoff and private worklog records, then create one commit containing the existing CR-001 through CR-018 changes and the completed P2 work.
 
 Detailed acceptance criteria for U001-U046 live in [update-backlog.md](update-backlog.md).
+
+## Frontend Completeness and Recovery Tasks
+
+- [x] U047 Add `@playwright/test` configuration plus failing reducer and browser tests for CR-031: a zero-resource Road command must preserve state, keep `#root` mounted, show a notice, and clear it after a successful command.
+- [x] U048 Split the exported safe reducer boundary from the internal command executor in `src/app/gameReducer.ts`, move notice into `AppState`, and remove the ineffective React-level dispatch `try/catch` until U047 passes.
+- [x] U049 Add failing selector, render, and browser tests for CR-032 through CR-034 covering authoritative availability/reasons, explicit Road/Settlement/City targets, cancel behavior, and explicit Maritime give/receive choices.
+- [x] U050 Add reusable legal settlement/city/setup target queries in `src/domain/rules/building.ts` and implement the composed selector in `src/app/actionAvailability.ts` until U049 domain tests pass.
+- [x] U051 Extract `src/ui/ActionDock.tsx` and `src/ui/BoardActionTargets.tsx`; wire transient interaction modes through `src/App.tsx` until U049 product/browser tests pass without adding rule logic to the shell.
+- [x] U052 Add failing reducer, target, and browser tests for CR-035 and CR-036 covering New Game, every snake-order setup pair, transition to normal play, winner visibility, and restart.
+- [x] U053 Add typed new-game/setup commands and reuse `createSetupGame`, `placeSetupSettlement`, and `placeSetupRoad`; expose setup targets and game-over New Game until U052 passes.
+- [x] U054 Add failing product/browser tests for CR-037 through CR-041 covering valid transfer recipients, per-player gathering redemption, dialog focus/Escape/restoration, labels/live regions, selected/disabled/touch states, phase guidance, and 1280/768/390 layout contracts.
+- [x] U055 Extract `src/ui/CommercePanel.tsx` and `src/ui/UtilityDialog.tsx`; implement valid local-state synchronization and accessible platform semantics until U054 interaction tests pass.
+- [x] U056 Update `src/styles/app.css`, resource labels, phase guidance, and narrow-layout ordering until U054 responsive/visual tests pass; keep the approved board-game visual direction and remove action content outside its panel.
+- [x] U057 Integrate `pnpm test:e2e` into `.github/workflows/ci.yml`, stabilize Playwright web-server usage, and extend `scripts/smoke-ui.mjs` only for durable built-bundle contracts.
+- [x] U058 Run focused review and Spec Kit convergence for CR-031 through CR-042; resolve every P0/P1 or Critical/High finding and confirm `App.tsx` loses responsibilities overall.
+- [x] U059 Run the complete Vitest/Playwright/build/Pages/smoke/render/diff gate and refresh handoff, roadmap, ledger, and one implementation Update Packet without committing or pushing unless separately authorized.
+
+Detailed acceptance criteria for U001-U059 live in [update-backlog.md](update-backlog.md).
 
 ## Independent Acceptance Slices
 

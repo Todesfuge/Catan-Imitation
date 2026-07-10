@@ -1,4 +1,4 @@
-# Ordered Update Backlog
+﻿# Ordered Update Backlog
 
 Date: 2026-07-08
 Scope: Post-MVP improvements after `453674f feat: implement catan imitation mvp`
@@ -248,3 +248,70 @@ This backlog records completed and planned post-MVP improvement work. Items rema
   - Current state: CR-001 through CR-030 passed the full test/build/Pages/smoke/render/diff gate and the records are synchronized for the requested single commit.
   - Target: run the full delivery gate, refresh outward/private handoff records, and create one commit for the complete CR-001 through CR-030 update.
   - Acceptance: `pnpm test`, `pnpm build`, `pnpm build:pages`, `pnpm smoke:ui`, rendered desktop/mobile checks, and `git diff --check` pass before the commit; the resulting working tree is clean.
+
+## Priority 8: Frontend Completeness and Recovery
+
+- [x] U047 Add the browser-level command recovery regression.
+  - Baseline: the React-level `try/catch` cannot catch reducer update errors; an enabled zero-resource Road click unmounts the production root.
+  - Target: encode CR-031 in a pure reducer test and a real-browser click before implementation.
+  - Acceptance: both tests fail for the former blank-root behavior, not for environment or selector errors.
+
+- [x] U048 Implement the safe command boundary.
+  - Baseline: domain rule exceptions escape through `useReducer` processing.
+  - Target: keep throwing owner modules while converting expected command errors to unchanged application state plus notice inside the exported reducer.
+  - Acceptance: U047 passes; a later valid command clears notice; existing atomic-failure tests remain green.
+
+- [x] U049 Add explicit-action interaction regressions.
+  - Baseline: normal builds and Maritime choose the first heuristic candidate without player input.
+  - Target: encode CR-032 through CR-034 for availability, reasons, legal targets, cancellation, and explicit resources.
+  - Acceptance: tests fail until strategic choice is visible and no heuristic command dispatch remains.
+
+- [x] U050 Implement authoritative availability and target queries.
+  - Baseline: `App.tsx` independently checks phase, resources, topology, and ratios.
+  - Target: compose reusable domain legality into one application selector.
+  - Acceptance: selector tests cover positive and negative states without duplicating mutation logic.
+
+- [x] U051 Implement ActionDock and board target interaction.
+  - Baseline: the bottom action bar contains calculation, presentation, and dispatch heuristics in one large component.
+  - Target: extract bounded components and explicit interaction modes for paid builds and Maritime.
+  - Acceptance: browser tests select distinct legal targets/resources, Escape cancels, and `App.tsx` gains no rule logic.
+
+- [x] U052 Add complete-game UI regressions.
+  - Baseline: `createSetupGame` is domain-only and game-over has no restart entry.
+  - Target: encode CR-035 and CR-036 before implementation.
+  - Acceptance: tests cover New Game reset, all setup stages/order, first normal turn, winner display, and restart.
+
+- [x] U053 Implement New Game, setup, and restart UI.
+  - Baseline: the application always boots the prepared demo and cannot enter setup.
+  - Target: reuse existing setup rules and the board target layer without a second setup path.
+  - Acceptance: U052 passes and the demo remains the initial review preset.
+
+- [x] U054 Add Commerce, accessibility, guidance, and responsive regressions.
+  - Baseline: recipients can become stale, only the active player can redeem, modal focus remains behind the overlay, controls lack names/live states, and medium/mobile action layout is inefficient.
+  - Target: encode CR-037 through CR-041 before the component and CSS changes.
+  - Acceptance: tests use actual labels/keyboard/layout measurements rather than source strings alone where browser behavior matters.
+
+- [x] U055 Implement bounded Commerce and dialog components.
+  - Baseline: both areas live inside `App.tsx` and mix local state with shell concerns.
+  - Target: extract their existing responsibility and add valid state synchronization/native dialog behavior.
+  - Acceptance: no duplicate component path remains and U054 interaction tests pass.
+
+- [x] U056 Repair guidance, touch states, resource labels, and narrow layouts.
+  - Baseline: post-roll guidance mentions rolling, Wood/Wool share `Wo`, disabled controls look active, several targets are below 44px, mobile actions follow all secondary panels, and the tablet action row is fixed at 76px.
+  - Target: complete CR-039 through CR-041 while preserving the current visual direction.
+  - Acceptance: 1280/768/390 browser checks show no overflow, clipping, overlap, detached panel content, or ambiguous resource label.
+
+- [x] U057 Integrate real-browser verification into delivery automation.
+  - Baseline: Vitest and bundle smoke passed while the real React root could still become empty.
+  - Target: make Playwright a stable local and CI delivery command.
+  - Acceptance: `pnpm test:e2e` runs against a managed Vite server and CI installs only the required browser.
+
+- [x] U058 Complete review and convergence.
+  - Baseline: the audit findings are approved but not reconciled against implementation.
+  - Target: map CR-031 through CR-042 to tests/code and review boundaries, behavior, and visual quality.
+  - Acceptance: no unresolved P0/P1 or Critical/High finding remains; `App.tsx` loses net responsibility.
+
+- [x] U059 Complete verification and handoff.
+  - Baseline: no implementation evidence exists for the frontend repair update.
+  - Target: run the full gate and synchronize outward/private records.
+  - Acceptance: `pnpm test`, `pnpm test:e2e`, `pnpm build`, `pnpm build:pages`, `pnpm smoke:ui`, 1280/768/390 rendered review, and `git diff --check` pass; no commit or push occurs without separate authorization.

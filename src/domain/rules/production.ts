@@ -1,4 +1,4 @@
-import {
+﻿import {
   emptyResources,
   resources,
   type GameState,
@@ -8,6 +8,7 @@ import {
   type ProductionResult,
   type ResourceMap
 } from "../types";
+import { RuleViolationError } from "../errors";
 
 function createPlayerResourceIndex(game: GameState): Record<PlayerId, ResourceMap> {
   return Object.fromEntries(
@@ -140,21 +141,21 @@ export function stealRandomResource(
 ): GameState {
   const victim = game.players.find((player) => player.id === fromPlayerId);
   if (!victim) {
-    throw new Error(`Unknown player: ${fromPlayerId}`);
+    throw new RuleViolationError(`Unknown player: ${fromPlayerId}`);
   }
 
   if (!game.players.some((player) => player.id === toPlayerId)) {
-    throw new Error(`Unknown player: ${toPlayerId}`);
+    throw new RuleViolationError(`Unknown player: ${toPlayerId}`);
   }
 
   const stealableCards = getStealableCards(victim);
   if (stealableCards.length === 0) {
-    throw new Error("Robber victim has no resource cards to steal.");
+    throw new RuleViolationError("Robber victim has no resource cards to steal.");
   }
 
   const randomValue = random();
   if (!Number.isFinite(randomValue) || randomValue < 0 || randomValue >= 1) {
-    throw new Error("Random source must return a finite value from 0 inclusive to 1 exclusive.");
+    throw new RuleViolationError("Random source must return a finite value from 0 inclusive to 1 exclusive.");
   }
   const stolenResource = stealableCards[Math.floor(randomValue * stealableCards.length)];
 

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { gameReducer, createInitialAppState } from "../../src/app/gameReducer";
+import {
+  createInitialAppState,
+  unsafeExecuteGameCommandForTests as gameReducer
+} from "../../src/app/gameReducer";
 import { createSetupGame } from "../../src/domain/setup";
 import { applyProduction } from "../../src/domain/rules/production";
 import {

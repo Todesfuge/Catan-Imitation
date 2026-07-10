@@ -57,3 +57,15 @@ Checked: 2026-07-10
 - [x] Development-card effects define paused commands, phase restoration, explicit UI choice, and atomic rejection.
 - [x] The standard port count, type distribution, coastal endpoints, ownership, ratios, and SVG presentation are testable.
 - [x] Networking, persistence, generalized card engines, and randomized board generation remain excluded.
+
+## Frontend Completeness Review
+
+- [x] Invalid-command recovery specifies unchanged gameplay state, a mounted React root, a notice, and success clearing.
+- [x] Action availability has one authority and covers enabled state, reason, cost or ratio, and legal targets.
+- [x] Normal building and maritime interactions require explicit player choices and cancellation behavior.
+- [x] New Game, snake-order setup, game-over restart, and demo-preservation behavior are unambiguous.
+- [x] Commerce Guild transfer and per-player gathering state are specified across turn changes.
+- [x] Dialog, form-label, live-region, disabled, touch-target, and non-color-only requirements are testable.
+- [x] Desktop, tablet, and mobile ordering and overflow expectations use exact review widths.
+- [x] A real-browser regression suite is required in addition to existing unit/build/smoke gates.
+- [x] Networking, persistence, randomized boards, AI players, and a global state-machine rewrite remain excluded.

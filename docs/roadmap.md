@@ -45,7 +45,6 @@ Status: Complete
 
 Status: Ready for implementation
 
-- Automated browser-level UI smoke tests for click flows and responsive screenshots.
 - Generalized board generation beyond the current fixed 19-hex shared topology.
 - Optional persistence or real-time multiplayer layer.
 
@@ -68,3 +67,15 @@ Status: Complete
 - Nine deterministic standard coastal ports with live ownership, 4:1/3:1/2:1 ratios, and SVG presentation.
 - Explicit effect-choice controls and per-resource maritime ratio guidance.
 - Verification: focused card/port/product TDD slices, implementation review, rendered responsive checks, and the full delivery gate.
+
+## Milestone 7: Frontend Completeness and Recovery
+
+Status: Complete
+
+- Recoverable reducer command boundary that cannot blank the React root.
+- Shared action availability and explicit normal build, maritime, and setup choices.
+- Complete New Game, game-over restart, and multi-player Commerce Guild gathering UI.
+- Accessible dialog, forms, dynamic notices, disabled states, and touch targets.
+- Board-adjacent action workflow across 1280 desktop, 768 tablet, and 390 mobile layouts.
+- Playwright click-flow and responsive regression coverage in the delivery gate.
+- Verification: 108 Vitest checks, 12 production-preview Playwright flows, production/Pages builds, UI smoke, rendered 1280/768/390 review, and focused code-review convergence.

@@ -12,7 +12,7 @@ import {
   type ResourceCost,
   type TradeSlot
 } from "../domain/expansion/commerceGuild";
-import { createDemoGame } from "../domain/setup";
+import { createDemoGame, createSetupGame } from "../domain/setup";
 import { applyProduction } from "../domain/rules/production";
 import { advanceTurn } from "../domain/rules/turns";
 import {
@@ -37,6 +37,8 @@ import {
   buildRoad,
   buildSettlement,
   getLegalRoadEdgeIds,
+  placeSetupRoad,
+  placeSetupSettlement,
   placeFreeRoad
 } from "../domain/rules/building";
 import {
@@ -58,6 +60,7 @@ import {
   type Resource,
   type ResourceMap
 } from "../domain/types";
+import { RuleViolationError } from "../domain/errors";
 
 export interface DiceRoll {
   first: number;
@@ -71,9 +74,13 @@ export interface AppState {
   lastDice: DiceRoll | null;
   selectedDiceTotal: number;
   selectedPlayerId: PlayerId;
+  notice: string | null;
 }
 
 export type GameCommand =
+  | { type: "START_NEW_GAME" }
+  | { type: "PLACE_SETUP_SETTLEMENT"; playerId: PlayerId; vertexId: string }
+  | { type: "PLACE_SETUP_ROAD"; playerId: PlayerId; edgeId: string }
   | { type: "ROLL_DICE"; playerId: PlayerId; dice?: [number, number] }
   | { type: "END_TURN"; playerId: PlayerId }
   | { type: "BUILD_ROAD"; playerId: PlayerId; edgeId: string }
@@ -156,6 +163,7 @@ export function createInitialAppState(): AppState {
     game,
     guild: createCommerceGuild(),
     lastDice: null,
+    notice: null,
     selectedDiceTotal: 8,
     selectedPlayerId: game.activePlayerId
   };
@@ -218,8 +226,32 @@ function startDevelopmentCardEffect(
   };
 }
 
-export function gameReducer(state: AppState, command: GameCommand): AppState {
+function executeGameCommand(state: AppState, command: GameCommand): AppState {
   switch (command.type) {
+    case "START_NEW_GAME": {
+      const game = createSetupGame();
+      return {
+        game: {
+          ...game,
+          log: [log("New game setup started."), ...game.log]
+        },
+        guild: createCommerceGuild(),
+        lastDice: null,
+        notice: null,
+        selectedDiceTotal: 8,
+        selectedPlayerId: game.activePlayerId
+      };
+    }
+    case "PLACE_SETUP_SETTLEMENT":
+      return {
+        ...state,
+        game: placeSetupSettlement(state.game, command.playerId, command.vertexId)
+      };
+    case "PLACE_SETUP_ROAD":
+      return {
+        ...state,
+        game: placeSetupRoad(state.game, command.playerId, command.edgeId)
+      };
     case "ROLL_DICE": {
       assertCanRoll(state.game, command.playerId);
       const [first, second] = command.dice ?? [rollDie(), rollDie()];
@@ -525,3 +557,23 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
       };
   }
 }
+
+export function gameReducer(state: AppState, command: GameCommand): AppState {
+  try {
+    return {
+      ...executeGameCommand(state, command),
+      notice: null
+    };
+  } catch (error) {
+    if (!(error instanceof RuleViolationError)) {
+      throw error;
+    }
+    return {
+      ...state,
+      notice: error instanceof Error ? error.message : "Action failed."
+    };
+  }
+}
+
+/** Throwing command executor for domain-focused tests. Production UI must use gameReducer. */
+export const unsafeExecuteGameCommandForTests = executeGameCommand;
