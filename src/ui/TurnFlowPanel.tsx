@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import type { GameCommand } from "../app/gameReducer";
 import { emptyResources, resources, type GameState, type ResourceMap } from "../domain/types";
+import { useI18n } from "./i18n";
 
 export function TurnFlowPanel({
   game,
@@ -9,6 +10,7 @@ export function TurnFlowPanel({
   game: GameState;
   dispatch: (command: GameCommand) => void;
 }) {
+  const { locale, t } = useI18n();
   const pendingPlayerId = Object.keys(game.turnState.pendingDiscards).find(
     (playerId) => (game.turnState.pendingDiscards[playerId] ?? 0) > 0
   );
@@ -33,14 +35,14 @@ export function TurnFlowPanel({
 
     return (
       <section className="turn-flow-panel" data-turn-flow="discard">
-        <strong>{player?.name ?? pendingPlayerId} must discard {required}</strong>
-        <span>{selectedTotal} / {required} selected</span>
+        <strong>{t("turn.discardRequired", { name: player?.name ?? pendingPlayerId, count: required })}</strong>
+        <span>{t("turn.selected", { selected: selectedTotal, required })}</span>
         <div className="turn-flow-resources">
           {resources.map((resource) => (
             <label key={resource}>
-              {resource}
+              {t(`resource.${resource}`)}
               <input
-                aria-label={`${player?.name ?? pendingPlayerId} ${resource} discard`}
+                aria-label={locale === "en" ? `${player?.name ?? pendingPlayerId} ${resource} discard` : `${player?.name ?? pendingPlayerId} ${t(`resource.${resource}`)}弃牌`}
                 max={player?.resources[resource] ?? 0}
                 min={0}
                 onChange={(event) =>
@@ -63,7 +65,7 @@ export function TurnFlowPanel({
           }
           type="button"
         >
-          Submit Discard
+          {t("turn.submitDiscard")}
         </button>
       </section>
     );
@@ -72,8 +74,8 @@ export function TurnFlowPanel({
   if (game.turnState.phase === "awaitingRobberPlacement") {
     return (
       <section className="turn-flow-panel" data-turn-flow="robber-placement">
-        <strong>Move the robber to a different hex</strong>
-        <span>Select an available board hex to continue.</span>
+        <strong>{t("turn.moveRobber")}</strong>
+        <span>{t("turn.selectHex")}</span>
       </section>
     );
   }
@@ -81,7 +83,7 @@ export function TurnFlowPanel({
   if (game.turnState.phase === "awaitingRobberVictim" && game.turnState.pendingRobber) {
     return (
       <section className="turn-flow-panel" data-turn-flow="robber-victim">
-        <strong>Choose a player to steal from</strong>
+        <strong>{t("turn.chooseVictim")}</strong>
         <div className="robber-victim-buttons">
           {game.turnState.pendingRobber.eligibleVictimIds.map((victimId) => {
             const victim = game.players.find((player) => player.id === victimId);

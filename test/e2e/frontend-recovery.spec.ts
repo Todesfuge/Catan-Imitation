@@ -8,18 +8,24 @@ async function advanceBackToFirstPlayer(page: Page) {
   }
 }
 
-async function setDeterministicTotal(page: Page, total: 3 | 8) {
+async function setDeterministicTotal(page: Page, total: 2 | 3 | 7 | 8) {
   await page.evaluate((nextTotal) => {
     let call = 0;
-    Math.random =
-      nextTotal === 3
-        ? () => (call++ % 2 === 0 ? 0 : 0.2)
-        : () => 0.5;
+    if (nextTotal === 2) {
+      Math.random = () => 0;
+    } else if (nextTotal === 3) {
+      Math.random = () => (call++ % 2 === 0 ? 0 : 0.2);
+    } else if (nextTotal === 7) {
+      Math.random = () => (call++ % 2 === 0 ? 0.5 : 0.34);
+    } else {
+      Math.random = () => 0.5;
+    }
   }, total);
 }
 
 test("an invalid command keeps the game mounted, reports a notice, and clears after success", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("tab", { name: "Commerce Guild" }).click();
   await page.getByRole("button", { name: "Start Gathering" }).click();
   await page.getByRole("button", { name: "Open Auctions" }).click();
   await page.getByRole("button", { name: "Resolve Blind Box" }).click();
@@ -178,6 +184,7 @@ test("Commerce controls keep valid named selections across turns", async ({ page
     Math.random = () => 0;
   });
   await page.goto("/");
+  await page.getByRole("tab", { name: "Commerce Guild" }).click();
 
   await expect(page.getByLabel("Token recipient")).toHaveValue("p2");
   await expect(page.getByLabel("Token amount")).toHaveValue("1");
@@ -227,6 +234,7 @@ for (const viewport of [
       const action = document.querySelector(".action-bar")!.getBoundingClientRect();
       const board = document.querySelector(".board-zone")!.getBoundingClientRect();
       const right = document.querySelector(".right-rail")!.getBoundingClientRect();
+      const tradeHub = document.querySelector<HTMLElement>(".trade-hub-content:not([hidden])")!;
       const childBottom = Math.max(
         ...[...document.querySelectorAll(".action-bar > *")].map(
           (element) => element.getBoundingClientRect().bottom
@@ -246,6 +254,8 @@ for (const viewport of [
         childRight,
         documentWidth: document.documentElement.scrollWidth,
         rightTop: right.top,
+        tradeHubClientWidth: tradeHub.clientWidth,
+        tradeHubScrollWidth: tradeHub.scrollWidth,
         viewportWidth: window.innerWidth
       };
     });
@@ -253,6 +263,7 @@ for (const viewport of [
     expect(measurements.documentWidth).toBeLessThanOrEqual(measurements.viewportWidth);
     expect(measurements.childBottom).toBeLessThanOrEqual(measurements.actionBottom + 1);
     expect(measurements.childRight).toBeLessThanOrEqual(measurements.actionRight + 1);
+    expect(measurements.tradeHubScrollWidth).toBeLessThanOrEqual(measurements.tradeHubClientWidth + 1);
     if (viewport.width <= 768) {
       expect(measurements.actionTop).toBeGreaterThanOrEqual(measurements.boardBottom);
       expect(measurements.actionTop).toBeLessThan(measurements.rightTop);
@@ -282,4 +293,167 @@ test("mobile setup board targets retain a 44px non-scaling hit stroke", async ({
   }));
   expect(hitStyle.strokeWidth).toBeGreaterThanOrEqual(44);
   expect(hitStyle.vectorEffect).toBe("non-scaling-stroke");
+});
+
+test("robber guidance stays readable and log/statistics lists reach their final entries", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/");
+  for (let completedTurn = 0; completedTurn < 8; completedTurn += 1) {
+    await setDeterministicTotal(page, 2);
+    await page.getByRole("button", { name: "Roll Dice" }).click();
+    await page.getByRole("button", { name: "End Turn" }).click();
+  }
+  await setDeterministicTotal(page, 7);
+  await page.getByRole("button", { name: "Roll Dice" }).click();
+
+  const robberPanel = page.locator('[data-turn-flow="robber-placement"]');
+  await expect(robberPanel).toBeVisible();
+  const contrast = await robberPanel.evaluate((element) => {
+    const parse = (value: string) => value.match(/[\d.]+/g)!.slice(0, 3).map(Number);
+    const luminance = ([red, green, blue]: number[]) => {
+      const channels = [red, green, blue].map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.03928
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    };
+    const style = getComputedStyle(element);
+    const foreground = luminance(parse(style.color));
+    const background = luminance(parse(style.backgroundColor));
+    return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+  });
+  expect(contrast).toBeGreaterThanOrEqual(4.5);
+
+  const log = page.getByRole("log");
+  const logScroll = await log.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight
+  }));
+  expect(logScroll.scrollHeight).toBeGreaterThan(logScroll.clientHeight);
+  await log.hover();
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => log.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await log.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await log.focus();
+  await page.keyboard.press("End");
+  await expect.poll(() => log.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect(log.locator("p").last()).toHaveText("Welcome to Catan Imitation.");
+  await expect(log.locator("p").last()).toBeInViewport();
+
+  await page.getByRole("button", { name: "dice", exact: true }).click();
+  const diceList = page.getByLabel("Income by player for selected dice total");
+  const diceScroll = await diceList.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight
+  }));
+  expect(diceScroll.scrollHeight).toBeGreaterThan(diceScroll.clientHeight);
+  await diceList.hover();
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => diceList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect(diceList.locator("p").last()).toBeInViewport();
+});
+
+test("a public multi-resource offer is visible to every opponent and accepts atomically", async ({ page }) => {
+  await page.goto("/");
+  await setDeterministicTotal(page, 8);
+  await page.getByRole("button", { name: "Roll Dice" }).click();
+
+  await page.getByLabel("Offer Wool").fill("1");
+  await page.getByLabel("Request Ore").fill("1");
+  await page.getByRole("button", { name: "Publish Public Offer" }).click();
+
+  await expect(page.getByText("Voyage1969 offers 1 Wool for 1 Ore")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Accept as Loss" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Accept as Kay" })).toBeDisabled();
+  await expect(page.getByText("Kay cannot afford the requested resources")).toBeVisible();
+
+  await page.getByRole("button", { name: "Accept as Loss" }).click();
+  await expect(page.getByText("No public offer is active.")).toBeVisible();
+  await expect(page.getByRole("log")).toContainText("Loss accepted Voyage1969's public player trade");
+
+  await page.getByRole("tab", { name: "Commerce Guild" }).click();
+  await expect(page.locator('[data-trade-hub-panel="commerce"]')).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Commerce Guild" })).toBeVisible();
+});
+
+test("public offers cancel explicitly and clear when the proposer ends the turn", async ({ page }) => {
+  await page.goto("/");
+  await setDeterministicTotal(page, 8);
+  await page.getByRole("button", { name: "Roll Dice" }).click();
+  await page.getByLabel("Offer Wool").fill("1");
+  await page.getByLabel("Request Ore").fill("1");
+  await page.getByRole("button", { name: "Publish Public Offer" }).click();
+  await page.getByRole("button", { name: "Cancel Offer" }).click();
+  await expect(page.getByText("No public offer is active.")).toBeVisible();
+
+  await page.getByLabel("Offer Wool").fill("1");
+  await page.getByLabel("Request Ore").fill("1");
+  await page.getByRole("button", { name: "Publish Public Offer" }).click();
+  await page.getByRole("button", { name: "End Turn" }).click();
+  await expect(page.getByText("No public offer is active.")).toBeVisible();
+  await expect(page.locator(".turn-status strong")).toHaveText("Loss");
+});
+
+test("English defaults, Chinese retranslates history, and the locale survives reload", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Game Log" })).toBeVisible();
+  await setDeterministicTotal(page, 8);
+  await page.getByRole("button", { name: "Roll Dice" }).click();
+  await expect(page.getByRole("log")).toContainText("Voyage1969 rolled 8");
+
+  await page.getByRole("button", { name: "Open settings" }).click();
+  const language = page.locator("[data-language-select]");
+  await expect(language).toHaveValue("en");
+  await language.selectOption("zh-CN");
+  await expect(page.getByRole("button", { name: "掷骰子" })).toBeVisible();
+  await page.locator("[data-dialog-close]").click();
+
+  await expect(page.getByRole("heading", { name: "游戏日志" })).toBeVisible();
+  await expect(page.getByRole("log")).toContainText("Voyage1969 掷出了 8");
+  await expect(page.getByText("产出统计")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "游戏日志" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "掷骰子" })).toBeVisible();
+  await expect(page.getByRole("log")).toContainText("欢迎来到卡坦岛仿制版");
+
+  await page.getByRole("tab", { name: "商业公会" }).click();
+  await page.getByRole("button", { name: "开始集会" }).click();
+  await page.getByRole("button", { name: "开启拍卖" }).click();
+  await page.getByLabel("Voyage1969").fill("1");
+  await page.getByRole("button", { name: "结算盲盒" }).click();
+  await expect(page.getByRole("status")).toContainText("Voyage1969 的出价超过了可用公会代币");
+});
+
+test("mobile keeps log and dice statistics internally scrollable", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  for (let completedTurn = 0; completedTurn < 8; completedTurn += 1) {
+    await setDeterministicTotal(page, 2);
+    await page.getByRole("button", { name: "Roll Dice" }).click();
+    await page.getByRole("button", { name: "End Turn" }).click();
+  }
+  await setDeterministicTotal(page, 7);
+  await page.getByRole("button", { name: "Roll Dice" }).click();
+
+  const log = page.getByRole("log");
+  expect(await log.evaluate((element) => element.scrollHeight)).toBeGreaterThan(
+    await log.evaluate((element) => element.clientHeight)
+  );
+  await log.focus();
+  await page.keyboard.press("End");
+  await expect.poll(() => log.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "dice", exact: true }).click();
+  const diceList = page.getByLabel("Income by player for selected dice total");
+  expect(await diceList.evaluate((element) => element.scrollHeight)).toBeGreaterThan(
+    await diceList.evaluate((element) => element.clientHeight)
+  );
+  await diceList.focus();
+  await page.keyboard.press("End");
+  await expect.poll(() => diceList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 });

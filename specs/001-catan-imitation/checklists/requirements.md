@@ -1,7 +1,7 @@
 # Requirements Quality Checklist
 
 Feature: 001-catan-imitation
-Checked: 2026-07-10
+Checked: 2026-07-11
 
 ## Completeness
 
@@ -69,3 +69,22 @@ Checked: 2026-07-10
 - [x] Desktop, tablet, and mobile ordering and overflow expectations use exact review widths.
 - [x] A real-browser regression suite is required in addition to existing unit/build/smoke gates.
 - [x] Networking, persistence, randomized boards, AI players, and a global state-machine rewrite remain excluded.
+
+## Readability, Public Trade, and Localization Review
+
+- [x] The reported robber contrast defect and both clipped scrolling surfaces have reproducible owners and observable acceptance criteria.
+- [x] Public player trade defines proposer, eligible acceptors, multiple-resource bundles, phase ownership, atomic validation, cancellation, and end-turn lifetime.
+- [x] Public player trade remains separate from Maritime and Commerce Guild rules.
+- [x] English-default and Simplified-Chinese switching behavior, session persistence, storage fallback, and dynamic log translation are explicit.
+- [x] README Chinese scope and reciprocal discovery are explicit.
+- [x] Tests cover domain conservation, reducer rejection preservation, real browser scrolling/trade/locale flows, and exact responsive widths.
+- [x] Translation packages, generic transaction engines, cross-turn offers, networking, and persistence remain excluded.
+
+## U060-U069 Implementation Convergence
+
+- [x] Game Log renders every entry and browser tests reach an oldest sentinel beyond the former eight-entry cap.
+- [x] Player-trade domain tests prove validation, stale-inventory rejection, atomic conservation, cancellation, and end-turn cleanup.
+- [x] Browser tests cover publish, accept, cancel, end-turn cleanup, locale persistence, historical log translation, and Chinese rule notices.
+- [x] Structured auction results preserve winner, round, bid, reward kind, resource names, and quantities in both locales.
+- [x] Independent review reported no Critical finding; every Important finding was corrected before the final gate.
+- [x] Rendered 1280 English/Chinese and 390 Chinese checks found no remaining P0/P1 visual defect.

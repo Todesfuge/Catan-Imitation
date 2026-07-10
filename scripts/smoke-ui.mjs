@@ -82,6 +82,7 @@ try {
   for (const text of [
     "Catan board",
     "Yield Statistics",
+    "Player Trade",
     "Commerce Guild",
     "Activity",
     "Submit Discard",
@@ -96,6 +97,10 @@ try {
     "Start New Game",
     "Standard maritime ports",
     "2:1 "
+    ,"Publish Public Offer"
+    ,"Simplified Chinese"
+    ,"游戏日志"
+    ,"catan.locale"
   ]) {
     assert(js.includes(text), `Expected JavaScript bundle to include ${text}.`);
   }
@@ -114,6 +119,10 @@ try {
     ".maritime-ratio-guide",
     ".board-action-target",
     ".utility-modal"
+    ,".player-trade-panel"
+    ,".trade-hub-panel"
+    ,".dice-income-list"
+    ,".log-list"
   ]) {
     assert(css.includes(text), `Expected CSS bundle to include ${text}.`);
   }
@@ -126,7 +135,10 @@ try {
   assert(/filter:\s*drop-shadow/.test(css), "Expected hexes to have visible separated borders.");
   assert(/@media \(max-width:\s*640px\)/.test(css), "Expected CSS bundle to include the mobile breakpoint.");
 
-  console.log("UI smoke passed: built preview exposes board, panels, activity, and responsive CSS.");
+  assert(/\.log-list\{[^}]*overflow-y:auto/s.test(css), "Expected Game Log to own vertical scrolling.");
+  assert(/\.dice-income-list\{[^}]*overflow-y:auto/s.test(css), "Expected dice statistics to own vertical scrolling.");
+
+  console.log("UI smoke passed: built preview exposes board, trade, localization, scrolling, and responsive CSS.");
 } catch (error) {
   throw error;
 } finally {

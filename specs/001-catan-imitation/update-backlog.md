@@ -315,3 +315,27 @@ This backlog records completed and planned post-MVP improvement work. Items rema
   - Baseline: no implementation evidence exists for the frontend repair update.
   - Target: run the full gate and synchronize outward/private records.
   - Acceptance: `pnpm test`, `pnpm test:e2e`, `pnpm build`, `pnpm build:pages`, `pnpm smoke:ui`, 1280/768/390 rendered review, and `git diff --check` pass; no commit or push occurs without separate authorization.
+
+## Priority 9: Readability, Public Trade, and Localization
+
+- [x] U060 Add overlay and scroll regressions.
+  - Baseline: robber text inherits dark ink; Game Log and Statistics dice content are clipped by hidden-overflow parents.
+  - Acceptance: browser regressions fail on contrast and final-entry reachability before CSS changes.
+- [x] U061 Repair overlay foreground and scrolling owners.
+  - Acceptance: the focused regressions pass without making the fixed desktop shell itself scroll.
+- [x] U062 Add public player-trade domain regressions.
+  - Acceptance: tests cover every CR-045 through CR-047 validation, conservation, lifecycle, and rejection-preservation rule before implementation.
+- [x] U063 Implement public player-trade state and commands.
+  - Acceptance: domain/reducer tests pass and no exchange arithmetic exists in React.
+- [x] U064 Add Player Trade UI/browser regressions.
+  - Acceptance: tests fail until bundle editing, public summary, eligible acceptance reasons, cancellation, and successful exchange are usable.
+- [x] U065 Implement the bounded Player Trade UI.
+  - Acceptance: Player Trade and Commerce Guild share space but not rules or component state; the browser flow passes.
+- [x] U066 Add English/Chinese and README regressions.
+  - Acceptance: tests fail on missing Chinese catalog, session persistence, historical log translation, and Chinese README.
+- [x] U067 Implement localization and Chinese README.
+  - Acceptance: English remains default and the approved Chinese coverage passes without a new dependency.
+- [x] U068 Integrate production-browser and bundle verification.
+  - Acceptance: scroll, trade, locale, and 1280/768/390 checks run in the managed production-preview suite and CI.
+- [x] U069 Complete review, convergence, verification, and handoff.
+  - Acceptance: no Critical/Important or P0/P1 finding remains and the full delivery gate passes before commit authorization is requested.

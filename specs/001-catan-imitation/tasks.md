@@ -1,7 +1,7 @@
 # Tasks: Catan Imitation With Commerce Guild Expansion
 
 Feature: 001-catan-imitation
-Status: Complete through CR-042 / U059; verified and authorized for GitHub delivery
+Status: Complete through U069; awaiting commit authorization
 
 ## MVP Task List
 
@@ -106,6 +106,21 @@ Detailed acceptance criteria for U001-U046 live in [update-backlog.md](update-ba
 - [x] U059 Run the complete Vitest/Playwright/build/Pages/smoke/render/diff gate and refresh handoff, roadmap, ledger, and one implementation Update Packet without committing or pushing unless separately authorized.
 
 Detailed acceptance criteria for U001-U059 live in [update-backlog.md](update-backlog.md).
+
+## Readability, Public Trade, and Localization Tasks
+
+- [x] U060 Add failing source/browser regressions for CR-043 and CR-044 covering readable robber overlay foreground plus mouse/keyboard scrolling to the final Game Log and Statistics dice entries.
+- [x] U061 Implement the smallest shared overlay foreground and bounded scroll-container CSS changes until U060 passes at 1280 and 390 widths.
+- [x] U062 Add failing domain/reducer tests for CR-045 through CR-047 covering multi-resource publish, one pending offer, invalid quantities, affordability, eligible acceptance, atomic conservation, cancellation, rejection preservation, and end-turn cleanup.
+- [x] U063 Implement `src/domain/rules/playerTrade.ts`, pending offer application state, keyed logs, and typed publish/cancel/accept commands until U062 passes.
+- [x] U064 Add failing component/browser tests for the Player Trade / Commerce Guild host, multi-resource editor, offer summary, per-opponent acceptance reasons, cancellation, and successful hot-seat acceptance.
+- [x] U065 Implement bounded `src/ui/PlayerTradePanel.tsx` and host integration without adding trade rules to `App.tsx` or `CommercePanel.tsx` until U064 passes.
+- [x] U066 Add failing localization and documentation tests for CR-049 through CR-052 covering default English, Chinese switching, session reload persistence, historical log translation, common notices, and reciprocal README links/content.
+- [x] U067 Implement the dependency-free locale provider/catalog, keyed log presentation, translated core UI surfaces, language control, and `README.zh-CN.md` until U066 passes.
+- [x] U068 Extend production-preview Playwright and bundle smoke for CR-053; verify 1280/768/390 containment, scroll reachability, trade lifecycle, locale behavior, and no regression to CR-001 through CR-042.
+- [x] U069 Run focused review, Spec Kit convergence, full delivery gate, rendered visual review, and handoff/worklog refresh; resolve every Critical/Important or P0/P1 finding before requesting commit authorization.
+
+Detailed acceptance criteria for U001-U069 live in [update-backlog.md](update-backlog.md).
 
 ## Independent Acceptance Slices
 

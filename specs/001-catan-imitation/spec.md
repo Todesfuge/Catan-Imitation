@@ -1,9 +1,9 @@
 # Feature Specification: Catan Imitation With Commerce Guild Expansion
 
 Created: 2026-07-08
-Last updated: 2026-07-10
-Status: Frontend repair specification approved through CR-042
-Workflow phase: Implementation verified through U059
+Last updated: 2026-07-11
+Status: Implemented and verified through CR-053
+Workflow phase: U060-U069 complete; awaiting commit authorization
 
 ## Feature Goal
 
@@ -154,6 +154,38 @@ This update turns the existing feature-rich demo into a complete, recoverable lo
 - A reviewer can start New Game, complete setup, play a normal turn, and start another game after victory.
 - Commerce Guild redemption can be completed for more than the active player without stale recipient state.
 - Keyboard and responsive browser checks pass at the approved widths, and automated browser coverage fails if the React root becomes empty.
+
+## Current Update: Readability, Public Player Trade, and Chinese Localization
+
+This update addresses four issues found during real use without changing the verified CR-001 through CR-042 behavior. The product remains English by default and adds an explicit Simplified Chinese option.
+
+### Readability and Scrolling
+
+- CR-043: Discard, robber, robber-victim, and development-effect overlays use a shared high-contrast foreground on the existing dark surface. Robber instructions and controls remain readable at desktop and mobile widths.
+- CR-044: Game Log and the Yield Statistics dice view have bounded internal scroll regions. Their headings and selectors remain visible while mouse-wheel, touch, and keyboard scrolling reaches all entries.
+
+### Public Player Resource Offers
+
+- CR-045: During the normal post-roll action phase, the active player may publish one public offer containing positive whole-number quantities across multiple offered and requested resources. Both sides must be non-empty and the offered side must be affordable at publish time.
+- CR-046: Every non-active player may inspect the public offer. A player with all requested resources may accept it; acceptance atomically transfers both resource bundles after revalidating both inventories. The active player cannot accept their own offer.
+- CR-047: Only one offer exists at a time. Successful acceptance or active-player cancellation clears it, and ending the active player's turn clears any unresolved offer. Rejected publish/accept commands preserve all inventories and the existing offer.
+- CR-048: Player resource trade is a standard game action, separate from Maritime and Commerce Guild rules. It appears as a bounded `PlayerTradePanel` in a shared Player Trade / Commerce Guild host slot rather than adding rule logic to `App.tsx` or `CommercePanel.tsx`.
+
+### English/Chinese Product Support
+
+- CR-049: The game starts in English. A labeled language control switches between English and Simplified Chinese and stores the choice in `sessionStorage`; unavailable or invalid storage falls back to English without changing game state.
+- CR-050: Chinese mode covers navigation, action/phase guidance, forms, statistics, Game Log presentation, player trade, Commerce Guild, dialogs, notices, and common rule errors. Player names, ids, numbers, and resource quantities retain their values.
+- CR-051: Existing and new game-log entries carry stable message keys and parameters plus an English fallback, so changing locale retranslates historical visible entries without rewriting gameplay state.
+- CR-052: `README.md` links to a complete `README.zh-CN.md`; the Chinese document covers scope, setup, commands, gameplay, testing, deployment, and documentation links.
+- CR-053: Vitest and production-preview Playwright cover the reported contrast/scrolling defects, full public-offer lifecycle, default English, Chinese switching/reload persistence, translated logs, README linkage, and 1280/768/390 layout containment.
+
+### Update Acceptance Signals
+
+- The robber overlay meets the same readable contrast standard as other dark phase overlays.
+- Game Log and Statistics dice lists can reach their final entries without moving the entire fixed desktop game shell.
+- One active player can publish a multi-resource offer and any eligible opponent can accept it exactly once.
+- English remains the default; switching to Chinese updates current UI and existing log entries and survives reload within the session.
+- The repository exposes a discoverable, complete Chinese README.
 
 ## Core Catan Rule Understanding
 

@@ -52,7 +52,13 @@ import { updateLongestRoadAward } from "../domain/rules/longestRoad";
 import { maritimeTrade } from "../domain/rules/maritimeTrade";
 import { calculatePlayerScore } from "../domain/rules/scoring";
 import {
+  acceptPlayerTrade,
+  createPlayerTradeOffer,
+  type PlayerTradeOffer
+} from "../domain/rules/playerTrade";
+import {
   resources,
+  type GameMessageKey,
   type GameLogEntry,
   type GameState,
   type HexId,
@@ -75,6 +81,7 @@ export interface AppState {
   selectedDiceTotal: number;
   selectedPlayerId: PlayerId;
   notice: string | null;
+  pendingPlayerTrade?: PlayerTradeOffer;
 }
 
 export type GameCommand =
@@ -93,6 +100,14 @@ export type GameCommand =
   | { type: "CHOOSE_YEAR_OF_PLENTY_RESOURCE"; playerId: PlayerId; resource: Resource }
   | { type: "CHOOSE_MONOPOLY_RESOURCE"; playerId: PlayerId; resource: Resource }
   | { type: "MARITIME_TRADE"; playerId: PlayerId; give: Resource; receive: Resource }
+  | {
+      type: "PUBLISH_PLAYER_TRADE";
+      playerId: PlayerId;
+      offered: ResourceMap;
+      requested: ResourceMap;
+    }
+  | { type: "CANCEL_PLAYER_TRADE"; playerId: PlayerId }
+  | { type: "ACCEPT_PLAYER_TRADE"; playerId: PlayerId }
   | { type: "DISCARD_FOR_SEVEN"; playerId: PlayerId; resources: ResourceMap }
   | { type: "PLACE_ROBBER"; playerId: PlayerId; hexId: HexId }
   | {
@@ -113,11 +128,17 @@ export type GameCommand =
 
 let logCounter = 0;
 
-function log(message: string): GameLogEntry {
+function log(
+  message: string,
+  messageKey?: GameMessageKey,
+  params?: Record<string, string | number>
+): GameLogEntry {
   logCounter += 1;
   return {
     id: `log-${logCounter}`,
-    message
+    message,
+    messageKey,
+    params
   };
 }
 
@@ -171,12 +192,17 @@ export function createInitialAppState(): AppState {
 
 function applyDiceRoll(game: GameState, diceTotal: number): GameState {
   const production = applyProduction(game, diceTotal);
+  const playerName = game.players.find(
+    (player) => player.id === game.activePlayerId
+  )?.name ?? "Player";
 
   return {
     ...production.game,
     log: [
       log(
-        `${game.players.find((player) => player.id === game.activePlayerId)?.name ?? "Player"} rolled ${diceTotal}; ${production.events.length} production events resolved.`
+        `${playerName} rolled ${diceTotal}; ${production.events.length} production events resolved.`,
+        "dice.rolled",
+        { playerName, total: diceTotal, eventCount: production.events.length }
       ),
       ...production.game.log
     ]
@@ -219,7 +245,11 @@ function startDevelopmentCardEffect(
     game: {
       ...effectGame,
       log: [
-        log(`${getPlayerName(state.game, playerId)} played ${played.card.kind}.`),
+        log(
+          `${getPlayerName(state.game, playerId)} played ${played.card.kind}.`,
+          "development.played",
+          { playerName: getPlayerName(state.game, playerId), cardKind: played.card.kind }
+        ),
         ...effectGame.log
       ]
     }
@@ -233,7 +263,7 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
       return {
         game: {
           ...game,
-          log: [log("New game setup started."), ...game.log]
+          log: [log("New game setup started.", "setup.newGameStarted"), ...game.log]
         },
         guild: createCommerceGuild(),
         lastDice: null,
@@ -260,7 +290,13 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         total === 7
           ? {
               ...beginSevenRoll(state.game),
-              log: [log("A 7 was rolled; resolve discards and the robber."), ...state.game.log]
+              log: [
+                log(
+                  "A 7 was rolled; resolve discards and the robber.",
+                  "robber.sevenRolled"
+                ),
+                ...state.game.log
+              ]
             }
           : enterActionPhase(applyDiceRoll(state.game, total));
       return {
@@ -275,7 +311,14 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         ...state,
         game: {
           ...discardedGame,
-          log: [log(`${getPlayerName(state.game, command.playerId)} completed a seven-roll discard.`), ...discardedGame.log]
+          log: [
+            log(
+              `${getPlayerName(state.game, command.playerId)} completed a seven-roll discard.`,
+              "robber.discardCompleted",
+              { playerName: getPlayerName(state.game, command.playerId) }
+            ),
+            ...discardedGame.log
+          ]
         }
       };
     }
@@ -299,11 +342,18 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
           game: {
             ...nextGame,
             log: gatheringStarted
-              ? [log("The Commerce Guild gathering has started automatically."), ...nextGame.log]
+              ? [
+                  log(
+                    "The Commerce Guild gathering has started automatically.",
+                    "guild.gatheringAutoStarted"
+                  ),
+                  ...nextGame.log
+                ]
               : nextGame.log
           },
           guild: nextGuild,
-          lastDice: null
+          lastDice: null,
+          pendingPlayerTrade: undefined
         };
       }
     case "BUILD_ROAD":
@@ -337,7 +387,14 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         ...state,
         game: {
           ...withWinnerState(result.game, command.playerId),
-          log: [log(`${command.playerId} bought a development card.`), ...result.game.log]
+          log: [
+            log(
+              `${getPlayerName(state.game, command.playerId)} bought a development card.`,
+              "development.bought",
+              { playerName: getPlayerName(state.game, command.playerId) }
+            ),
+            ...result.game.log
+          ]
         }
       };
     }
@@ -352,7 +409,14 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
           ...state,
           game: {
             ...knightGame,
-            log: [log(`${command.playerId} played a knight card; move the robber.`), ...knightGame.log]
+            log: [
+              log(
+                `${getPlayerName(state.game, command.playerId)} played a knight card; move the robber.`,
+                "development.knightPlayed",
+                { playerName: getPlayerName(state.game, command.playerId) }
+              ),
+              ...knightGame.log
+            ]
           }
         };
       }
@@ -373,7 +437,11 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         game: {
           ...withWinnerState(progressedGame, command.playerId),
           log: [
-            log(`${getPlayerName(state.game, command.playerId)} placed a free road.`),
+            log(
+              `${getPlayerName(state.game, command.playerId)} placed a free road.`,
+              "development.freeRoadPlaced",
+              { playerName: getPlayerName(state.game, command.playerId) }
+            ),
             ...progressedGame.log
           ]
         }
@@ -389,7 +457,14 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         ...state,
         game: {
           ...result,
-          log: [log(`Year of Plenty supplied ${command.resource}.`), ...result.log]
+          log: [
+            log(
+              `Year of Plenty supplied ${command.resource}.`,
+              "development.yearOfPlentyLog",
+              { resource: command.resource }
+            ),
+            ...result.log
+          ]
         }
       };
     }
@@ -399,7 +474,14 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         ...state,
         game: {
           ...result,
-          log: [log(`Monopoly collected all opponent ${command.resource}.`), ...result.log]
+          log: [
+            log(
+              `Monopoly collected all opponent ${command.resource}.`,
+              "development.monopolyLog",
+              { resource: command.resource }
+            ),
+            ...result.log
+          ]
         }
       };
     }
@@ -410,11 +492,98 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         game: {
           ...maritimeTrade(state.game, command.playerId, command.give, command.receive),
           log: [
-            log(`${command.playerId} completed a maritime trade: ${command.give} for ${command.receive}.`),
+            log(
+              `${getPlayerName(state.game, command.playerId)} completed a maritime trade: ${command.give} for ${command.receive}.`,
+              "trade.maritime",
+              {
+                playerName: getPlayerName(state.game, command.playerId),
+                give: command.give,
+                receive: command.receive
+              }
+            ),
             ...state.game.log
           ]
         }
       };
+    case "PUBLISH_PLAYER_TRADE": {
+      if (state.pendingPlayerTrade) {
+        throw new RuleViolationError("Only one public player trade may be active at a time.");
+      }
+      const pendingPlayerTrade = createPlayerTradeOffer(
+        state.game,
+        command.playerId,
+        command.offered,
+        command.requested
+      );
+      const proposerName = getPlayerName(state.game, command.playerId);
+      return {
+        ...state,
+        pendingPlayerTrade,
+        game: {
+          ...state.game,
+          log: [
+            log(
+              `${proposerName} published a public player trade.`,
+              "trade.player.published",
+              { proposerName }
+            ),
+            ...state.game.log
+          ]
+        }
+      };
+    }
+    case "CANCEL_PLAYER_TRADE": {
+      assertCanUseTurnAction(state.game, command.playerId);
+      if (!state.pendingPlayerTrade) {
+        throw new RuleViolationError("There is no public player trade to cancel.");
+      }
+      if (state.pendingPlayerTrade.proposerId !== command.playerId) {
+        throw new RuleViolationError("Only the active player who published the offer may cancel it.");
+      }
+      const proposerName = getPlayerName(state.game, command.playerId);
+      return {
+        ...state,
+        pendingPlayerTrade: undefined,
+        game: {
+          ...state.game,
+          log: [
+            log(
+              `${proposerName} cancelled the public player trade.`,
+              "trade.player.cancelled",
+              { proposerName }
+            ),
+            ...state.game.log
+          ]
+        }
+      };
+    }
+    case "ACCEPT_PLAYER_TRADE": {
+      if (!state.pendingPlayerTrade) {
+        throw new RuleViolationError("There is no public player trade to accept.");
+      }
+      const acceptingPlayerName = getPlayerName(state.game, command.playerId);
+      const proposerName = getPlayerName(state.game, state.pendingPlayerTrade.proposerId);
+      const acceptedGame = acceptPlayerTrade(
+        state.game,
+        state.pendingPlayerTrade,
+        command.playerId
+      );
+      return {
+        ...state,
+        pendingPlayerTrade: undefined,
+        game: {
+          ...acceptedGame,
+          log: [
+            log(
+              `${acceptingPlayerName} accepted ${proposerName}'s public player trade.`,
+              "trade.player.accepted",
+              { acceptingPlayerName, proposerName }
+            ),
+            ...acceptedGame.log
+          ]
+        }
+      };
+    }
     case "PLACE_ROBBER": {
       const robberGame = placePendingRobber(state.game, command.playerId, command.hexId);
       const resolvedGame =
@@ -425,7 +594,12 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         ...state,
         game: {
           ...resolvedGame,
-          log: [log(`Robber moved to ${command.hexId}.`), ...resolvedGame.log]
+          log: [
+            log(`Robber moved to ${command.hexId}.`, "robber.moved", {
+              hexId: command.hexId
+            }),
+            ...resolvedGame.log
+          ]
         }
       };
     }
@@ -443,7 +617,12 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
           ...resolvedGame,
           log: [
             log(
-              `${getPlayerName(state.game, command.playerId)} stole one random resource from ${getPlayerName(state.game, command.victimId)}.`
+              `${getPlayerName(state.game, command.playerId)} stole one random resource from ${getPlayerName(state.game, command.victimId)}.`,
+              "robber.stolen",
+              {
+                playerName: getPlayerName(state.game, command.playerId),
+                victimName: getPlayerName(state.game, command.victimId)
+              }
             ),
             ...resolvedGame.log
           ]
@@ -463,7 +642,13 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         ...state,
         game: {
           ...result.game,
-          log: [log("Commerce Guild trade completed and the slot refreshed."), ...result.game.log]
+          log: [
+            log(
+              "Commerce Guild trade completed and the slot refreshed.",
+              "guild.slotCompleted"
+            ),
+            ...result.game.log
+          ]
         },
         guild: result.guild
       };
@@ -481,7 +666,13 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
           ),
           log: [
             log(
-              `${getPlayerName(state.game, command.fromPlayerId)} transferred ${command.amount} guild token(s) to ${getPlayerName(state.game, command.toPlayerId)}.`
+              `${getPlayerName(state.game, command.fromPlayerId)} transferred ${command.amount} guild token(s) to ${getPlayerName(state.game, command.toPlayerId)}.`,
+              "guild.tokensTransferred",
+              {
+                fromName: getPlayerName(state.game, command.fromPlayerId),
+                amount: command.amount,
+                toName: getPlayerName(state.game, command.toPlayerId)
+              }
             ),
             ...state.game.log
           ]
@@ -494,7 +685,10 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         guild: startGuildGathering(state.guild),
         game: {
           ...state.game,
-          log: [log("The Commerce Guild gathering has started."), ...state.game.log]
+          log: [
+            log("The Commerce Guild gathering has started.", "guild.gatheringStarted"),
+            ...state.game.log
+          ]
         }
       };
     case "OPEN_AUCTION":
@@ -504,7 +698,10 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         guild: openGuildAuction(state.guild),
         game: {
           ...state.game,
-          log: [log("The Commerce Guild auction phase is open."), ...state.game.log]
+          log: [
+            log("The Commerce Guild auction phase is open.", "guild.auctionOpened"),
+            ...state.game.log
+          ]
         }
       };
     case "REDEEM_GATHERING": {
@@ -514,7 +711,14 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         ...state,
         game: {
           ...result.game,
-          log: [log(`${command.playerId} redeemed guild tokens for resources.`), ...result.game.log]
+          log: [
+            log(
+              `${getPlayerName(state.game, command.playerId)} redeemed guild tokens for resources.`,
+              "guild.redeemedResources",
+              { playerName: getPlayerName(state.game, command.playerId) }
+            ),
+            ...result.game.log
+          ]
         },
         guild: result.guild
       };
@@ -522,13 +726,27 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
     case "RESOLVE_AUCTION": {
       assertGameInProgress(state.game);
       const result = resolveAuctionRound(state.game, state.guild, command.bids);
+      const outcomeParams: Record<string, string | number> =
+        result.outcome.kind === "resources"
+          ? { outcomeKind: result.outcome.kind, ...result.outcome.resources }
+          : result.outcome.kind === "developmentCard"
+            ? { outcomeKind: result.outcome.kind, cardKind: result.outcome.card }
+            : { outcomeKind: result.outcome.kind };
       return {
         ...state,
         game: {
           ...result.game,
           log: [
             log(
-              result.summary
+              result.summary,
+              "guild.auctionResolved",
+              {
+                summary: result.summary,
+                winnerName: getPlayerName(state.game, result.winnerId),
+                bid: result.winningBid,
+                round: state.guild.gathering.auctionRound,
+                ...outcomeParams
+              }
             ),
             ...result.game.log
           ]
@@ -542,7 +760,14 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
         ...state,
         game: {
           ...withWinnerState(redeemPrizeCards(state.game, command.playerId), command.playerId),
-          log: [log(`${command.playerId} redeemed vouchers for prize cards.`), ...state.game.log]
+          log: [
+            log(
+              `${getPlayerName(state.game, command.playerId)} redeemed vouchers for prize cards.`,
+              "guild.prizeRedeemed",
+              { playerName: getPlayerName(state.game, command.playerId) }
+            ),
+            ...state.game.log
+          ]
         }
       };
     case "SELECT_DICE_TOTAL":

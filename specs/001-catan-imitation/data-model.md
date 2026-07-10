@@ -191,3 +191,37 @@ Frontend invariants:
 - Targets are derived from current domain state and are never cached as game state.
 - Setup interaction mode matches `game.setup.stage`; normal build modes exist only during the normal action phase.
 - Maritime give/receive selections are distinct and do not dispatch until the selected ratio, player inventory, and bank stock are legal.
+
+## Public Player Trade and Locale State
+
+```ts
+interface PlayerTradeOffer {
+  proposerId: PlayerId;
+  offered: ResourceMap;
+  requested: ResourceMap;
+}
+
+interface GameLogEntry {
+  id: string;
+  message: string; // English fallback
+  messageKey?: GameMessageKey;
+  params?: Record<string, string | number>;
+}
+
+type Locale = "en" | "zh-CN";
+```
+
+Trade invariants:
+
+- At most one `PlayerTradeOffer` exists in application state.
+- Only the active player in `action` phase may publish or cancel.
+- Offered and requested maps each contain at least one positive whole-number quantity.
+- The proposer can afford `offered` when publishing and accepting; the accepting non-active player can afford `requested` when accepting.
+- Acceptance conserves every resource across the two players and clears the offer atomically.
+- End turn clears the unresolved offer.
+
+Locale invariants:
+
+- Locale defaults to `en`; only `en` and `zh-CN` are accepted from session storage.
+- Locale changes presentation only and never mutate domain/reducer gameplay data.
+- Log keys and params are stable; English `message` remains a compatibility fallback.

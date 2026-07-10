@@ -106,7 +106,8 @@ export function createDemoGame(): GameState {
     log: [
       {
         id: "log-welcome",
-        message: "Welcome to Catan Imitation."
+        message: "Welcome to Catan Imitation.",
+        messageKey: "game.welcome"
       }
     ]
   };
@@ -139,7 +140,8 @@ export function createSetupGame(): GameState {
     log: [
       {
         id: "log-setup",
-        message: "Setup started. Place settlements and roads in snake order."
+        message: "Setup started. Place settlements and roads in snake order.",
+        messageKey: "setup.started"
       }
     ]
   };

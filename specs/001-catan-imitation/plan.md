@@ -2,8 +2,8 @@
 
 Created: 2026-07-08
 Workflow phase: Technical Plan
-Last updated: 2026-07-10
-Status: Frontend repair implemented and verified through U059
+Last updated: 2026-07-11
+Status: U060-U069 implemented, reviewed, and verified; awaiting commit authorization
 
 ## Recommended Approach
 
@@ -335,4 +335,30 @@ scripts/smoke-ui.mjs                      # stable built-bundle contracts
 - Rung: reuse existing domain rules and native dialog behavior, then add direct bounded application/UI modules where the current monolith cannot safely absorb more responsibility.
 - One justified dependency is added for a reproduced browser-only regression and approved responsive interaction coverage.
 - No generic event bus, form framework, UI kit, state-machine library, or duplicated rule engine is introduced.
+
+## Current Update Plan: Readability, Public Trade, and Localization
+
+### Scope and Boundaries
+
+- Fix overlay contrast and scrolling with direct CSS changes in their existing owners.
+- Add `src/domain/rules/playerTrade.ts` as the sole resource-offer rule owner and one optional `pendingPlayerTrade` field in `AppState`.
+- Add typed publish, cancel, and accept commands to the reducer facade. `END_TURN` clears unresolved offers.
+- Add a bounded `PlayerTradePanel` and a lightweight host that switches the existing right-side bottom slot between Player Trade and Commerce Guild; do not merge their state or rules.
+- Add a dependency-free `src/ui/i18n.ts` message catalog and locale helpers. Keep English fallbacks in state/log data and translate only at presentation boundaries.
+- Add `README.zh-CN.md` and reciprocal language links. No translation package, generalized transaction engine, persistence layer, or cross-turn offer queue is introduced.
+
+### State and Data Flow
+
+1. The active player edits offered/requested resource maps locally; publishing dispatches a typed command.
+2. Domain validation rejects empty, fractional, negative, unaffordable, wrong-phase, self-accept, and stale-inventory operations before returning updated state.
+3. A valid accept command subtracts and adds both bundles atomically, adds a keyed log entry, and clears the offer.
+4. Locale is UI state initialized from `sessionStorage` with English fallback. Components receive `locale`/`t` through a small provider rather than reading storage independently.
+5. Game logs expose stable keys/parameters and an English fallback; the log renderer chooses the current localized form.
+
+### Error Handling and Tests
+
+- Failed player-trade commands use the existing safe reducer notice boundary and preserve inventories and offer references.
+- Storage failures are ignored and fall back to English.
+- TDD order: CSS/browser defect regressions; player-trade domain/reducer tests; trade UI/browser flow; locale/log/README tests; responsive convergence.
+- Final gate: `pnpm test`, `pnpm test:e2e`, `pnpm build`, `pnpm build:pages`, `pnpm smoke:ui`, rendered 1280/768/390 review, and `git diff --check`.
 - `App.tsx` must lose responsibilities overall; it may not gain new rule or Commerce Guild business logic.

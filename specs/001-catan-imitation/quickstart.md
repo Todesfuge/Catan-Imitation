@@ -1,6 +1,6 @@
 # Quickstart
 
-Status: Verified through U046.
+Status: Verified through U069 / CR-053.
 
 ## Expected Commands
 
@@ -52,3 +52,15 @@ pnpm smoke:ui
 5. During a gathering, switch among participating players and confirm token allowance and bank availability update.
 6. Verify dialog focus/Escape behavior and live notices using keyboard navigation.
 7. Run the same core path at 1280 desktop, 768 tablet, and 390 mobile widths without horizontal overflow or detached action controls.
+
+## Readability, Public Trade, and Chinese Manual Path
+
+1. Trigger robber placement and victim selection; confirm every overlay line and button is readable on the dark surface.
+2. Add enough log entries to exceed Game Log height and use wheel plus keyboard scrolling to reach the last entry.
+3. Open Yield Statistics dice mode and scroll through every player's result without scrolling the fixed desktop shell.
+4. During an action phase, publish a multi-resource public offer and confirm only eligible opponents can accept.
+5. Accept from another player; confirm both bundles transfer once, totals are conserved, the offer closes, and the log records both player names.
+6. Publish another offer and confirm cancellation and end turn each clear it without moving resources.
+7. Confirm English is the initial language, switch to Simplified Chinese, and verify controls, guidance, logs, dialogs, notices, Player Trade, and Commerce Guild update immediately.
+8. Reload in the same browser session and confirm Chinese remains selected; open a new session and confirm English is the fallback.
+9. Open `README.md` and `README.zh-CN.md`; confirm reciprocal links and equivalent setup/run/test/deployment guidance.

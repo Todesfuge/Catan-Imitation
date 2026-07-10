@@ -323,4 +323,23 @@ describe("product polish UI", () => {
     expect(css).toContain(".road-building-target");
     expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
   });
+
+  it("keeps turn overlays readable and activity lists independently scrollable", () => {
+    const css = readFileSync("src/styles/app.css", "utf8");
+    const appSource = readFileSync("src/App.tsx", "utf8");
+    const turnFlowRule = css.match(/\.turn-flow-panel\s*{([^}]*)}/)?.[1] ?? "";
+    const logListRule = css.match(/\.log-list\s*{([^}]*)}/)?.[1] ?? "";
+    const diceListRule = css.match(/\.dice-income-list\s*{([^}]*)}/)?.[1] ?? "";
+    const html = renderToString(createElement(App));
+
+    expect(turnFlowRule).toMatch(/color:\s*#(?:f{3}|fffdf7|f7f3e8)/i);
+    expect(logListRule).toMatch(/overflow-y:\s*auto/);
+    expect(logListRule).toMatch(/min-height:\s*0/);
+    expect(logListRule).toMatch(/touch-action:\s*pan-y/);
+    expect(diceListRule).toMatch(/overflow-y:\s*auto/);
+    expect(diceListRule).toMatch(/min-height:\s*0/);
+    expect(diceListRule).toMatch(/touch-action:\s*pan-y/);
+    expect(html).toContain('class="log-list" role="log" tabindex="0"');
+    expect(appSource).not.toContain("game.log.slice(0, 8)");
+  });
 });

@@ -1,47 +1,45 @@
 # Handoff: Catan Imitation
 
-Date: 2026-07-10
-Scope: Implemented and verified through CR-042 / U059
+Date: 2026-07-11
+Scope: Implemented and verified through CR-053 / U069
 
 ## Current State
 
-Catan Imitation is a complete local hot-seat React and TypeScript prototype for the specified scope. The verified domain includes the standard turn/robber/build/development-card/port systems plus the Commerce Guild expansion. The frontend now exposes the complete setup-to-play loop, explicit strategic choices, recoverable command rejection, and responsive keyboard-accessible controls.
+Catan Imitation is a complete local hot-seat React and TypeScript prototype for the approved scope. Core Catan turn, robber, building, development-card, port, scoring, statistics, and Commerce Guild behavior remains intact. The latest update repairs reported readability/scrolling defects, adds public player resource offers, and adds an English-default Simplified Chinese interface and complete Chinese README.
 
 ## Latest Delivery
 
-- Added a reducer safety boundary that catches only typed rule violations, preserves caller-owned game/guild state, keeps React mounted, and clears notices after success.
-- Centralized roll, end-turn, build, development-card, maritime, and Commerce availability/reasons in `src/app/actionAvailability.ts`.
-- Replaced heuristic Road/Settlement/City and Maritime choices with explicit board targets and give/receive selectors.
-- Added New Game, all eight snake-order settlement/road pairs, normal-play transition, winner-preserving game-over UI, and restart.
-- Extracted `ActionDock`, `BoardActionTargets`, `CommercePanel`, and native `UtilityDialog`; `App.tsx` fell from 1,022 to 613 lines.
-- Added valid Commerce recipient synchronization and per-player gathering tokens, allowance, and bank stock.
-- Added labels, selected/live/disabled states, distinct Wood/Wool abbreviations, 44px controls and SVG hit layers, accurate phase guidance, and board-adjacent responsive ordering.
-- Added production-preview Playwright regression coverage and Chromium installation in CI.
+- Added explicit high-contrast foregrounds to shared turn/robber/development overlays.
+- Made Game Log and Yield Statistics dice results bounded mouse, keyboard, and touch scroll owners at desktop and mobile widths; every log entry remains reachable.
+- Added one public multi-resource offer with action-phase publish/cancel, per-opponent eligibility reasons, atomic accept, stale-inventory rejection, conservation, and end-turn cleanup.
+- Kept exchange arithmetic in `src/domain/rules/playerTrade.ts`; React only edits bundles and dispatches typed commands.
+- Added an accessible Player Trade / Commerce Guild tab host that preserves each panel's state.
+- Added dependency-free `en` / `zh-CN` presentation state with guarded `sessionStorage`, translated core UI/notices, and keyed historical logs.
+- Preserved structured auction winner, bid, round, reward kind, resource names, and quantities across locale changes.
+- Added reciprocal `README.md` and complete `README.zh-CN.md` documentation.
 
 ## Verification
 
-Latest complete gate:
-
-- `pnpm test`: 20 test files and 108 tests passed.
-- `pnpm test:e2e`: 12 production-preview browser tests passed.
-- `pnpm build`: passed; Vite transformed 1,605 modules.
+- `pnpm test`: 23 files / 120 tests passed.
+- `pnpm test:e2e`: 17 production-preview browser tests passed.
+- `pnpm build`: passed.
 - `pnpm build:pages`: passed with `/Catan-Imitation/` base.
 - `pnpm smoke:ui`: passed against the built preview.
 - `git diff --check`: passed.
-- Focused reviewer convergence: no remaining Critical or Important findings after the last unavailable-reason edge case was corrected.
+- Independent review: no Critical finding; all Important findings fixed, including full log reachability, Chinese dynamic notices/outcomes, complete trade lifecycle coverage, and artifact convergence.
 
 Rendered checks:
 
-- 1280x720 desktop: board, secondary panels, and action dock remain contained; maritime labels no longer clip.
-- 768x1024 tablet: board is followed immediately by the complete action area, then secondary content.
-- 390x844 mobile: no horizontal overflow; 44px utility controls and non-scaling board target hit strokes remain usable.
+- 1280x720 English and Chinese: no overlap or clipping; Player Trade fields and publish action are visible; overlay/log/stat surfaces meet contrast and scroll expectations.
+- 768x1024: Playwright containment passed with board-adjacent actions and no horizontal overflow.
+- 390x844 Chinese: no horizontal overflow, 44px utility/target controls remain usable, and bounded log/stat lists reach their terminal entries.
 
 ## Remaining Limits
 
-- Multiplayer remains local hot-seat only; persistence, real-time networking, AI players, and randomized/generalized board generation are out of scope.
-- The initial screen remains a prepared demo preset by design; New Game enters the full setup flow.
-- CR-031 through CR-042 are being delivered as one GitHub commit following explicit user authorization.
+- Multiplayer remains local hot-seat only; persistence, real-time networking, AI players, and randomized/generalized board generation remain out of scope.
+- The prepared demo remains the initial portfolio view; New Game enters the complete setup flow.
+- Locale persistence is intentionally session-scoped and does not persist game state.
 
 ## Next Action
 
-Monitor the pushed `main` commit and its GitHub Actions verification.
+Review the completed local branch, then authorize one commit and GitHub push if accepted.

@@ -4,6 +4,7 @@ import { getActionAvailability } from "../app/actionAvailability";
 import type { AppState, GameCommand } from "../app/gameReducer";
 import { resources } from "../domain/types";
 import { formatResourceMap, resourceLabels } from "./resourceLabels";
+import { formatAuctionSummary, translateRuleText, useI18n } from "./i18n";
 
 export function CommercePanel({
   state,
@@ -12,6 +13,7 @@ export function CommercePanel({
   state: AppState;
   dispatch: (command: GameCommand) => void;
 }) {
+  const { locale, t } = useI18n();
   const activePlayer = state.game.players.find(
     (player) => player.id === state.game.activePlayerId
   );
@@ -30,6 +32,10 @@ export function CommercePanel({
   const [tokenAmount, setTokenAmount] = useState(1);
   const [gatheringPlayerId, setGatheringPlayerId] = useState(state.game.activePlayerId);
   const [bids, setBids] = useState<Record<string, number>>({});
+  const localizedResourceLabels = useMemo(
+    () => Object.fromEntries(resources.map((resource) => [resource, t(`resource.${resource}`)])) as typeof resourceLabels,
+    [t]
+  );
 
   useEffect(() => {
     if (!validRecipients.some((player) => player.id === recipientId)) {
@@ -59,17 +65,17 @@ export function CommercePanel({
     tokenAmount <= availability.commerce.transfer.maxAmount;
 
   return (
-    <section className="tool-panel commerce-panel">
+    <section className="commerce-panel">
       <div className="panel-header">
-        <h2>Commerce Guild</h2>
-        <span>Round {state.game.round}</span>
+        <h2>{t("trade.commerceTab")}</h2>
+        <span>{t("commerce.round", { round: state.game.round })}</span>
       </div>
       <div className="trade-slots">
         {state.guild.tradeSlots.map((slot) => (
           <article className="trade-slot" key={slot.id}>
-            <strong>{formatResourceMap(slot.requires)}</strong>
+            <strong>{formatResourceMap(slot.requires, localizedResourceLabels)}</strong>
             <span>
-              <ArrowRightLeft size={14} /> {slot.tokenReward} tokens
+              <ArrowRightLeft size={14} /> {t("commerce.tokens", { count: slot.tokenReward })}
             </span>
             <button
               aria-describedby={`trade-${slot.id}-unavailable-reason`}
@@ -86,14 +92,14 @@ export function CommercePanel({
               }
               type="button"
             >
-              Trade
+              {t("commerce.trade")}
             </button>
           </article>
         ))}
       </div>
       <div className="token-transfer">
         <select
-          aria-label="Token recipient"
+          aria-label={t("commerce.tokenRecipient")}
           onChange={(event) => setRecipientId(event.currentTarget.value)}
           value={recipientId}
         >
@@ -104,7 +110,7 @@ export function CommercePanel({
           ))}
         </select>
         <input
-          aria-label="Token amount"
+          aria-label={t("commerce.tokenAmount")}
           min={1}
           type="number"
           value={tokenAmount}
@@ -124,13 +130,13 @@ export function CommercePanel({
           }
           type="button"
         >
-          Send
+          {t("commerce.send")}
         </button>
       </div>
       <div className="gathering">
         <div className="phase-line">
           <Landmark size={16} />
-          <strong>{state.guild.gathering.phase}</strong>
+          <strong>{t(`commerce.phase.${state.guild.gathering.phase}`)}</strong>
         </div>
         {state.guild.gathering.phase === "idle" ? (
           <button
@@ -139,27 +145,27 @@ export function CommercePanel({
             onClick={() => dispatch({ type: "START_GATHERING" })}
             type="button"
           >
-            Start Gathering
+            {t("commerce.startGathering")}
           </button>
         ) : null}
         {state.guild.gathering.phase === "redemption" ? (
           <>
             <select
-              aria-label="Gathering player"
+              aria-label={t("commerce.gatheringPlayer")}
               onChange={(event) => setGatheringPlayerId(event.currentTarget.value)}
               value={gatheringPlayerId}
             >
               {state.game.players.map((player) => (
                 <option key={player.id} value={player.id}>
-                  {player.name} ({player.guildTokens} tokens)
+                  {player.name} ({t("commerce.tokens", { count: player.guildTokens })})
                 </option>
               ))}
             </select>
             <p aria-live="polite" className="gathering-summary" role="status">
-              {gatheringPlayer?.name ?? "Player"}: {gatheringAvailability?.tokens ?? 0} tokens ·{
+              {gatheringPlayer?.name ?? "Player"}: {t("commerce.tokens", { count: gatheringAvailability?.tokens ?? 0 })} ·{
                 " "
               }
-              {gatheringAvailability?.remainingAllowance ?? 0} redemptions remaining
+              {t("commerce.redemptions", { count: gatheringAvailability?.remainingAllowance ?? 0 })}
             </p>
             <div className="resource-buttons">
               {resources.map((resource) => (
@@ -180,7 +186,7 @@ export function CommercePanel({
                   }
                   type="button"
                 >
-                  +{resourceLabels[resource]} ({gatheringAvailability?.bankStock[resource] ?? 0} bank)
+                  +{localizedResourceLabels[resource]} ({t("commerce.bank", { count: gatheringAvailability?.bankStock[resource] ?? 0 })})
                 </button>
               ))}
             </div>
@@ -190,13 +196,13 @@ export function CommercePanel({
               onClick={() => dispatch({ type: "OPEN_AUCTION" })}
               type="button"
             >
-              Open Auctions
+              {t("commerce.openAuctions")}
             </button>
           </>
         ) : null}
         {state.guild.gathering.phase === "auction" ? (
           <div className="auction-grid">
-            <strong>Round {state.guild.gathering.auctionRound} / 3</strong>
+            <strong>{t("commerce.auctionRound", { round: state.guild.gathering.auctionRound })}</strong>
             {state.game.players.map((player) => (
               <label key={player.id}>
                 {player.name}
@@ -211,12 +217,14 @@ export function CommercePanel({
               </label>
             ))}
             <button onClick={() => dispatch({ type: "RESOLVE_AUCTION", bids })} type="button">
-              Resolve Blind Box
+              {t("commerce.resolveBlindBox")}
             </button>
           </div>
         ) : null}
-        {state.guild.gathering.lastAuctionSummary ? (
-          <p className="auction-result">{state.guild.gathering.lastAuctionSummary}</p>
+        {state.guild.gathering.lastAuctionResult ? (
+          <p className="auction-result">
+            {formatAuctionSummary(state.guild.gathering.lastAuctionResult, locale)}
+          </p>
         ) : null}
         <button
           aria-describedby="prize-unavailable-reason"
@@ -226,25 +234,25 @@ export function CommercePanel({
           }
           type="button"
         >
-          Redeem Prize
+          {t("commerce.redeemPrize")}
         </button>
         <div className="sr-only">
           {availability.commerce.tradeSlots.map((slot) => (
             <span id={`trade-${slot.id}-unavailable-reason`} key={slot.id}>
-              {slot.reason}
+              {translateRuleText(locale, slot.reason)}
             </span>
           ))}
           <span id="transfer-unavailable-reason">
-            {availability.commerce.transfer.reason}
+            {translateRuleText(locale, availability.commerce.transfer.reason)}
           </span>
           <span id="gathering-start-unavailable-reason">
-            {availability.commerce.startGathering.reason}
+            {translateRuleText(locale, availability.commerce.startGathering.reason)}
           </span>
           <span id="auction-open-unavailable-reason">
-            {availability.commerce.openAuction.reason}
+            {translateRuleText(locale, availability.commerce.openAuction.reason)}
           </span>
           <span id="prize-unavailable-reason">
-            {availability.commerce.redeemPrize.reason}
+            {translateRuleText(locale, availability.commerce.redeemPrize.reason)}
           </span>
         </div>
       </div>

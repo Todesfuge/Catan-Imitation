@@ -1,7 +1,7 @@
 # Research Notes
 
 Created: 2026-07-08
-Last updated: 2026-07-10
+Last updated: 2026-07-11
 
 ## Technical Choices
 
@@ -75,3 +75,18 @@ Last updated: 2026-07-10
   - Rejected: source-string smoke alone, because it cannot prove click behavior, focus, or responsive layout.
 - Decision: reorder narrow layouts to board, actions, then secondary panels.
   - Reason: road/setup/robber choices require the action prompt and board to remain adjacent.
+
+## Readability, Player Trade, and Localization Decisions
+
+- Finding: `.turn-flow-panel` uses a dark surface without an explicit foreground, so robber text inherits the page's dark ink. `.development-effect-panel` already demonstrates the working light-foreground pattern.
+- Finding: `.log-panel` and `.tool-panel` clip overflow while `.log-list` and `.dice-income-list` do not own a bounded scroll region.
+- Decision: model one public multi-resource offer in application state and keep exchange arithmetic in `playerTrade.ts`.
+  - Reason: a hot-seat acceptance step must survive component rerenders and be atomically validated; component-local state and Commerce Guild ownership are both incorrect boundaries.
+- Decision: clear public offers at end turn and allow any single eligible non-active player to accept.
+  - Reason: this matches the approved public-offer behavior without introducing cross-turn queues or multiple-offer coordination.
+- Decision: implement a small local message catalog and session-scoped locale provider.
+  - Reason: only two fixed locales exist, React and browser storage are already available, and a third-party i18n dependency would add more surface than value.
+- Decision: add keyed log metadata while retaining English fallback messages.
+  - Reason: historical logs must retranslate immediately while existing tests and integrations still need readable fallback text.
+- Decision: add a separate complete `README.zh-CN.md` with reciprocal links.
+  - Reason: it keeps each README readable and discoverable without doubling every section in one file.

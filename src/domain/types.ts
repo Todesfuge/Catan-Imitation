@@ -87,7 +87,37 @@ export interface Bank {
 export interface GameLogEntry {
   id: string;
   message: string;
+  messageKey?: GameMessageKey;
+  params?: Record<string, string | number>;
 }
+
+export type GameMessageKey =
+  | "game.welcome"
+  | "setup.started"
+  | "setup.newGameStarted"
+  | "dice.rolled"
+  | "robber.sevenRolled"
+  | "robber.discardCompleted"
+  | "robber.moved"
+  | "robber.stolen"
+  | "development.played"
+  | "development.bought"
+  | "development.knightPlayed"
+  | "development.freeRoadPlaced"
+  | "development.yearOfPlentyLog"
+  | "development.monopolyLog"
+  | "trade.maritime"
+  | "trade.player.published"
+  | "trade.player.cancelled"
+  | "trade.player.accepted"
+  | "guild.gatheringAutoStarted"
+  | "guild.slotCompleted"
+  | "guild.tokensTransferred"
+  | "guild.gatheringStarted"
+  | "guild.auctionOpened"
+  | "guild.redeemedResources"
+  | "guild.auctionResolved"
+  | "guild.prizeRedeemed";
 
 export interface SetupState {
   order: PlayerId[];

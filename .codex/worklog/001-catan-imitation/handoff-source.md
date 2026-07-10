@@ -1,26 +1,27 @@
 # Handoff Source: 001-catan-imitation
 
-Current phase: CR-001 through CR-030 are committed at `15e3e95`; CR-031 through CR-042 / U047-U059 are implemented, verified, and authorized for GitHub delivery.
+Current phase: CR-001 through CR-053 / U001-U069 are implemented and verified. Baseline `44254f9` is pushed; the readability/public-trade/localization update is complete on `codex/readability-trade-localization` and awaits commit authorization.
 
-The project is a local hot-seat React and TypeScript Catan-style prototype with a Commerce Guild expansion and statistics panel. Work synchronizes to `https://github.com/Todesfuge/Catan-Imitation`. Spec Kit CLI tools are unavailable, so the workflow is represented manually by `.specify/`, `specs/001-catan-imitation/`, and this private worklog.
+The project is a local hot-seat React and TypeScript Catan-style prototype with statistics, standard rule systems, and a Commerce Guild expansion. Work synchronizes to `https://github.com/Todesfuge/Catan-Imitation`.
 
 Completed and verified:
 
-- MVP T001-T026 and updates U001-U059.
-- Core rules CR-001 through CR-030 remain preserved.
-- Frontend CR-031 through CR-042 add typed recoverable commands, shared availability, explicit targets/trades, complete setup/restart, Commerce participant controls, accessible dialog/live/touch states, responsive ordering, and production-browser regression coverage.
-- Baseline: `pnpm test` 20 files / 108 tests; `pnpm test:e2e` 12 tests; production and Pages builds; UI smoke; rendered 1280/768/390 checks; `git diff --check`.
-- Focused code review converged with no remaining Critical or Important finding.
+- MVP T001-T026 and updates U001-U069.
+- High-contrast turn overlays and bounded, terminally reachable Game Log / dice-stat scrolling.
+- One public multi-resource player offer with atomic exchange, rejection preservation, cancellation, and end-turn cleanup.
+- English-default, session-persistent Simplified Chinese presentation, keyed historical logs, translated dynamic notices/auction outcomes, and reciprocal complete READMEs.
+- `pnpm test`: 23 files / 120 tests; `pnpm test:e2e`: 17 tests; production and Pages builds; UI smoke; rendered 1280 English/Chinese and 390 Chinese review; `git diff --check`.
+- Independent review found no Critical issue; every Important issue was fixed and reverified.
 
 Boundary decisions:
 
-- Domain rules throw `RuleViolationError`; the production reducer catches only this expected class and rethrows implementation faults.
-- One composed selector owns visible turn and Commerce availability, reasons, costs/ratios, targets, and participant limits.
-- Strategic choices remain local UI modes until an explicit target/resource pair dispatches an existing typed command.
-- Native `<dialog>` provides modal focus behavior; SVG overlays use visible markers plus non-scaling 44px hit layers.
+- `playerTrade.ts` is the only player-resource exchange rule owner; reducer state stores at most one pending offer.
+- Player Trade and Commerce Guild share a tab host but not rules or local form state.
+- Locale and session storage are presentation-only; gameplay state keeps keyed logs with English fallbacks.
+- Structured auction results retain winner, bid, round, reward kind, resource names, and quantities across locale switches.
 
 Still out of scope:
 
-- Networking, persistence, AI players, generalized/randomized board generation, and unrelated visual redesign.
+- Networking, game persistence, AI players, generalized/randomized board generation, and unrelated visual redesign.
 
-Next action: push the authorized `main` commit and monitor GitHub Actions.
+Next action: review the completed branch and authorize one commit/push if accepted.

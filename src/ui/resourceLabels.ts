@@ -16,7 +16,10 @@ export const resourceShortLabels: Record<Resource, string> = {
   ore: "Or"
 };
 
-export function formatResourceMap(map: Partial<ResourceMap>): string {
+export function formatResourceMap(
+  map: Partial<ResourceMap>,
+  labels: Record<Resource, string> = resourceLabels
+): string {
   return resources
     .filter((resource) => (map[resource] ?? 0) > 0)
     .map((resource) => {
@@ -24,7 +27,7 @@ export function formatResourceMap(map: Partial<ResourceMap>): string {
       const displayQuantity = Number.isInteger(quantity)
         ? String(quantity)
         : quantity.toFixed(2).replace(/\.0+$|(?<=\.[0-9])0+$/, "");
-      return `${resourceLabels[resource]} ${displayQuantity}`;
+      return `${labels[resource]} ${displayQuantity}`;
     })
     .join(", ");
 }

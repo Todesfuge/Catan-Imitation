@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import type { AppState } from "../app/gameReducer";
+import { useI18n } from "./i18n";
 
 export type UtilityPanel = "settings" | "rulebook" | "info" | null;
 
@@ -15,6 +16,7 @@ export function UtilityDialog({
   onNewGame: () => void;
   onClose: () => void;
 }) {
+  const { locale, setLocale, t } = useI18n();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
@@ -46,7 +48,7 @@ export function UtilityDialog({
   }
 
   const title =
-    panel === "settings" ? "Settings" : panel === "rulebook" ? "Rulebook" : "Project Info";
+    panel === "settings" ? t("dialog.settings") : panel === "rulebook" ? t("dialog.rulebook") : t("dialog.info");
   const activePlayer = state.game.players.find(
     (player) => player.id === state.game.activePlayerId
   );
@@ -65,8 +67,9 @@ export function UtilityDialog({
         <div className="modal-header">
           <h2 id="utility-dialog-title">{title}</h2>
           <button
-            aria-label="Close utility panel"
+            aria-label={t("dialog.close")}
             className="modal-close"
+            data-dialog-close
             onClick={onClose}
             ref={closeRef}
             type="button"
@@ -78,52 +81,57 @@ export function UtilityDialog({
           <div className="modal-stack">
             <dl className="utility-facts">
               <div>
-                <dt>Active player</dt>
+                <dt>{t("language.label")}</dt>
+                <dd>
+                  <select
+                    aria-label={t("language.label")}
+                    data-language-select
+                    onChange={(event) => setLocale(event.currentTarget.value as "en" | "zh-CN")}
+                    value={locale}
+                  >
+                    <option value="en">{t("language.english")}</option>
+                    <option value="zh-CN">{t("language.chinese")}</option>
+                  </select>
+                </dd>
+              </div>
+              <div>
+                <dt>{t("dialog.activePlayer")}</dt>
                 <dd>{activePlayer?.name ?? "Player"}</dd>
               </div>
               <div>
-                <dt>Target score</dt>
+                <dt>{t("dialog.targetScore")}</dt>
                 <dd>{state.game.targetScore}</dd>
               </div>
               <div>
-                <dt>Round</dt>
+                <dt>{t("dialog.round")}</dt>
                 <dd>{state.game.round}</dd>
               </div>
               <div>
-                <dt>Guild phase</dt>
-                <dd>{state.guild.gathering.phase}</dd>
+                <dt>{t("dialog.guildPhase")}</dt>
+                <dd>{t(`commerce.phase.${state.guild.gathering.phase}`)}</dd>
               </div>
             </dl>
             <p>
-              Invalid actions are reported as toast messages so the local turn can recover
-              without a page reload.
+              {t("dialog.recovery")}
             </p>
-            <button onClick={onNewGame} type="button">Start New Game</button>
+            <button onClick={onNewGame} type="button">{t("dialog.startNewGame")}</button>
           </div>
         ) : null}
         {panel === "rulebook" ? (
           <ul className="modal-list">
-            <li>Roll dice to produce resources from matching terrain with settlements and cities.</li>
-            <li>Build roads, settlements, and cities by spending the standard resource costs.</li>
-            <li>
-              Use maritime trades, development cards, the robber, longest road, and largest army
-              to reach the target score.
-            </li>
-            <li>
-              Commerce Guild trades convert listed resources into tokens, then gatherings let
-              tokens buy resources or blind boxes.
-            </li>
+            <li>{t("dialog.rule1")}</li>
+            <li>{t("dialog.rule2")}</li>
+            <li>{t("dialog.rule3")}</li>
+            <li>{t("dialog.rule4")}</li>
           </ul>
         ) : null}
         {panel === "info" ? (
           <div className="modal-stack">
             <p>
-              Catan Imitation is a TypeScript local-table implementation with deterministic rules,
-              statistics, and an original Commerce Guild expansion.
+              {t("dialog.info1")}
             </p>
             <p>
-              The interface prioritizes reviewable product behavior: visible state, direct
-              commands, and recoverable errors.
+              {t("dialog.info2")}
             </p>
           </div>
         ) : null}

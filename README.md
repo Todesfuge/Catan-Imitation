@@ -1,5 +1,7 @@
 # Catan Imitation
 
+[简体中文](README.zh-CN.md)
+
 TypeScript portfolio prototype for a Catan-like online board-game table with an original Commerce Guild expansion.
 
 ## Current Scope
@@ -12,6 +14,8 @@ TypeScript portfolio prototype for a Catan-like online board-game table with an 
   - player income by dice total
   - dice-total distribution across players
   - full expected income matrix
+- Public multi-resource player offers that any eligible opponent can accept during the active player's action phase.
+- English interface by default with a session-persistent Simplified Chinese option in Settings.
 - Commerce Guild expansion:
   - three shared trade slots
   - once-per-turn resource-to-token trades
@@ -26,6 +30,7 @@ TypeScript portfolio prototype for a Catan-like online board-game table with an 
 pnpm install
 pnpm dev -- --port 5173
 pnpm test
+pnpm test:e2e
 pnpm build
 pnpm build:pages
 pnpm smoke:ui

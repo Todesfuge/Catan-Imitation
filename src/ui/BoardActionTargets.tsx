@@ -8,6 +8,7 @@ import {
 import type { GameState } from "../domain/types";
 import type { BoardInteractionMode } from "./ActionDock";
 import { edgeProjection, vertexProjection } from "./boardGeometry";
+import { useI18n } from "./i18n";
 
 interface BoardTarget {
   id: string;
@@ -151,6 +152,7 @@ export function BoardActionTargets({
   interactionMode: BoardInteractionMode;
   onTargetSelected?: () => void;
 }) {
+  const { t } = useI18n();
   if (!interactionMode) return null;
   const game = state.game;
   const activate = (command: GameCommand) => {
@@ -165,7 +167,7 @@ export function BoardActionTargets({
         game,
         edgeId,
         "setupRoad",
-        `Place setup road ${edgeId}`,
+        t("board.placeSetupRoad", { id: edgeId }),
         { type: "PLACE_SETUP_ROAD", playerId: game.activePlayerId, edgeId }
       );
       return target ? [target] : [];
@@ -177,7 +179,7 @@ export function BoardActionTargets({
         vertexId,
         vertexId,
         "setupSettlement",
-        `Place setup settlement ${vertexId}`,
+        t("board.placeSetupSettlement", { id: vertexId }),
         { type: "PLACE_SETUP_SETTLEMENT", playerId: game.activePlayerId, vertexId }
       )
     );
@@ -189,7 +191,7 @@ export function BoardActionTargets({
           game,
           edgeId,
           "road",
-          `Build road ${edgeId}`,
+          t("board.buildRoad", { id: edgeId }),
           { type: "BUILD_ROAD", playerId: game.activePlayerId, edgeId }
         );
         return target ? [target] : [];
@@ -201,7 +203,7 @@ export function BoardActionTargets({
           vertexId,
           vertexId,
           "settlement",
-          `Build settlement ${vertexId}`,
+          t("board.buildSettlement", { id: vertexId }),
           { type: "BUILD_SETTLEMENT", playerId: game.activePlayerId, vertexId }
         )
       );
@@ -215,7 +217,7 @@ export function BoardActionTargets({
                 buildingId,
                 building.vertexId,
                 "city",
-                `Upgrade city ${buildingId}`,
+                t("board.upgradeCity", { id: buildingId }),
                 { type: "BUILD_CITY", playerId: game.activePlayerId, buildingId }
               )
             ]

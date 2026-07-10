@@ -28,24 +28,15 @@ import { TurnFlowPanel } from "./ui/TurnFlowPanel";
 import { RoadBuildingTargets } from "./ui/DevelopmentCardPanel";
 import { ActionDock, type BoardInteractionMode } from "./ui/ActionDock";
 import { BoardActionTargets } from "./ui/BoardActionTargets";
-import { CommercePanel } from "./ui/CommercePanel";
+import { TradeHubPanel } from "./ui/TradeHubPanel";
 import { UtilityDialog, type UtilityPanel } from "./ui/UtilityDialog";
 import {
   formatResourceMap,
-  resourceLabels,
   resourceShortLabels
 } from "./ui/resourceLabels";
+import { formatGameLogEntry, translateRuleText, useI18n } from "./ui/i18n";
 
 type StatsMode = "player" | "dice" | "matrix";
-
-const terrainLabels: Record<BoardHex["terrain"], string> = {
-  forest: "Forest",
-  hill: "Hill",
-  pasture: "Pasture",
-  field: "Field",
-  mountain: "Mountain",
-  desert: "Desert"
-} as const;
 
 const terrainMarks: Record<BoardHex["terrain"], string> = {
   forest: "Fo",
@@ -68,10 +59,6 @@ const dicePipCounts: Record<number, number> = {
   11: 2,
   12: 1
 } as const;
-
-function terrainLabel(hex: BoardHex) {
-  return terrainLabels[hex.terrain];
-}
 
 function buildingPosition(hexes: BoardHex[], building: Building) {
   return vertexProjection(hexes, building.vertexId);
@@ -115,44 +102,45 @@ function BoardView({
   onUtilityOpen: (panel: Exclude<UtilityPanel, null>) => void;
   onFullscreen: () => void;
 }) {
+  const { t } = useI18n();
   const canPlaceRobber = state.game.turnState.phase === "awaitingRobberPlacement";
   const playerColorById = new Map(state.game.players.map((player) => [player.id, player.color]));
 
   return (
-    <section className="board-zone" aria-label="Catan board">
-      <div className="utility-rail" aria-label="Utility controls">
-        <button aria-label="Open settings" onClick={() => onUtilityOpen("settings")} title="Settings" type="button">
+    <section className="board-zone" aria-label={t("board.label")}>
+      <div className="utility-rail" aria-label={t("board.utilityControls")}>
+        <button aria-label={t("nav.openSettings")} onClick={() => onUtilityOpen("settings")} title={t("dialog.settings")} type="button">
           <Settings size={26} />
         </button>
-        <button aria-label="Open rulebook" onClick={() => onUtilityOpen("rulebook")} title="Rulebook" type="button">
+        <button aria-label={t("nav.openRulebook")} onClick={() => onUtilityOpen("rulebook")} title={t("dialog.rulebook")} type="button">
           <BookOpen size={26} />
         </button>
-        <button aria-label="Toggle fullscreen" onClick={onFullscreen} title="Fullscreen" type="button">
+        <button aria-label={t("nav.toggleFullscreen")} onClick={onFullscreen} title={t("nav.toggleFullscreen")} type="button">
           <Maximize size={26} />
         </button>
-        <button aria-label="Open info" onClick={() => onUtilityOpen("info")} title="Info" type="button">
+        <button aria-label={t("nav.openInfo")} onClick={() => onUtilityOpen("info")} title={t("dialog.info")} type="button">
           <Info size={26} />
         </button>
       </div>
       <div className="island">
         <svg
-          aria-label="Catan board map"
+          aria-label={t("board.map")}
           className="board-svg"
           role="group"
           viewBox={`0 0 ${boardViewBox.width} ${boardViewBox.height}`}
         >
           <ellipse className="shoreline outer" cx="450" cy="310" rx="408" ry="272" />
           <ellipse className="shoreline inner" cx="450" cy="310" rx="380" ry="250" />
-          <g className="port-layer" aria-label="Standard maritime ports">
+          <g className="port-layer" aria-label={t("board.ports")}>
             {state.game.ports.map((port) => {
               const position = portProjection(state.game.board, port);
               const label =
                 port.kind === "generic"
                   ? "3:1"
-                  : `2:1 ${resourceLabels[port.resource ?? "wood"]}`;
+                  : `2:1 ${t(`resource.${port.resource ?? "wood"}`)}`;
               return (
                 <g
-                  aria-label={`${label} port`}
+                  aria-label={t("board.portLabel", { label })}
                   className="port-marker"
                   data-port-id={port.id}
                   key={port.id}
@@ -185,7 +173,7 @@ function BoardView({
 
               return (
                 <g
-                  aria-label={terrainLabel(hex)}
+                  aria-label={t(`terrain.${hex.terrain}`)}
                   className="hex-tile"
                   key={hex.id}
                   onClick={
@@ -219,7 +207,7 @@ function BoardView({
                     {terrainMarks[hex.terrain]}
                   </text>
                   <text className="hex-resource" x={center.x} y={center.y - 4}>
-                    {terrainLabel(hex)}
+                    {t(`terrain.${hex.terrain}`)}
                   </text>
                   {hex.diceNumber ? (
                     <g className={`dice-chip ${hex.diceNumber === 6 || hex.diceNumber === 8 ? "hot" : ""}`}>
@@ -236,7 +224,7 @@ function BoardView({
                     </g>
                   ) : (
                     <text className="robber-label" x={center.x} y={center.y + 38}>
-                      Robber
+                      {t("board.robber")}
                     </text>
                   )}
                   {state.game.robberHexId === hex.id ? (
@@ -266,7 +254,7 @@ function BoardView({
             {state.game.buildings.map((building) => {
               const position = buildingPosition(state.game.board, building);
               const owner = state.game.players.find((player) => player.id === building.ownerId);
-              const title = `${owner?.name ?? building.ownerId} ${building.kind}`;
+              const title = `${owner?.name ?? building.ownerId} ${t(`action.${building.kind}`)}`;
               return building.kind === "city" ? (
                 <rect
                   className="building-marker city"
@@ -310,8 +298,9 @@ function BoardView({
 }
 
 function PlayerPanel({ state }: { state: ReturnType<typeof createInitialAppState> }) {
+  const { locale, t } = useI18n();
   return (
-    <section className="players-panel" aria-label="Players">
+    <section className="players-panel" aria-label={t("board.players")}>
       {state.game.players.map((player) => {
         const score = calculatePlayerScore(state.game, player.id);
         const active = player.id === state.game.activePlayerId;
@@ -323,7 +312,7 @@ function PlayerPanel({ state }: { state: ReturnType<typeof createInitialAppState
               </span>
               <div>
                 <strong>{player.name}</strong>
-                <span>{active ? "Taking turn" : "Waiting"}</span>
+                <span>{active ? t("board.takingTurn") : t("board.waiting")}</span>
               </div>
             </div>
             <div className="player-metrics">
@@ -343,7 +332,7 @@ function PlayerPanel({ state }: { state: ReturnType<typeof createInitialAppState
             <div className="resource-strip compact">
               {resources.map((resource) => (
                 <span className={`resource-token ${resource}`} key={resource}>
-                  {`${resourceShortLabels[resource]} ${player.resources[resource]}`}
+                  {`${locale === "en" ? resourceShortLabels[resource] : t(`resource.${resource}`)} ${player.resources[resource]}`}
                 </span>
               ))}
             </div>
@@ -355,28 +344,29 @@ function PlayerPanel({ state }: { state: ReturnType<typeof createInitialAppState
 }
 
 function RightRail({ state }: { state: ReturnType<typeof createInitialAppState> }) {
+  const { locale, t } = useI18n();
   return (
     <aside className="right-rail">
       <section className="log-panel">
         <h2>
-          <ScrollText size={18} /> Game Log
+          <ScrollText size={18} /> {t("log.title")}
         </h2>
-        <div aria-live="polite" className="log-list" role="log">
-          {state.game.log.slice(0, 8).map((entry) => (
-            <p key={entry.id}>{entry.message}</p>
+        <div aria-live="polite" className="log-list" role="log" tabIndex={0}>
+          {state.game.log.map((entry) => (
+            <p key={entry.id}>{formatGameLogEntry(entry, locale)}</p>
           ))}
         </div>
       </section>
-      <section className="activity-shell" aria-label="Activity summary">
-        <strong>Activity</strong>
-        <span>{state.game.phase === "gameOver" ? "Game complete" : `${state.game.log.length} logged events`}</span>
+      <section className="activity-shell" aria-label={t("activity.title")}>
+        <strong>{t("activity.title")}</strong>
+        <span>{state.game.phase === "gameOver" ? t("activity.complete") : t("activity.events", { count: state.game.log.length })}</span>
       </section>
       <section className="bank-panel">
         <Warehouse size={28} />
         <div className="resource-strip">
           {resources.map((resource) => (
             <span className={`resource-token ${resource}`} key={resource}>
-              {resourceLabels[resource]} {state.game.bank.resources[resource]}
+              {t(`resource.${resource}`)} {state.game.bank.resources[resource]}
             </span>
           ))}
         </div>
@@ -393,7 +383,12 @@ function StatsPanel({
   state: ReturnType<typeof createInitialAppState>;
   dispatch: (command: GameCommand) => void;
 }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<StatsMode>("player");
+  const localizedResourceLabels = useMemo(
+    () => Object.fromEntries(resources.map((resource) => [resource, t(`resource.${resource}`)])) as Record<(typeof resources)[number], string>,
+    [t]
+  );
   const playerRows = useMemo(
     () => getPlayerIncome(state.game, state.selectedPlayerId),
     [state.game, state.selectedPlayerId]
@@ -407,7 +402,7 @@ function StatsPanel({
   return (
     <section className="tool-panel stats-panel">
       <div className="panel-header">
-        <h2>Yield Statistics</h2>
+        <h2>{t("stats.title")}</h2>
         <div className="segmented">
           {(["player", "dice", "matrix"] as const).map((nextMode) => (
             <button
@@ -417,7 +412,7 @@ function StatsPanel({
               onClick={() => setMode(nextMode)}
               type="button"
             >
-              {nextMode}
+              {t(`stats.${nextMode}`)}
             </button>
           ))}
         </div>
@@ -425,7 +420,7 @@ function StatsPanel({
       {mode === "player" ? (
         <>
           <select
-            aria-label="Statistics player"
+            aria-label={t("stats.playerLabel")}
             value={state.selectedPlayerId}
             onChange={(event) =>
               dispatch({ type: "SELECT_PLAYER", playerId: event.currentTarget.value })
@@ -441,10 +436,10 @@ function StatsPanel({
             <table>
               <thead>
                 <tr>
-                  <th>Dice</th>
-                  <th>Chance</th>
-                  <th>Gain now</th>
-                  <th>Expected</th>
+                  <th>{t("stats.diceHeader")}</th>
+                  <th>{t("stats.chance")}</th>
+                  <th>{t("stats.gainNow")}</th>
+                  <th>{t("stats.expected")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -452,8 +447,8 @@ function StatsPanel({
                   <tr key={row.diceTotal}>
                     <td>{row.diceTotal}</td>
                     <td>{Math.round(row.probability * 1000) / 10}%</td>
-                    <td>{formatResourceMap(row.resources) || "-"}</td>
-                    <td>{formatResourceMap(row.expected) || "-"}</td>
+                    <td>{formatResourceMap(row.resources, localizedResourceLabels) || "-"}</td>
+                    <td>{formatResourceMap(row.expected, localizedResourceLabels) || "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -464,7 +459,7 @@ function StatsPanel({
       {mode === "dice" ? (
         <>
           <select
-            aria-label="Statistics dice total"
+            aria-label={t("stats.diceLabel")}
             value={state.selectedDiceTotal}
             onChange={(event) =>
               dispatch({ type: "SELECT_DICE_TOTAL", diceTotal: Number(event.currentTarget.value) })
@@ -476,11 +471,15 @@ function StatsPanel({
               </option>
             ))}
           </select>
-          <div className="dice-income-list">
+          <div
+            aria-label={t("stats.incomeList")}
+            className="dice-income-list"
+            tabIndex={0}
+          >
             {state.game.players.map((player) => (
               <p key={player.id}>
                 <strong>{player.name}</strong>
-                <span>{formatResourceMap(diceIncome.players[player.id]) || "no gain"}</span>
+                <span>{formatResourceMap(diceIncome.players[player.id], localizedResourceLabels) || t("stats.noGain")}</span>
               </p>
             ))}
           </div>
@@ -491,11 +490,11 @@ function StatsPanel({
           <table>
             <thead>
               <tr>
-                <th>Player</th>
+                <th>{t("stats.player")}</th>
                 {resources.map((resource) => (
-                  <th key={resource}>{resourceLabels[resource]}</th>
+                  <th key={resource}>{localizedResourceLabels[resource]}</th>
                 ))}
-                <th>Total EV</th>
+                <th>{t("stats.totalEv")}</th>
               </tr>
             </thead>
             <tbody>
@@ -521,6 +520,7 @@ function StatsPanel({
 }
 
 export default function App() {
+  const { locale } = useI18n();
   const [state, dispatchBase] = useReducer(gameReducer, undefined, createInitialAppState);
   const [browserNotice, setBrowserNotice] = useState<string | null>(null);
   const [interactionMode, setInteractionMode] = useState<BoardInteractionMode>(null);
@@ -585,7 +585,7 @@ export default function App() {
       <RightRail state={state} />
       <div className="bottom-dock">
         <StatsPanel state={state} dispatch={dispatch} />
-        <CommercePanel state={state} dispatch={dispatch} />
+        <TradeHubPanel state={state} dispatch={dispatch} />
       </div>
       <TurnFlowPanel game={state.game} dispatch={dispatch} />
       <ActionDock
@@ -605,7 +605,7 @@ export default function App() {
       />
       {state.notice || browserNotice ? (
         <div aria-live="polite" className="toast" role="status">
-          {state.notice ?? browserNotice}
+          {translateRuleText(locale, state.notice ?? browserNotice)}
         </div>
       ) : null}
     </main>

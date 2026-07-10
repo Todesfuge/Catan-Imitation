@@ -79,3 +79,15 @@ Status: Complete
 - Board-adjacent action workflow across 1280 desktop, 768 tablet, and 390 mobile layouts.
 - Playwright click-flow and responsive regression coverage in the delivery gate.
 - Verification: 108 Vitest checks, 12 production-preview Playwright flows, production/Pages builds, UI smoke, rendered 1280/768/390 review, and focused code-review convergence.
+
+## Milestone 8: Readability, Public Trade, and Chinese Localization
+
+Status: Complete
+
+- High-contrast robber and turn-flow overlays.
+- Scrollable Game Log and Yield Statistics dice results inside the fixed game shell.
+- One public multi-resource player offer per action phase with any eligible opponent acceptance.
+- English-default interface with session-persistent Simplified Chinese switching and translated historical logs.
+- Complete reciprocal English and Chinese README documents.
+- Production-preview browser coverage for contrast, scrolling, trade, locale, and responsive containment.
+- Verification: 120 Vitest checks, 17 production-preview Playwright flows, production/Pages builds, bundle smoke, rendered English/Chinese 1280 and mobile 390 review, and converged independent code review.

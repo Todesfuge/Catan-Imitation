@@ -12,7 +12,7 @@ import { getActionAvailability } from "../app/actionAvailability";
 import type { AppState, GameCommand } from "../app/gameReducer";
 import { resources, type Resource } from "../domain/types";
 import { DevelopmentCardPanel } from "./DevelopmentCardPanel";
-import { resourceLabels } from "./resourceLabels";
+import { translate, translateRuleText, useI18n, type Locale } from "./i18n";
 
 export type BoardInteractionMode =
   | { kind: "road" }
@@ -22,47 +22,47 @@ export type BoardInteractionMode =
   | { kind: "setupRoad" }
   | null;
 
-function phaseGuidance(state: AppState): string {
+function phaseGuidance(state: AppState, locale: Locale): string {
   const activePlayer = state.game.players.find(
     (player) => player.id === state.game.activePlayerId
   );
 
   if (state.game.phase === "gameOver") {
     const winner = state.game.players.find((player) => player.id === state.game.winnerId);
-    return `${winner?.name ?? "A player"} has won the game`;
+    return translate(locale, "turn.gameWon", { name: winner?.name ?? "A player" });
   }
   if (state.game.phase === "setup") {
     return state.game.setup?.stage === "road"
-      ? "Place the connected setup road"
-      : "Place the next settlement";
+      ? translate(locale, "turn.setupRoad")
+      : translate(locale, "turn.setupSettlement");
   }
   if (state.guild.gathering.phase === "redemption") {
-    return "Guild redemption is open: choose a player and spend tokens";
+    return translate(locale, "turn.guildRedemption");
   }
   if (state.guild.gathering.phase === "auction") {
-    return `Resolve Commerce Guild auction round ${state.guild.gathering.auctionRound}`;
+    return translate(locale, "turn.guildAuction", { round: state.guild.gathering.auctionRound });
   }
   if (state.game.turnState.phase === "awaitingRoll") {
-    return `${activePlayer?.name ?? "Player"} must roll or play a development card`;
+    return translate(locale, "turn.awaitingRoll", { name: activePlayer?.name ?? "Player" });
   }
   if (state.game.turnState.phase === "awaitingDiscards") {
-    return "Players with more than seven cards must choose their discards";
+    return translate(locale, "turn.awaitingDiscards");
   }
   if (state.game.turnState.phase === "awaitingRobberPlacement") {
-    return `${activePlayer?.name ?? "Player"} must move the robber`;
+    return translate(locale, "turn.awaitingRobber", { name: activePlayer?.name ?? "Player" });
   }
   if (state.game.turnState.phase === "awaitingRobberVictim") {
-    return `${activePlayer?.name ?? "Player"} must choose a robber victim`;
+    return translate(locale, "turn.awaitingVictim", { name: activePlayer?.name ?? "Player" });
   }
   if (state.game.turnState.phase === "awaitingDevelopmentEffect") {
     const effect = state.game.turnState.pendingDevelopmentEffect;
     return effect?.kind === "roadBuilding"
-      ? "Choose the next free road"
+      ? translate(locale, "turn.freeRoad")
       : effect?.kind === "yearOfPlenty"
-        ? "Choose resources from the bank"
-        : "Choose a resource for Monopoly";
+        ? translate(locale, "turn.bankResources")
+        : translate(locale, "turn.monopolyResource");
   }
-  return "Choose an action or end the turn";
+  return translate(locale, "turn.action");
 }
 
 export function ActionDock({
@@ -76,6 +76,7 @@ export function ActionDock({
   interactionMode: BoardInteractionMode;
   onInteractionModeChange: (mode: BoardInteractionMode) => void;
 }) {
+  const { locale, t } = useI18n();
   const activePlayer = state.game.players.find(
     (player) => player.id === state.game.activePlayerId
   );
@@ -110,8 +111,8 @@ export function ActionDock({
         <Timer size={26} />
         <div>
           <strong>{activePlayer?.name ?? "Player"}</strong>
-          <span>Turn {state.game.turn} · Round {state.game.round}</span>
-          <span className="phase-guidance">{phaseGuidance(state)}</span>
+          <span>{t("turn.number", { turn: state.game.turn, round: state.game.round })}</span>
+          <span className="phase-guidance">{phaseGuidance(state, locale)}</span>
         </div>
       </div>
       <button
@@ -121,7 +122,7 @@ export function ActionDock({
         onClick={() => activePlayer && dispatch({ type: "ROLL_DICE", playerId: activePlayer.id })}
         type="button"
       >
-        <Dices size={20} /> Roll Dice
+        <Dices size={20} /> {t("action.rollDice")}
       </button>
       <button
         aria-describedby="road-unavailable-reason"
@@ -130,10 +131,10 @@ export function ActionDock({
         data-action-mode="road"
         disabled={!availability.road.enabled}
         onClick={() => toggleMode("road")}
-        title={availability.road.reason}
+        title={translateRuleText(locale, availability.road.reason)}
         type="button"
       >
-        <Hammer size={20} /> Road
+        <Hammer size={20} /> {t("action.road")}
       </button>
       <button
         aria-describedby="settlement-unavailable-reason"
@@ -142,10 +143,10 @@ export function ActionDock({
         data-action-mode="settlement"
         disabled={!availability.settlement.enabled}
         onClick={() => toggleMode("settlement")}
-        title={availability.settlement.reason}
+        title={translateRuleText(locale, availability.settlement.reason)}
         type="button"
       >
-        <Home size={20} /> Settlement
+        <Home size={20} /> {t("action.settlement")}
       </button>
       <button
         aria-describedby="city-unavailable-reason"
@@ -154,10 +155,10 @@ export function ActionDock({
         data-action-mode="city"
         disabled={!availability.city.enabled}
         onClick={() => toggleMode("city")}
-        title={availability.city.reason}
+        title={translateRuleText(locale, availability.city.reason)}
         type="button"
       >
-        <Castle size={20} /> City
+        <Castle size={20} /> {t("action.city")}
       </button>
       <button
         aria-describedby="development-buy-unavailable-reason"
@@ -168,50 +169,50 @@ export function ActionDock({
         }
         type="button"
       >
-        <ScrollText size={20} /> Dev Card
+        <ScrollText size={20} /> {t("action.devCard")}
       </button>
       <DevelopmentCardPanel state={state} dispatch={dispatch} />
       <div className="maritime-action-group">
         <div className="maritime-ratio-guide" aria-label="Effective maritime trade ratios">
           {resources.map((resource) => (
             <span key={resource}>
-              {resourceLabels[resource]} {availability.maritime.ratios[resource]}:1
+              {t(`resource.${resource}`)} {availability.maritime.ratios[resource]}:1
             </span>
           ))}
         </div>
         <div className="maritime-selectors">
           <select
-            aria-label="Maritime give resource"
+            aria-label={t("action.maritimeGiveLabel")}
             onChange={(event) => {
               setMaritimeGive(event.currentTarget.value as Resource | "");
               setMaritimeReceive("");
             }}
             value={maritimeGive}
           >
-            <option value="">Give resource</option>
+            <option value="">{t("action.giveResource")}</option>
             {resources.map((resource) => {
               const trade = availability.maritime.trades.find(
                 (candidate) => candidate.give === resource
               );
               return (
                 <option disabled={!trade} key={resource} value={resource}>
-                  {resourceLabels[resource]} {trade ? `${trade.ratio}:1` : "unavailable"}
+                  {t(`resource.${resource}`)} {trade ? `${trade.ratio}:1` : t("action.unavailable")}
                 </option>
               );
             })}
           </select>
           <select
-            aria-label="Maritime receive resource"
+            aria-label={t("action.maritimeReceiveLabel")}
             disabled={!selectedTrade}
             onChange={(event) =>
               setMaritimeReceive(event.currentTarget.value as Resource | "")
             }
             value={maritimeReceive}
           >
-            <option value="">Receive resource</option>
+            <option value="">{t("action.receiveResource")}</option>
             {(selectedTrade?.receives ?? []).map((resource) => (
               <option key={resource} value={resource}>
-                {resourceLabels[resource]} ({state.game.bank.resources[resource]} in bank)
+                {t(`resource.${resource}`)} ({state.game.bank.resources[resource]})
               </option>
             ))}
           </select>
@@ -232,10 +233,10 @@ export function ActionDock({
               setMaritimeReceive("");
             }
           }}
-          title={availability.maritime.reason}
+          title={translateRuleText(locale, availability.maritime.reason)}
           type="button"
         >
-          <ArrowRightLeft size={20} /> Maritime
+          <ArrowRightLeft size={20} /> {t("action.maritime")}
         </button>
       </div>
       <button
@@ -246,28 +247,28 @@ export function ActionDock({
         onClick={() => activePlayer && dispatch({ type: "END_TURN", playerId: activePlayer.id })}
         type="button"
       >
-        End Turn
+        {t("action.endTurn")}
       </button>
       <div className="dice-readout">
         {state.lastDice
           ? `${state.lastDice.first} + ${state.lastDice.second} = ${state.lastDice.total}`
-          : "No roll"}
+          : t("action.noRoll")}
       </div>
       {state.game.phase === "gameOver" ? (
         <button data-action="new-game" onClick={() => dispatch({ type: "START_NEW_GAME" })} type="button">
-          New Game
+          {t("action.newGame")}
         </button>
       ) : null}
       <div className="sr-only">
-        <span id="roll-unavailable-reason">{availability.roll.reason}</span>
-        <span id="road-unavailable-reason">{availability.road.reason}</span>
-        <span id="settlement-unavailable-reason">{availability.settlement.reason}</span>
-        <span id="city-unavailable-reason">{availability.city.reason}</span>
+        <span id="roll-unavailable-reason">{translateRuleText(locale, availability.roll.reason)}</span>
+        <span id="road-unavailable-reason">{translateRuleText(locale, availability.road.reason)}</span>
+        <span id="settlement-unavailable-reason">{translateRuleText(locale, availability.settlement.reason)}</span>
+        <span id="city-unavailable-reason">{translateRuleText(locale, availability.city.reason)}</span>
         <span id="development-buy-unavailable-reason">
-          {availability.buyDevelopmentCard.reason}
+          {translateRuleText(locale, availability.buyDevelopmentCard.reason)}
         </span>
-        <span id="maritime-unavailable-reason">{availability.maritime.reason}</span>
-        <span id="end-turn-unavailable-reason">{availability.endTurn.reason}</span>
+        <span id="maritime-unavailable-reason">{translateRuleText(locale, availability.maritime.reason)}</span>
+        <span id="end-turn-unavailable-reason">{translateRuleText(locale, availability.endTurn.reason)}</span>
       </div>
     </footer>
   );

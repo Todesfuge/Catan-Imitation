@@ -27,12 +27,21 @@ export type BlindBoxOutcome =
   | { kind: "voucher" }
   | { kind: "developmentCard"; card: DevelopmentCardKind };
 
+export interface AuctionSummaryData {
+  winnerId: PlayerId;
+  winnerName: string;
+  round: number;
+  winningBid: number;
+  outcome: BlindBoxOutcome;
+}
+
 export interface GatheringState {
   phase: GatheringPhase;
   redemptions: Record<PlayerId, number>;
   auctionRound: number;
   auctionResults: BlindBoxOutcome[];
   lastAuctionSummary?: string;
+  lastAuctionResult?: AuctionSummaryData;
 }
 
 export interface CommerceGuildState {
@@ -508,7 +517,14 @@ export function resolveAuctionRound(
         auctionRound: nextRound,
         phase: nextRound > 3 ? "complete" : "auction",
         auctionResults: [...guild.gathering.auctionResults, outcome],
-        lastAuctionSummary: summary
+        lastAuctionSummary: summary,
+        lastAuctionResult: {
+          winnerId,
+          winnerName,
+          round: guild.gathering.auctionRound,
+          winningBid,
+          outcome
+        }
       }
     },
     winnerId,

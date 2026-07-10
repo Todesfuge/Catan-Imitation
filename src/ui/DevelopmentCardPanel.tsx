@@ -4,27 +4,10 @@ import type { AppState, GameCommand } from "../app/gameReducer";
 import { getLegalRoadEdgeIds } from "../domain/rules/building";
 import {
   resources,
-  type DevelopmentCardKind,
-  type GameState,
-  type Resource
+  type GameState
 } from "../domain/types";
 import { edgeProjection } from "./boardGeometry";
-
-const cardLabels: Record<DevelopmentCardKind, string> = {
-  knight: "Knight",
-  victoryPoint: "Victory Point",
-  roadBuilding: "Road Building",
-  yearOfPlenty: "Year of Plenty",
-  monopoly: "Monopoly"
-};
-
-const resourceLabels: Record<Resource, string> = {
-  wood: "Wood",
-  brick: "Brick",
-  wool: "Wool",
-  grain: "Grain",
-  ore: "Ore"
-};
+import { translateRuleText, useI18n } from "./i18n";
 
 export function DevelopmentCardPanel({
   state,
@@ -33,14 +16,15 @@ export function DevelopmentCardPanel({
   state: AppState;
   dispatch: (command: GameCommand) => void;
 }) {
+  const { locale, t } = useI18n();
   const game = state.game;
   const effect = game.turnState.pendingDevelopmentEffect;
   if (game.turnState.phase === "awaitingDevelopmentEffect" && effect) {
     if (effect.kind === "roadBuilding") {
       return (
         <section className="turn-flow-panel development-effect-panel" data-development-effect="roadBuilding">
-          <strong>Choose a highlighted road</strong>
-          <span>{effect.remainingRoads} free road{effect.remainingRoads === 1 ? "" : "s"} remaining</span>
+          <strong>{t("development.chooseRoad")}</strong>
+          <span>{t("development.roadsRemaining", { count: effect.remainingRoads })}</span>
         </section>
       );
     }
@@ -53,8 +37,8 @@ export function DevelopmentCardPanel({
       >
         <strong>
           {isPlenty
-            ? `Choose ${effect.remainingPicks} resource${effect.remainingPicks === 1 ? "" : "s"}`
-            : "Choose a resource to monopolize"}
+            ? t(effect.remainingPicks === 1 ? "development.chooseResource" : "development.chooseResources", { count: effect.remainingPicks })
+            : t("development.chooseMonopoly")}
         </strong>
         <div className="development-resource-buttons">
           {resources.map((resource) => (
@@ -73,7 +57,7 @@ export function DevelopmentCardPanel({
               }
               type="button"
             >
-              {resourceLabels[resource]}
+              {t(`resource.${resource}`)}
               {isPlenty ? ` (${game.bank.resources[resource]})` : ""}
             </button>
           ))}
@@ -111,16 +95,16 @@ export function DevelopmentCardPanel({
                 cardId: cardAvailability.cardId
               })
             }
-            title={cardAvailability.reason}
+            title={translateRuleText(locale, cardAvailability.reason)}
             type="button"
           >
-            {cardLabels[cardAvailability.kind]} ×{cardAvailability.count}
+            {t(`development.${cardAvailability.kind}`)} ×{cardAvailability.count}
           </button>
         );
       })}
       {victoryPointCount > 0 ? (
         <span className="development-card-victory-points">
-          {cardLabels.victoryPoint} ×{victoryPointCount}
+          {t("development.victoryPoint")} ×{victoryPointCount}
         </span>
       ) : null}
       <div className="sr-only">
@@ -129,7 +113,7 @@ export function DevelopmentCardPanel({
             id={`development-${cardAvailability.kind}-unavailable-reason`}
             key={cardAvailability.kind}
           >
-            {cardAvailability.reason}
+            {translateRuleText(locale, cardAvailability.reason)}
           </span>
         ))}
       </div>
@@ -144,6 +128,7 @@ export function RoadBuildingTargets({
   game: GameState;
   dispatch: (command: GameCommand) => void;
 }) {
+  const { t } = useI18n();
   const effect = game.turnState.pendingDevelopmentEffect;
   if (
     game.turnState.phase !== "awaitingDevelopmentEffect" ||
@@ -165,7 +150,7 @@ export function RoadBuildingTargets({
           dispatch({ type: "PLACE_FREE_ROAD", playerId: game.activePlayerId, edgeId });
         return (
           <line
-            aria-label={`Place free road ${edgeId}`}
+            aria-label={t("development.placeFreeRoad", { edgeId })}
             className="board-action-hit-target road-building-hit-target"
             data-road-building-target={edgeId}
             key={`hit-${edgeId}`}
