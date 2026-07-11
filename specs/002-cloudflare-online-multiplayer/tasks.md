@@ -17,7 +17,7 @@ Status: Ready for implementation; artifact analysis passed with no critical or h
 
 ## Phase A: Shared Correctness Boundary
 
-### T001 — Correct no-token and all-pass Commerce Guild auctions
+### Task 1 (T001) — Correct no-token and all-pass Commerce Guild auctions
 
 Requirements: OM-038 through OM-043
 
@@ -37,7 +37,7 @@ Steps:
 - [ ] Run `pnpm vitest run test/domain/auctionNoBid.test.ts test/domain/commerceGuild.test.ts test/domain/commerceGuildIntegrity.test.ts test/domain/commerceGuildPolish.test.ts`; expect all pass.
 - [ ] Commit with `fix: allow Commerce Guild auctions to end without bids`.
 
-### T002 — Define synchronized match state and execution context
+### Task 2 (T002) — Define synchronized match state and execution context
 
 Requirements: OM-022, OM-023, OM-030
 
@@ -57,7 +57,7 @@ Steps:
 - [ ] Run `pnpm vitest run test/domain/matchTransition.test.ts test/domain/gameplay.test.ts`; expect all pass.
 - [ ] Commit with `refactor: define shared match execution state`.
 
-### T003 — Extract the authoritative match command dispatcher
+### Task 3 (T003) — Extract the authoritative match command dispatcher
 
 Requirements: OM-022 through OM-030
 
@@ -81,7 +81,7 @@ Steps:
 - [ ] Confirm `rg -n "Math\.random|case \"BUILD_|case \"ROLL_DICE" src/app/gameReducer.ts` finds no rule/random ownership.
 - [ ] Commit with `refactor: share authoritative match command execution`.
 
-### T004 — Support deterministic three/four-player match creation
+### Task 4 (T004) — Support deterministic three/four-player match creation
 
 Requirements: OM-003 through OM-007, OM-024
 
@@ -108,7 +108,7 @@ Phase A exit gate:
 
 ## Phase B: Privacy-safe Contract
 
-### T005 — Define and validate the online protocol
+### Task 5 (T005) — Define and validate the online protocol
 
 Requirements: OM-012, OM-025 through OM-029, OM-044, OM-052 through OM-059
 
@@ -126,7 +126,7 @@ Steps:
 - [ ] Run `pnpm vitest run test/online/protocol.test.ts`; expect all pass.
 - [ ] Commit with `feat: define bounded online room protocol`.
 
-### T006 — Define public/private room projections
+### Task 6 (T006) — Define public/private room projections
 
 Requirements: OM-031 through OM-037, OM-044, OM-048 through OM-050
 
@@ -146,7 +146,7 @@ Steps:
 - [ ] Run the focused suite; expect all privacy assertions pass.
 - [ ] Commit with `feat: project private room views per seat`.
 
-### T007 — Project caller-specific allowed actions
+### Task 7 (T007) — Project caller-specific allowed actions
 
 Requirements: OM-021, OM-033, OM-034, OM-046, OM-048 through OM-050
 
@@ -174,7 +174,7 @@ Phase B exit gate:
 
 ## Phase C: Cloudflare Room Runtime
 
-### T008 — Add the combined Worker build and runtime test harness
+### Task 8 (T008) — Add the combined Worker build and runtime test harness
 
 Requirements: OM-060 through OM-063
 
@@ -202,7 +202,7 @@ Steps:
 - [ ] Run `pnpm test:worker`, `pnpm build:worker`, and `pnpm exec wrangler deploy --dry-run`; expect all pass.
 - [ ] Commit with `build: add Cloudflare Worker runtime`.
 
-### T009 — Implement credentials, tickets, bounded HTTP, and origin checks
+### Task 9 (T009) — Implement credentials, tickets, bounded HTTP, and origin checks
 
 Requirements: OM-008 through OM-014, OM-054 through OM-058
 
@@ -221,7 +221,7 @@ Steps:
 - [ ] Run the focused Worker suite; expect all pass.
 - [ ] Commit with `feat: secure anonymous room credentials`.
 
-### T010 — Implement the persisted room model and lobby lifecycle
+### Task 10 (T010) — Implement the persisted room model and lobby lifecycle
 
 Requirements: OM-003 through OM-007, OM-015, OM-016, OM-020, OM-052, OM-059
 
@@ -241,7 +241,7 @@ Steps:
 - [ ] Run `pnpm test:worker -- test/worker/roomLifecycle.test.ts`; expect all pass.
 - [ ] Commit with `feat: persist online room lobbies`.
 
-### T011 — Add HTTP room routes and one-time WebSocket upgrade
+### Task 11 (T011) — Add HTTP room routes and one-time WebSocket upgrade
 
 Requirements: OM-003 through OM-014, OM-017 through OM-020
 
@@ -261,7 +261,7 @@ Steps:
 - [ ] Run the focused suite; expect all pass.
 - [ ] Commit with `feat: connect authenticated room sockets`.
 
-### T012 — Implement expiry alarms and recovery after eviction
+### Task 12 (T012) — Implement expiry alarms and recovery after eviction
 
 Requirements: OM-016 through OM-021, OM-042, OM-052, OM-059
 
@@ -279,7 +279,7 @@ Steps:
 - [ ] Run the focused suite; expect all pass.
 - [ ] Commit with `feat: recover and expire durable game rooms`.
 
-### T013 — Implement the authoritative command pipeline
+### Task 13 (T013) — Implement the authoritative command pipeline
 
 Requirements: OM-022 through OM-030, OM-044 through OM-047, OM-052 through OM-058
 
@@ -300,7 +300,7 @@ Steps:
 - [ ] Run the focused Worker suite plus `pnpm test`; expect all pass.
 - [ ] Commit with `feat: execute authoritative room commands`.
 
-### T014 — Implement persisted sealed bidding
+### Task 14 (T014) — Implement persisted sealed bidding
 
 Requirements: OM-035 through OM-043, OM-050, OM-052, OM-053
 
@@ -327,7 +327,7 @@ Phase C exit gate:
 
 ## Phase D: Online React Experience
 
-### T015 — Extract a shared game-table view boundary
+### Task 15 (T015) — Extract a shared game-table view boundary
 
 Requirements: OM-001, OM-002, OM-024, OM-031, OM-046, OM-048, OM-051
 
@@ -354,7 +354,7 @@ Steps:
 - [ ] Run `pnpm test` and `pnpm test:e2e`; expect existing Local Game behavior pass.
 - [ ] Commit with `refactor: share the game table presentation`.
 
-### T016 — Add online session persistence and reconnect transport
+### Task 16 (T016) — Add online session persistence and reconnect transport
 
 Requirements: OM-009, OM-012 through OM-014, OM-019 through OM-021, OM-044 through OM-047
 
@@ -374,7 +374,7 @@ Steps:
 - [ ] Run the focused test; expect all pass.
 - [ ] Commit with `feat: reconnect anonymous online seats`.
 
-### T017 — Add Local/Online entry and room lobby
+### Task 17 (T017) — Add Local/Online entry and room lobby
 
 Requirements: OM-001 through OM-007, OM-045, OM-049, OM-051
 
@@ -397,7 +397,7 @@ Steps:
 - [ ] Run the focused test and `pnpm test`; expect all pass.
 - [ ] Commit with `feat: add private online room lobby`.
 
-### T018 — Adapt the full table to caller-specific online views
+### Task 18 (T018) — Adapt the full table to caller-specific online views
 
 Requirements: OM-021, OM-031 through OM-037, OM-045 through OM-051
 
@@ -427,7 +427,7 @@ Phase D exit gate:
 
 ## Phase E: Browser Convergence and Deployment
 
-### T019 — Add three-context online browser coverage
+### Task 19 (T019) — Add three-context online browser coverage
 
 Requirements: all user stories; OM-001 through OM-051
 
@@ -446,7 +446,7 @@ Steps:
 - [ ] Run `pnpm test:e2e`; expect existing local and new online suites pass at desktop and mobile widths.
 - [ ] Commit with `test: cover online multiplayer in real browsers`.
 
-### T020 — Add production security, observability, and combined smoke gates
+### Task 20 (T020) — Add production security, observability, and combined smoke gates
 
 Requirements: OM-054 through OM-063
 
@@ -469,7 +469,7 @@ Steps:
 - [ ] Run `pnpm test:worker`, `pnpm build:worker`, `pnpm smoke:worker`, and `pnpm exec wrangler deploy --dry-run`; expect all pass.
 - [ ] Commit with `chore: harden Cloudflare multiplayer delivery`.
 
-### T021 — Verify preview, document production, and retire duplicate hosting
+### Task 21 (T021) — Verify preview, document production, and retire duplicate hosting
 
 Requirements: OM-064, OM-065
 
@@ -495,7 +495,7 @@ Steps:
 - [ ] Run link/content tests, `git diff --check`, and the full release gate again.
 - [ ] Commit with `docs: publish Cloudflare online multiplayer`.
 
-### T022 — Converge, review, and finish the feature
+### Task 22 (T022) — Converge, review, and finish the feature
 
 Requirements: all OM-001 through OM-065
 
