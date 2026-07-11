@@ -3,6 +3,7 @@ import type {
   BlindBoxOutcome,
   CommerceGuildState
 } from "../domain/expansion/commerceGuild";
+import { createStandardBoardData } from "../domain/board";
 import type { MatchState } from "../domain/match/types";
 import { calculatePlayerScore } from "../domain/rules/scoring";
 import {
@@ -66,6 +67,16 @@ const developmentCardKinds: readonly DevelopmentCardKind[] = [
   "yearOfPlenty",
   "monopoly"
 ];
+
+const MAX_PUBLIC_LOG_ENTRIES = 6;
+const standardBoardData = createStandardBoardData();
+const standardBoardWire = JSON.stringify(standardBoardData);
+
+function requireStandardBoardLayout(game: GameState): void {
+  if (JSON.stringify({ board: game.board, edges: game.edges, ports: game.ports }) !== standardBoardWire) {
+    throw new Error("Online projection requires the standard-v1 board layout.");
+  }
+}
 
 const noParamLogKeys = new Set<GameMessageKey>([
   "game.welcome",
@@ -366,6 +377,7 @@ function projectGame(
   revealFinalScores: boolean
 ): PublicGameView {
   const game = match.game;
+  requireStandardBoardLayout(game);
   const logContext: LogProjectionContext = {
     playerNames: new Set(playerNameById.values()),
     playerNameById,
@@ -390,13 +402,7 @@ function projectGame(
     round: game.round,
     turnState: { phase: game.turnState.phase, awaitedPlayerIds: awaitedPlayerIds(game) },
     targetScore: game.targetScore,
-    board: game.board.map((hex) => ({
-      ...hex,
-      vertexIds: [...hex.vertexIds],
-      edgeIds: [...hex.edgeIds]
-    })),
-    edges: game.edges.map((edge) => ({ ...edge, vertexIds: [...edge.vertexIds] })),
-    ports: game.ports.map((port) => ({ ...port, vertexIds: [...port.vertexIds] })),
+    boardLayout: "standard-v1",
     buildings: game.buildings.map((building) => ({ ...building })),
     roads: game.roads.map((road) => ({ ...road })),
     robberHexId: game.robberHexId,
@@ -404,7 +410,7 @@ function projectGame(
     log: game.log.flatMap((entry) => {
       const projected = projectLogEntry(entry, logContext);
       return projected ? [projected] : [];
-    }),
+    }).slice(-MAX_PUBLIC_LOG_ENTRIES),
     developmentDeckCount: game.developmentDeck.length,
     lastDice: match.lastDice ? { ...match.lastDice } : null,
     ...(match.pendingPlayerTrade

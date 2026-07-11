@@ -1,12 +1,9 @@
 import type { ResourceCost } from "../domain/expansion/commerceGuild";
 import type {
-  BoardEdge,
-  BoardHex,
   Building,
   DevelopmentCard,
   GameMessageKey,
   GamePhase,
-  MaritimePort,
   PlayerId,
   ResourceMap,
   Road,
@@ -71,9 +68,7 @@ export interface PublicGameView {
   round: number;
   turnState: PublicTurnView;
   targetScore: number;
-  board: BoardHex[];
-  edges: BoardEdge[];
-  ports: MaritimePort[];
+  boardLayout: "standard-v1";
   buildings: Building[];
   roads: Road[];
   robberHexId: string;

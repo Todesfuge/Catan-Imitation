@@ -250,7 +250,7 @@ export function ActionDock({
           : t("action.noRoll")}
       </div>
       {state.game.phase === "gameOver" ? (
-        <button data-action="new-game" onClick={() => dispatch({ type: "game.new" })} type="button">
+        <button data-action="new-game" disabled={state.newGameEnabled === false} onClick={() => dispatch({ type: "game.new" })} type="button">
           {t("action.newGame")}
         </button>
       ) : null}

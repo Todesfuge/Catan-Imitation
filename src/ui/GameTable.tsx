@@ -111,11 +111,10 @@ export interface GameTableBoardHex {
   readonly resource: GameTableResource | null;
   readonly diceNumber: number | null;
   readonly vertexIds: readonly string[];
-  readonly edgeIds: readonly string[];
   readonly q: number;
   readonly r: number;
 }
-export interface GameTableBoardEdge { readonly id: string; readonly hexId: string; readonly vertexIds: readonly [string, string] }
+export interface GameTableBoardEdge { readonly id: string; readonly vertexIds: readonly [string, string] }
 export interface GameTablePort { readonly id: string; readonly kind: "generic" | "resource"; readonly resource?: GameTableResource; readonly vertexIds: readonly string[] }
 export interface GameTableBuilding { readonly id: string; readonly ownerId: string; readonly vertexId: string; readonly kind: "settlement" | "city" }
 export interface GameTableRoad { readonly id: string; readonly ownerId: string; readonly edgeId: string }
@@ -174,13 +173,23 @@ export interface GameTableView {
   readonly selectedDiceTotal: number;
   readonly selectedPlayerId: string;
   readonly notice: string | null;
-  readonly statistics: { readonly playerRows: Readonly<Record<string, readonly { readonly diceTotal: number; readonly probability: number; readonly resources: GameTableResourceMap; readonly expected: GameTableResourceMap }[]>>; readonly diceIncome: Readonly<Record<number, { readonly players: Readonly<Record<string, GameTableResourceMap>> }>>; readonly matrix: { readonly totals: Readonly<Record<string, GameTableResourceMap>> } };
+  readonly statistics?: { readonly playerRows: Readonly<Record<string, readonly { readonly diceTotal: number; readonly probability: number; readonly resources: GameTableResourceMap; readonly expected: GameTableResourceMap }[]>>; readonly diceIncome: Readonly<Record<number, { readonly players: Readonly<Record<string, GameTableResourceMap>> }>>; readonly matrix: { readonly totals: Readonly<Record<string, GameTableResourceMap>> } };
   readonly legality: { readonly actions: GameTableActions; readonly setupControlId?: string; readonly setupRoadEdgeIds: readonly string[]; readonly setupSettlementVertexIds: readonly string[]; readonly freeRoadEdgeIds: readonly string[] };
   readonly tradePolicy: {
     readonly publishEnabled: boolean;
     readonly publishReason?: string;
     readonly maxOfferResources: GameTableResourceMap;
   };
+  readonly sealedAuction?: {
+    readonly viewerSeatId: string;
+    readonly seats: readonly { readonly seatId: string; readonly nickname: string; readonly submitted: boolean }[];
+    readonly ownPendingBid?: number;
+    readonly enabled: boolean;
+    readonly maxAmount: number;
+    readonly submitted: boolean;
+    readonly reason?: string;
+  };
+  readonly newGameEnabled?: boolean;
 }
 
 export type GameTableIntent =
@@ -504,6 +513,8 @@ function PlayerPanel({ state }: { state: GameTableView }) {
               <span>
                 <Landmark size={15} /> {player.prizeCards}
               </span>
+              <span>{t("online.resourceCardCount", { count: player.resourceCardCount })}</span>
+              <span>{t("online.developmentCardCount", { count: player.developmentCardCount })}</span>
             </div>
             <div className="resource-strip compact">
               {privatePresentation ? resources.map((resource) => (
@@ -570,6 +581,14 @@ function StatsPanel({
     () => Object.fromEntries(resources.map((resource) => [resource, t(`resource.${resource}`)])) as Record<(typeof resources)[number], string>,
     [t]
   );
+  if (!state.statistics) {
+    return (
+      <section className="tool-panel stats-panel">
+        <div className="panel-header"><h2>{t("stats.title")}</h2></div>
+        <p>{t("online.statisticsUnavailable")}</p>
+      </section>
+    );
+  }
   const playerRows = state.statistics.playerRows[state.selectedPlayerId] ?? [];
   const diceIncome = state.statistics.diceIncome[state.selectedDiceTotal];
   const matrix = state.statistics.matrix;

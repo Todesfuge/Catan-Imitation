@@ -261,7 +261,7 @@ describe("caller-specific room projection privacy", () => {
         requested: { wood: 0, brick: 1, wool: 0, grain: 0, ore: 0 }
       }
     });
-    expect(view.publicState.game?.board).toHaveLength(room.matchState!.game.board.length);
+    expect(view.publicState.game?.boardLayout).toBe("standard-v1");
     expect(view.publicState.guild?.gathering.lastAuctionResult).toEqual({
       winnerId: "p2",
       winnerName: "Loss",
@@ -542,7 +542,7 @@ describe("caller-specific room projection privacy", () => {
     expect(first).not.toBe(second);
     expect(first.publicState).not.toBe(second.publicState);
     expect(first.publicState.game).not.toBe(room.matchState!.game);
-    expect(first.publicState.game?.board).not.toBe(room.matchState!.game.board);
+    expect(first.publicState.game?.boardLayout).toBe("standard-v1");
     expect(first.privateState.resources).not.toBe(room.matchState!.game.players[0].resources);
     expect(first.privateState.developmentCards).not.toBe(
       room.matchState!.game.players[0].developmentCards

@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { createInitialAppState } from "../../src/app/localGameState";
+import { projectRoomView } from "../../src/online/projectRoomView";
 
 async function openLocal(page: Page) {
   await page.goto("/");
@@ -124,6 +126,61 @@ async function installOnlineLobbyMock(page: Page, seatCount: 3 | 4) {
     window.WebSocket = MockWebSocket as unknown as typeof WebSocket;
     (window as unknown as { __onlineMock: typeof state }).__onlineMock = state;
   }, { seatCount });
+}
+
+function callerOnlineGameSnapshot() {
+  const local = createInitialAppState();
+  const seats = local.game.players.map((player, index) => ({
+    seatId: `seat-${index + 1}`,
+    playerId: player.id,
+    nickname: player.name,
+    ready: true
+  }));
+  const projected = projectRoomView({
+    roomCode: "234567", lifecycle: "playing", roomVersion: 42, seats,
+    matchState: { game: local.game, guild: local.guild, lastDice: local.lastDice }
+  }, "seat-1", { connectedSeatIds: seats.map((seat) => seat.seatId) });
+  return {
+    type: "room.snapshot", schemaVersion: 1, roomVersion: 42, lifecycle: "playing",
+    ...projected,
+    presence: seats.map((seat, index) => ({ seatId: seat.seatId, connectionCount: index === 2 ? 0 : 1, online: index !== 2 }))
+  };
+}
+
+async function installOnlineGameMock(page: Page) {
+  await page.addInitScript((snapshot) => {
+    const state = { sent: [] as Array<Record<string, unknown>>, socketCount: 0 };
+    const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), {
+      status, headers: { "content-type": "application/json; charset=utf-8" }
+    });
+    window.fetch = async (input) => {
+      const path = new URL(typeof input === "string" ? input : input instanceof Request ? input.url : input.toString()).pathname;
+      if (path === "/api/rooms") return json({ roomCode: "234567", seatId: "seat-1", seatToken: "s".repeat(43) }, 201);
+      if (path.endsWith("/connection-ticket")) return json({ ticket: "t".repeat(43), expiresInMs: 30_000 }, 201);
+      return json({ error: { code: "ROOM_NOT_FOUND", params: {}, retryable: false } }, 404);
+    };
+    class MockWebSocket {
+      readyState = 0;
+      private listeners = new Map<string, Set<(event: unknown) => void>>();
+      constructor(_url: string) {
+        state.socketCount += 1;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.emit("open", {});
+          this.emit("message", { data: JSON.stringify(snapshot) });
+        });
+      }
+      addEventListener(type: string, listener: (event: unknown) => void) {
+        const entries = this.listeners.get(type) ?? new Set(); entries.add(listener); this.listeners.set(type, entries);
+      }
+      removeEventListener(type: string, listener: (event: unknown) => void) { this.listeners.get(type)?.delete(listener); }
+      send(value: string) { state.sent.push(JSON.parse(value) as Record<string, unknown>); }
+      close() { this.readyState = 3; }
+      emit(type: string, event: unknown) { for (const listener of this.listeners.get(type) ?? []) listener(event); }
+    }
+    window.WebSocket = MockWebSocket as unknown as typeof WebSocket;
+    (window as unknown as { __onlineGameMock: typeof state }).__onlineGameMock = state;
+  }, callerOnlineGameSnapshot());
 }
 
 async function enterMockCreatedRoom(page: Page) {
@@ -286,6 +343,54 @@ for (const viewport of [
     expect(measurements.documentWidth).toBeLessThanOrEqual(measurements.viewportWidth);
     expect(measurements.shortTargetCount).toBe(0);
     expect(measurements.wideSeatCount).toBe(0);
+  });
+}
+
+for (const viewport of [
+  { name: "desktop", width: 1280, height: 768 },
+  { name: "tablet", width: 768, height: 1024 },
+  { name: "mobile", width: 390, height: 844 }
+]) {
+  test(`${viewport.name} caller-only online table is contained and dispatches server commands`, async ({ page }) => {
+    await installOnlineGameMock(page);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Play Online Game" }).click();
+    await page.getByLabel("Create nickname").fill("Voyage1969");
+    await page.getByRole("button", { name: "Create room" }).click();
+    await expect(page.locator(".online-game-shell")).toBeVisible();
+    await expect(page.getByText("Room 234567")).toBeVisible();
+    await expect(page.getByText("Kay is offline")).toBeVisible();
+    await expect(page.locator(".resource-strip.compact").filter({ hasText: "Wd" })).toHaveCount(1);
+    const roll = page.getByRole("button", { name: "Roll Dice" });
+    await expect(roll).toBeEnabled();
+    await page.locator("body").click({ position: { x: 1, y: 1 } });
+    for (let tab = 0; tab < 24; tab += 1) {
+      await page.keyboard.press("Tab");
+      if (await page.evaluate(() => document.activeElement?.getAttribute("data-action") === "roll-dice")) break;
+    }
+    await expect(roll).toBeFocused();
+    const focus = await roll.evaluate((element) => getComputedStyle(element).outlineStyle);
+    expect(focus).not.toBe("none");
+    await roll.click();
+    await expect.poll(() => page.evaluate(() =>
+      (window as unknown as { __onlineGameMock: { sent: unknown[] } }).__onlineGameMock.sent.length
+    )).toBe(1);
+    const sent = await page.evaluate(() =>
+      (window as unknown as { __onlineGameMock: { sent: Array<Record<string, unknown>> } }).__onlineGameMock.sent[0]
+    );
+    expect(sent).toMatchObject({ type: "match.command", expectedVersion: 42, command: { type: "ROLL_DICE" } });
+    expect(JSON.stringify(sent)).not.toContain("playerId");
+    const measurements = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      shortButtons: [...document.querySelectorAll("button")].filter((button) => {
+        const rect = button.getBoundingClientRect();
+        return rect.width > 0 && rect.height < 44;
+      }).length
+    }));
+    expect(measurements.documentWidth).toBeLessThanOrEqual(measurements.viewportWidth);
+    expect(measurements.shortButtons).toBe(0);
   });
 }
 

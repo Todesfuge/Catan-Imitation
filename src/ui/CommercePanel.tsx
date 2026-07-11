@@ -194,7 +194,45 @@ export function CommercePanel({
         {state.guild.gathering.phase === "auction" ? (
           <div className="auction-grid">
             <strong>{t("commerce.auctionRound", { round: state.guild.gathering.auctionRound })}</strong>
-            {state.controlledPlayers.map((control) => {
+            {state.sealedAuction ? (
+              <>
+                {state.sealedAuction.seats.map((seat) => (
+                  <span className="auction-submission-state" key={seat.seatId}>
+                    {seat.seatId === state.sealedAuction?.viewerSeatId
+                      ? state.sealedAuction.ownPendingBid !== undefined
+                        ? t("online.auctionOwnBid", { bid: state.sealedAuction.ownPendingBid })
+                        : t("online.auctionYourTurn")
+                      : seat.submitted
+                        ? t("online.auctionSubmitted", { name: seat.nickname })
+                        : t("online.auctionWaiting", { name: seat.nickname })}
+                  </span>
+                ))}
+                <label>
+                  {t("online.auctionBidLabel")}
+                  <input
+                    aria-label={t("online.auctionBidLabel")}
+                    disabled={!state.sealedAuction.enabled}
+                    max={state.sealedAuction.maxAmount}
+                    min={0}
+                    onChange={(event) => setBids({ ...bids, [state.sealedAuction!.viewerSeatId]: Number(event.currentTarget.value) })}
+                    type="number"
+                    value={bids[state.sealedAuction.viewerSeatId] ?? state.sealedAuction.ownPendingBid ?? 0}
+                  />
+                </label>
+                <button
+                  disabled={!state.sealedAuction.enabled}
+                  onClick={() => dispatch({
+                    type: "auction.submitBid",
+                    controlId: state.sealedAuction!.viewerSeatId,
+                    bid: bids[state.sealedAuction!.viewerSeatId] ?? state.sealedAuction!.ownPendingBid ?? 0
+                  })}
+                  type="button"
+                >
+                  {t("online.auctionSubmit")}
+                </button>
+                {state.sealedAuction.reason ? <span>{translateRuleText(locale, state.sealedAuction.reason)}</span> : null}
+              </>
+            ) : state.controlledPlayers.map((control) => {
               return <label data-control-id={control.controlId} key={control.controlId}>
                 {control.displayName}
                 <input
@@ -207,13 +245,13 @@ export function CommercePanel({
                 />
               </label>;
             })}
-            <button onClick={() => state.controlledPlayers.forEach((control) => dispatch({
+            {!state.sealedAuction ? <button onClick={() => state.controlledPlayers.forEach((control) => dispatch({
               type: "auction.submitBid",
               controlId: control.controlId,
               bid: bids[control.controlId] ?? 0
             }))} type="button">
               {t("commerce.resolveBlindBox")}
-            </button>
+            </button> : null}
           </div>
         ) : null}
         {state.guild.gathering.lastAuctionResult ? (
@@ -225,7 +263,9 @@ export function CommercePanel({
               outcome: state.guild.gathering.lastAuctionResult.outcome.kind === "voucher"
                 ? t("commerce.outcome.voucher")
                 : state.guild.gathering.lastAuctionResult.outcome.kind === "developmentCard"
-                  ? t("commerce.outcome.developmentCard", { cardKind: t("action.devCard") })
+                  ? state.sealedAuction
+                    ? t("online.auctionDevelopmentCardGeneric")
+                    : t("commerce.outcome.developmentCard", { cardKind: t("action.devCard") })
                   : t("commerce.outcome.resources", {
                       resources: state.guild.gathering.lastAuctionResult.outcome.resourceCardCount ?? 0
                     })

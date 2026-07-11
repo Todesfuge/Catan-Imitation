@@ -11,6 +11,7 @@ import {
   type OnlineSeatSession
 } from "./useOnlineRoom";
 import type { PublicRoomState, PublicSeatView } from "./view";
+import { OnlineGame } from "./OnlineGame";
 import { translate, type Locale, type MessageKey } from "../ui/i18n";
 
 const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -515,6 +516,18 @@ function ConnectedOnlineRoom({
     }
   };
   const terminal = room.state.status === "expired" || room.state.status === "incompatible";
+  if (room.state.snapshot?.lifecycle === "playing" || room.state.snapshot?.lifecycle === "finished") {
+    return (
+      <OnlineGame
+        createCommandId={services.createCommandId}
+        dispatch={room.dispatch}
+        onExit={onExit}
+        reconnect={room.reconnect}
+        roomCode={session.roomCode}
+        state={room.state}
+      />
+    );
+  }
   return (
     <OnlineRoomView
       actionNotice={actionNotice}
