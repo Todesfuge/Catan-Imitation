@@ -95,16 +95,16 @@ Files:
 
 Steps:
 
-- [ ] Write failing tests for three-player and four-player snake setup orders, unique stable player IDs/colors, caller nicknames, injected deterministic development-deck shuffling, and rejection of other counts.
-- [ ] Run `pnpm vitest run test/domain/matchTransition.test.ts test/domain/setupInteraction.test.ts`; expect failures for fixed four-player setup.
-- [ ] Add `createSetupMatch(seats, context)` and make the current local defaults call it; keep board/ports fixed and shuffle the development deck through the injected random source.
-- [ ] Run the focused tests and `pnpm test`; expect all pass.
-- [ ] Commit with `feat: create matches from three or four seats`.
+- [x] Write failing tests for three-player and four-player snake setup orders, unique stable player IDs/colors, caller nicknames, injected deterministic development-deck shuffling, and rejection of other counts.
+- [x] Run `pnpm vitest run test/domain/matchTransition.test.ts test/domain/setupInteraction.test.ts`; expect failures for fixed four-player setup.
+- [x] Add `createSetupMatch(seats, context)` and make the current local defaults call it; keep board/ports fixed and shuffle the development deck through the injected random source.
+- [x] Run the focused tests and `pnpm test`; expect all pass.
+- [x] Commit with `feat: create matches from three or four seats`.
 
 Phase A exit gate:
 
-- [ ] Run `pnpm test` and `pnpm build`; record pass evidence.
-- [ ] Review `gameReducer.ts` responsibility: it must have lost business execution and gained no network behavior.
+- [x] Run `pnpm test` and `pnpm build`; record pass evidence.
+- [x] Review `gameReducer.ts` responsibility: it must have lost business execution and gained no network behavior.
 
 ## Phase B: Privacy-safe Contract
 
