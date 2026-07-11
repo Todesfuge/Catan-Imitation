@@ -138,13 +138,13 @@ Files:
 
 Steps:
 
-- [ ] Write adversarial failing tests that JSON-serialize each opponent projection and search for resource maps, development-card kinds/IDs, hidden victory points, raw deck contents, unresolved bids, losing bids, token hashes, tickets, and private errors.
-- [ ] Add failing positive tests for own resources/cards/bid and public counts/board/bank/trades/logs.
-- [ ] Run `pnpm vitest run test/online/projectionPrivacy.test.ts`; expect missing-projection failures.
-- [ ] Implement newly allocated public/private view types and privacy-safe structured log projection; never cast a raw `GameState` to a view.
-- [ ] Redact blind-box development-card kinds from every non-recipient projection.
-- [ ] Run the focused suite; expect all privacy assertions pass.
-- [ ] Commit with `feat: project private room views per seat`.
+- [x] Write adversarial failing tests that JSON-serialize each opponent projection and search for resource maps, development-card kinds/IDs, hidden victory points, raw deck contents, unresolved bids, losing bids, token hashes, tickets, and private errors.
+- [x] Add failing positive tests for own resources/cards/bid and public counts/board/bank/trades/logs.
+- [x] Run `pnpm vitest run test/online/projectionPrivacy.test.ts`; expect missing-projection failures.
+- [x] Implement newly allocated public/private view types and privacy-safe structured log projection; never cast a raw `GameState` to a view.
+- [x] Redact blind-box development-card kinds from every non-recipient projection.
+- [x] Run the focused suite; expect all privacy assertions pass.
+- [x] Commit with `feat: project private room views per seat`.
 
 ### Task 7 (T007) — Project caller-specific allowed actions
 
