@@ -254,12 +254,12 @@ Files:
 
 Steps:
 
-- [ ] Add failing integration tests for health/create/join/delete/ticket endpoints, eight-attempt room-code collision retry, status/error mappings, ticket consumption, invalid/expired tickets, WebSocket attachments, multi-tab presence, and snapshot on connect.
-- [ ] Run the focused Worker suite; expect route/upgrade failures.
-- [ ] Route normalized room codes with `ROOMS.getByName`, implement the thin Durable Object fetch adapter, call `ctx.acceptWebSocket`, and serialize only `seatId`, `connectionId`, and time.
-- [ ] Broadcast presence from `ctx.getWebSockets()` without persisting it or incrementing room version.
-- [ ] Run the focused suite; expect all pass.
-- [ ] Commit with `feat: connect authenticated room sockets`.
+- [x] Add failing integration tests for health/create/join/delete/ticket endpoints, eight-attempt room-code collision retry, status/error mappings, ticket consumption, invalid/expired tickets, WebSocket attachments, multi-tab presence, and snapshot on connect.
+- [x] Run the focused Worker suite; expect route/upgrade failures.
+- [x] Route normalized room codes with `ROOMS.getByName`, implement the thin Durable Object fetch adapter, call `ctx.acceptWebSocket`, and serialize only `seatId`, `connectionId`, and time.
+- [x] Broadcast presence from `ctx.getWebSockets()` without persisting it or incrementing room version.
+- [x] Run the focused suite; expect all pass.
+- [x] Commit with `feat: connect authenticated room sockets`.
 
 ### Task 12 (T012) — Implement expiry alarms and recovery after eviction
 
