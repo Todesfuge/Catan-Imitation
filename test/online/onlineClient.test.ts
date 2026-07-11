@@ -280,6 +280,24 @@ describe("online HTTP bootstrap", () => {
         }
       }), { status: 429 })
     })).rejects.toMatchObject({ protocolError: { code: "INTERNAL_ERROR", params: {} } });
+
+    let keyError: unknown;
+    try {
+      await requestConnectionTicket(roomCode, seatToken, {
+        origin: "https://game.test",
+        fetch: async () => new Response(JSON.stringify({
+          error: {
+            code: "RULE_VIOLATION",
+            params: { [seatToken]: "echoed as a key" },
+            retryable: false
+          }
+        }), { status: 422 })
+      });
+    } catch (error) {
+      keyError = error;
+    }
+    expect(keyError).toMatchObject({ protocolError: { code: "INTERNAL_ERROR", params: {} } });
+    expect(JSON.stringify(keyError)).not.toContain(seatToken);
   });
 
   it("cancels a streamed response as soon as the actual body exceeds the wire limit", async () => {
@@ -505,6 +523,35 @@ describe("online reconnect transport", () => {
     client.dispose();
   });
 
+  it("redacts a current credential used as a WebSocket error param key", async () => {
+    const credentials = createSeatCredentialStore(memoryStorage());
+    credentials.save({ roomCode, seatId: "seat-1", seatToken });
+    const socket = new FakeSocket();
+    const client = createOnlineRoomClient(roomCode, {
+      origin: "https://game.test",
+      credentials,
+      scheduler: new FakeScheduler(),
+      fetch: async () => new Response(JSON.stringify({ ticket: "t".repeat(43), expiresInMs: 30_000 }), { status: 201 }),
+      createWebSocket: () => socket
+    });
+    client.connect();
+    await flush();
+    socket.readyState = 1;
+    socket.emit("open");
+    socket.emit("message", { data: JSON.stringify({
+      type: "command.rejected",
+      commandId: "11111111-1111-4111-8111-111111111111",
+      error: {
+        code: "RULE_VIOLATION",
+        params: { [seatToken]: "echoed as a key" },
+        retryable: false
+      }
+    }) });
+    expect(client.getState().notice).toEqual({ code: "INTERNAL_ERROR", params: {}, retryable: true });
+    expect(JSON.stringify(client.getState())).not.toContain(seatToken);
+    client.dispose();
+  });
+
   it("uses a fresh one-time ticket per socket and capped 1/2/4/8/15 second retries", async () => {
     const storage = memoryStorage();
     const credentials = createSeatCredentialStore(storage);
@@ -715,5 +762,31 @@ describe("online reconnect transport", () => {
     await flush();
     expect(sockets).toHaveLength(0);
     expect(scheduler.tasks).toHaveLength(0);
+  });
+
+  it("removes every credential-capturing socket listener before dispose closes it", async () => {
+    const credentials = createSeatCredentialStore(memoryStorage());
+    credentials.save({ roomCode, seatId: "seat-1", seatToken });
+    const socket = new FakeSocket();
+    const client = createOnlineRoomClient(roomCode, {
+      origin: "https://game.test",
+      credentials,
+      scheduler: new FakeScheduler(),
+      fetch: async () => new Response(JSON.stringify({ ticket: "t".repeat(43), expiresInMs: 30_000 }), { status: 201 }),
+      createWebSocket: () => socket
+    });
+    client.connect();
+    await flush();
+    expect([...socket.listeners.values()].reduce((total, listeners) => total + listeners.size, 0)).toBe(4);
+    socket.readyState = 1;
+    socket.emit("open");
+    const beforeDispose = client.getState();
+    client.dispose();
+    expect([...socket.listeners.values()].reduce((total, listeners) => total + listeners.size, 0)).toBe(0);
+
+    socket.emit("message", { data: JSON.stringify(snapshot(99)) });
+    socket.emit("close");
+    socket.emit("open");
+    expect(client.getState()).toBe(beforeDispose);
   });
 });

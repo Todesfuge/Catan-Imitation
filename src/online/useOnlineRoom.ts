@@ -95,9 +95,11 @@ export function sanitizeProtocolError(
   error: ProtocolError,
   secrets: readonly string[] = []
 ): ProtocolError {
-  for (const entry of Object.values(error.params)) {
-    if (typeof entry !== "string") continue;
-    if (/[A-Za-z0-9_-]{32,}/.test(entry) || secrets.some((secret) => secret.length > 0 && entry.includes(secret))) {
+  const containsCredential = (value: string) =>
+    /[A-Za-z0-9_-]{32,}/.test(value) ||
+    secrets.some((secret) => secret.length > 0 && value.includes(secret));
+  for (const [key, entry] of Object.entries(error.params)) {
+    if (containsCredential(key) || (typeof entry === "string" && containsCredential(entry))) {
       return internalError();
     }
   }
@@ -320,6 +322,7 @@ export function createOnlineRoomClient(
   const listeners = new Set<(state: OnlineClientState) => void>();
   let state = createInitialOnlineState();
   let socket: ClientSocket | undefined;
+  let socketCleanup: (() => void) | undefined;
   let timer: unknown;
   let abortController: AbortController | undefined;
   let generation = 0;
@@ -402,7 +405,14 @@ export function createOnlineRoomClient(
       scheduleReconnect();
       return;
     }
+    const previousSocket = socket;
+    const previousCleanup = socketCleanup;
+    socketCleanup = undefined;
+    previousCleanup?.();
+    socket = undefined;
+    previousSocket?.close();
     socket = nextSocket;
+    let cleanupSocketListeners = () => undefined;
     const handlers: Record<string, (event: unknown) => void> = {
       open: () => {
         if (disposed || socket !== nextSocket || currentGeneration !== generation) return;
@@ -421,7 +431,7 @@ export function createOnlineRoomClient(
           reduce({ type: "server.message", message });
           if (message.type === "room.expired" || message.type === "protocol.incompatible") {
             clearPending();
-            detachSocket(nextSocket, handlers);
+            cleanupSocketListeners();
             socket = undefined;
             nextSocket.close();
           }
@@ -431,24 +441,33 @@ export function createOnlineRoomClient(
             error: { code: "PROTOCOL_INCOMPATIBLE", params: { expected: 1 }, retryable: false }
           });
           clearPending();
-          detachSocket(nextSocket, handlers);
+          cleanupSocketListeners();
           socket = undefined;
           nextSocket.close();
         }
       },
       close: () => {
         if (disposed || socket !== nextSocket || currentGeneration !== generation) return;
-        detachSocket(nextSocket, handlers);
+        cleanupSocketListeners();
         socket = undefined;
         reduce({ type: "socket.closed" });
         scheduleReconnect();
       },
       error: () => {
         if (disposed || socket !== nextSocket || currentGeneration !== generation) return;
+        cleanupSocketListeners();
+        socket = undefined;
         nextSocket.close();
+        reduce({ type: "socket.closed" });
+        scheduleReconnect();
       }
     };
     for (const [type, listener] of Object.entries(handlers)) nextSocket.addEventListener(type, listener);
+    cleanupSocketListeners = () => {
+      detachSocket(nextSocket, handlers);
+      if (socketCleanup === cleanupSocketListeners) socketCleanup = undefined;
+    };
+    socketCleanup = cleanupSocketListeners;
   };
 
   return {
@@ -476,6 +495,9 @@ export function createOnlineRoomClient(
       generation += 1;
       clearPending();
       const current = socket;
+      const cleanup = socketCleanup;
+      socketCleanup = undefined;
+      cleanup?.();
       socket = undefined;
       current?.close();
       listeners.clear();
