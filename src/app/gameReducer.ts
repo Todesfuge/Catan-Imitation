@@ -8,10 +8,10 @@ import {
   resolveAuctionRound,
   startGuildGathering,
   transferGuildTokens,
-  type CommerceGuildState,
   type ResourceCost,
   type TradeSlot
 } from "../domain/expansion/commerceGuild";
+import type { MatchState } from "../domain/match/types";
 import { createDemoGame, createSetupGame } from "../domain/setup";
 import { applyProduction } from "../domain/rules/production";
 import { advanceTurn } from "../domain/rules/turns";
@@ -53,8 +53,7 @@ import { maritimeTrade } from "../domain/rules/maritimeTrade";
 import { calculatePlayerScore } from "../domain/rules/scoring";
 import {
   acceptPlayerTrade,
-  createPlayerTradeOffer,
-  type PlayerTradeOffer
+  createPlayerTradeOffer
 } from "../domain/rules/playerTrade";
 import {
   resources,
@@ -68,20 +67,10 @@ import {
 } from "../domain/types";
 import { RuleViolationError } from "../domain/errors";
 
-export interface DiceRoll {
-  first: number;
-  second: number;
-  total: number;
-}
-
-export interface AppState {
-  game: GameState;
-  guild: CommerceGuildState;
-  lastDice: DiceRoll | null;
+export interface AppState extends MatchState {
   selectedDiceTotal: number;
   selectedPlayerId: PlayerId;
   notice: string | null;
-  pendingPlayerTrade?: PlayerTradeOffer;
 }
 
 export type GameCommand =
