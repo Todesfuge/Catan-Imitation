@@ -16,8 +16,13 @@ export interface SeatCredential {
 
 export interface SeatCredentialStore {
   load(roomCode: string): SeatCredential | undefined;
-  save(credential: SeatCredential): boolean;
+  save(credential: SeatCredential): SeatCredentialSaveResult;
   remove(roomCode: string): void;
+}
+
+export interface SeatCredentialSaveResult {
+  saved: boolean;
+  persistent: boolean;
 }
 
 function normalizeRoomCode(roomCode: string): string {
@@ -58,21 +63,30 @@ function defaultStorage(): StorageLike | undefined {
 export function createSeatCredentialStore(
   storage: StorageLike | undefined = defaultStorage()
 ): SeatCredentialStore {
+  const memory = new Map<string, SeatCredential>();
+  const volatileOverrides = new Set<string>();
   return {
     load(roomCode) {
       const normalizedRoomCode = normalizeRoomCode(roomCode);
-      if (!ROOM_CODE_PATTERN.test(normalizedRoomCode) || !storage) return undefined;
+      if (!ROOM_CODE_PATTERN.test(normalizedRoomCode)) return undefined;
       const key = seatCredentialStorageKey(normalizedRoomCode);
-      try {
-        const serialized = storage.getItem(key);
-        if (serialized === null) return undefined;
-        const credential = credentialAt(JSON.parse(serialized) as unknown, normalizedRoomCode);
-        if (credential) return credential;
-        try { storage.removeItem(key); } catch { /* unavailable storage remains a safe miss */ }
-      } catch {
-        try { storage.removeItem(key); } catch { /* unavailable storage remains a safe miss */ }
+      if (volatileOverrides.has(key)) return memory.get(key);
+      if (storage) {
+        try {
+          const serialized = storage.getItem(key);
+          if (serialized !== null) {
+            const credential = credentialAt(JSON.parse(serialized) as unknown, normalizedRoomCode);
+            if (credential) {
+              memory.set(key, credential);
+              return credential;
+            }
+            try { storage.removeItem(key); } catch { /* fall back to page memory */ }
+          }
+        } catch {
+          try { storage.removeItem(key); } catch { /* fall back to page memory */ }
+        }
       }
-      return undefined;
+      return memory.get(key);
     },
     save(credential) {
       const normalizedRoomCode = normalizeRoomCode(credential.roomCode);
@@ -80,17 +94,36 @@ export function createSeatCredentialStore(
         { ...credential, roomCode: normalizedRoomCode },
         normalizedRoomCode
       );
-      if (!ROOM_CODE_PATTERN.test(normalizedRoomCode) || !safeCredential || !storage) return false;
+      if (!ROOM_CODE_PATTERN.test(normalizedRoomCode) || !safeCredential) {
+        return { saved: false, persistent: false };
+      }
+      const key = seatCredentialStorageKey(normalizedRoomCode);
+      memory.set(key, safeCredential);
+      if (!storage) {
+        volatileOverrides.add(key);
+        return { saved: true, persistent: false };
+      }
       try {
-        storage.setItem(seatCredentialStorageKey(normalizedRoomCode), JSON.stringify(safeCredential));
-        return true;
+        storage.setItem(key, JSON.stringify(safeCredential));
+        volatileOverrides.delete(key);
+        return { saved: true, persistent: true };
       } catch {
-        return false;
+        volatileOverrides.add(key);
+        return { saved: true, persistent: false };
       }
     },
     remove(roomCode) {
+      memory.delete(seatCredentialStorageKey(roomCode));
+      volatileOverrides.delete(seatCredentialStorageKey(roomCode));
       if (!storage) return;
       try { storage.removeItem(seatCredentialStorageKey(roomCode)); } catch { /* best-effort cleanup */ }
     }
   };
+}
+
+let defaultStore: SeatCredentialStore | undefined;
+
+export function getDefaultSeatCredentialStore(): SeatCredentialStore {
+  defaultStore ??= createSeatCredentialStore();
+  return defaultStore;
 }

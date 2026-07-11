@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createSeatCredentialStore,
+  getDefaultSeatCredentialStore,
   seatCredentialStorageKey,
+  type SeatCredentialStore,
   type StorageLike
 } from "../../src/online/sessionStorage";
 import {
@@ -18,7 +20,7 @@ import {
   type ClientSocket,
   type Scheduler
 } from "../../src/online/useOnlineRoom";
-import type { RoomSnapshotMessage } from "../../src/online/protocol";
+import { MAX_WIRE_BYTES, type RoomSnapshotMessage } from "../../src/online/protocol";
 
 const roomCode = "7KMPQX";
 const seatToken = "s".repeat(43);
@@ -105,7 +107,7 @@ describe("online seat credential storage", () => {
     const secondTab = createSeatCredentialStore(storage);
 
     expect(seatCredentialStorageKey(" 7kmpqx ")).toBe("catan.online.seat.v1:7KMPQX");
-    expect(firstTab.save({ roomCode, seatId: "seat-1", seatToken })).toBe(true);
+    expect(firstTab.save({ roomCode, seatId: "seat-1", seatToken })).toEqual({ saved: true, persistent: true });
     expect(secondTab.load(roomCode)).toEqual({ roomCode, seatId: "seat-1", seatToken });
     expect([...storage.values.keys()]).toEqual(["catan.online.seat.v1:7KMPQX"]);
   });
@@ -123,8 +125,48 @@ describe("online seat credential storage", () => {
     };
     const store = createSeatCredentialStore(unavailable);
     expect(store.load(roomCode)).toBeUndefined();
-    expect(store.save({ roomCode, seatId: "seat-1", seatToken })).toBe(false);
+    expect(store.save({ roomCode, seatId: "seat-1", seatToken })).toEqual({ saved: true, persistent: false });
+    expect(store.load(roomCode)).toEqual({ roomCode, seatId: "seat-1", seatToken });
     expect(() => store.remove(roomCode)).not.toThrow();
+  });
+
+  it("uses page-memory fallback for quota failures and keeps last-write-wins reads", () => {
+    const storage = memoryStorage();
+    const store = createSeatCredentialStore(storage);
+    expect(store.save({ roomCode, seatId: "seat-old", seatToken })).toEqual({ saved: true, persistent: true });
+    storage.values.set(seatCredentialStorageKey(roomCode), JSON.stringify({
+      roomCode,
+      seatId: "seat-new",
+      seatToken: "n".repeat(43)
+    }));
+    expect(store.load(roomCode)?.seatId).toBe("seat-new");
+
+    const quotaStorage: StorageLike = {
+      getItem: () => { throw new DOMException("blocked"); },
+      setItem: () => { throw new DOMException("quota"); },
+      removeItem: () => undefined
+    };
+    const memoryOnly = createSeatCredentialStore(quotaStorage);
+    expect(memoryOnly.save({ roomCode, seatId: "seat-1", seatToken })).toEqual({ saved: true, persistent: false });
+    expect(memoryOnly.load(roomCode)?.seatToken).toBe(seatToken);
+  });
+
+  it("keeps a newer volatile credential over stale readable storage after quota failure", () => {
+    const values = new Map<string, string>([[seatCredentialStorageKey(roomCode), JSON.stringify({
+      roomCode,
+      seatId: "seat-old",
+      seatToken: "o".repeat(43)
+    })]]);
+    const quotaAfterRead: StorageLike = {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: () => { throw new DOMException("quota"); },
+      removeItem: (key) => void values.delete(key)
+    };
+    const store = createSeatCredentialStore(quotaAfterRead);
+    expect(store.load(roomCode)?.seatId).toBe("seat-old");
+    expect(store.save({ roomCode, seatId: "seat-new", seatToken })).toEqual({ saved: true, persistent: false });
+    expect(store.load(roomCode)).toEqual({ roomCode, seatId: "seat-new", seatToken });
+    expect(store.load("ABC234")).toBeUndefined();
   });
 });
 
@@ -172,6 +214,128 @@ describe("online HTTP bootstrap", () => {
     expect(request?.url).toBe("https://game.test/api/rooms/7KMPQX/connection-ticket");
     expect(request?.headers.get("authorization")).toBe(`Bearer ${seatToken}`);
     expect(request?.url).not.toContain(seatToken);
+  });
+
+  it("rejects oversized or malformed HTTP bodies before secrets can enter client state", async () => {
+    const oversized = JSON.stringify({ ticket: "t".repeat(MAX_WIRE_BYTES), expiresInMs: 30_000 });
+    await expect(requestConnectionTicket(roomCode, seatToken, {
+      origin: "https://game.test",
+      fetch: async () => new Response(oversized, {
+        status: 201,
+        headers: { "content-length": String(new TextEncoder().encode(oversized).byteLength) }
+      })
+    })).rejects.toMatchObject({ protocolError: { code: "INTERNAL_ERROR" } });
+
+    let caught: unknown;
+    try {
+      await requestConnectionTicket(roomCode, seatToken, {
+        origin: "https://game.test",
+        fetch: async () => new Response(JSON.stringify({
+          error: {
+            code: "RATE_LIMITED",
+            params: { seatToken },
+            retryable: true,
+            extra: "not allowed"
+          }
+        }), { status: 429 })
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({ protocolError: { code: "INTERNAL_ERROR", params: {} } });
+    expect(JSON.stringify(caught)).not.toContain(seatToken);
+  });
+
+  it("cancels a streamed response as soon as the actual body exceeds the wire limit", async () => {
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(MAX_WIRE_BYTES));
+        controller.enqueue(new Uint8Array([1]));
+      },
+      cancel() { cancelled = true; }
+    });
+    await expect(requestConnectionTicket(roomCode, seatToken, {
+      origin: "https://game.test",
+      fetch: async () => new Response(stream, { status: 201 })
+    })).rejects.toMatchObject({ protocolError: { code: "INTERNAL_ERROR" } });
+    expect(cancelled).toBe(true);
+  });
+
+  it("normalizes malformed error param boundaries and length mismatches", async () => {
+    const malformedParams = [
+      Object.fromEntries(Array.from({ length: 17 }, (_, index) => [`key${index}`, index])),
+      { ["k".repeat(129)]: "value" },
+      { detail: "v".repeat(129) },
+      { detail: -1 }
+    ];
+    for (const params of malformedParams) {
+      await expect(requestConnectionTicket(roomCode, seatToken, {
+        origin: "https://game.test",
+        fetch: async () => new Response(JSON.stringify({
+          error: { code: "RATE_LIMITED", params, retryable: true }
+        }), { status: 429 })
+      })).rejects.toMatchObject({ protocolError: { code: "INTERNAL_ERROR", params: {} } });
+    }
+    await expect(requestConnectionTicket(roomCode, seatToken, {
+      origin: "https://game.test",
+      fetch: async () => new Response("{}", {
+        status: 201,
+        headers: { "content-length": "3" }
+      })
+    })).rejects.toMatchObject({ protocolError: { code: "INTERNAL_ERROR" } });
+  });
+
+  it("rejects false-success seat creation when an injected credential store cannot save", async () => {
+    const failingStore: SeatCredentialStore = {
+      load: () => undefined,
+      save: () => ({ saved: false, persistent: false }),
+      remove: () => undefined
+    };
+    await expect(createOnlineRoom("Alice", {
+      origin: "https://game.test",
+      credentials: failingStore,
+      fetch: async () => new Response(JSON.stringify({ roomCode, seatId: "seat-1", seatToken }), { status: 201 })
+    })).rejects.toMatchObject({ protocolError: { code: "INTERNAL_ERROR" } });
+  });
+
+  it("shares the default page-lifetime credential store", () => {
+    expect(getDefaultSeatCredentialStore()).toBe(getDefaultSeatCredentialStore());
+  });
+
+  it("can ticket and connect after create falls back to page memory", async () => {
+    const unavailable: StorageLike = {
+      getItem: () => { throw new DOMException("blocked"); },
+      setItem: () => { throw new DOMException("quota"); },
+      removeItem: () => undefined
+    };
+    const credentials = createSeatCredentialStore(unavailable);
+    const requests: Request[] = [];
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      return requests.length === 1
+        ? new Response(JSON.stringify({ roomCode, seatId: "seat-1", seatToken }), { status: 201 })
+        : new Response(JSON.stringify({ ticket: "t".repeat(43), expiresInMs: 30_000 }), { status: 201 });
+    };
+    await createOnlineRoom("Alice", { origin: "https://game.test", fetch: fetcher, credentials });
+    const sockets: FakeSocket[] = [];
+    const client = createOnlineRoomClient(roomCode, {
+      origin: "https://game.test",
+      fetch: fetcher,
+      credentials,
+      scheduler: new FakeScheduler(),
+      createWebSocket: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket;
+      }
+    });
+    client.connect();
+    await flush();
+    expect(requests[1].headers.get("authorization")).toBe(`Bearer ${seatToken}`);
+    expect(sockets).toHaveLength(1);
+    client.dispose();
   });
 });
 
@@ -239,6 +403,25 @@ describe("online reducer", () => {
 });
 
 describe("online reconnect transport", () => {
+  it("reduces a secret-echoing ticket error to a generic notice", async () => {
+    const credentials = createSeatCredentialStore(memoryStorage());
+    credentials.save({ roomCode, seatId: "seat-1", seatToken });
+    const client = createOnlineRoomClient(roomCode, {
+      origin: "https://game.test",
+      credentials,
+      scheduler: new FakeScheduler(),
+      fetch: async () => new Response(JSON.stringify({
+        error: { code: "RATE_LIMITED", params: { detail: seatToken }, retryable: true }
+      }), { status: 429 }),
+      createWebSocket: () => new FakeSocket()
+    });
+    client.connect();
+    await flush();
+    expect(client.getState().notice).toEqual({ code: "INTERNAL_ERROR", params: {}, retryable: true });
+    expect(JSON.stringify(client.getState())).not.toContain(seatToken);
+    client.dispose();
+  });
+
   it("uses a fresh one-time ticket per socket and capped 1/2/4/8/15 second retries", async () => {
     const storage = memoryStorage();
     const credentials = createSeatCredentialStore(storage);
@@ -353,6 +536,42 @@ describe("online reconnect transport", () => {
     client.dispose();
     sockets[1].emit("message", { data: JSON.stringify(snapshot(2)) });
     expect(client.getState().snapshot).toBeUndefined();
+  });
+
+  it("validates and canonicalizes every outbound message before sending", async () => {
+    const credentials = createSeatCredentialStore(memoryStorage());
+    credentials.save({ roomCode, seatId: "seat-1", seatToken });
+    const socket = new FakeSocket();
+    const client = createOnlineRoomClient(roomCode, {
+      origin: "https://game.test",
+      credentials,
+      scheduler: new FakeScheduler(),
+      fetch: async () => new Response(JSON.stringify({ ticket: "t".repeat(43), expiresInMs: 30_000 }), { status: 201 }),
+      createWebSocket: () => socket
+    });
+    client.connect();
+    await flush();
+    socket.readyState = 1;
+    socket.emit("open");
+    const before = client.getState();
+
+    const invalid = [
+      { type: "room.ready", commandId: "bad", expectedVersion: 0, ready: true },
+      { type: "room.ready", commandId: "11111111-1111-4111-8111-111111111111", expectedVersion: -1, ready: true },
+      { type: "room.ready", commandId: "11111111-1111-4111-8111-111111111111", expectedVersion: 0, ready: true, seatToken },
+      { type: "match.command", commandId: "11111111-1111-4111-8111-111111111111", expectedVersion: 0,
+        command: { type: "BUILD_ROAD", edgeId: "x".repeat(MAX_WIRE_BYTES) } }
+    ];
+    for (const message of invalid) {
+      expect(client.dispatch(message as never)).toBe(false);
+    }
+    expect(socket.sent).toHaveLength(0);
+    expect(client.getState()).toBe(before);
+    expect(JSON.stringify(client.getState())).not.toContain(seatToken);
+
+    const valid = { type: "room.ready", commandId: "11111111-1111-4111-8111-111111111111", expectedVersion: 0, ready: true } as const;
+    expect(client.dispatch(valid)).toBe(true);
+    expect(socket.sent).toEqual([JSON.stringify(valid)]);
   });
 
   it("stops reconnecting after terminal messages", async () => {

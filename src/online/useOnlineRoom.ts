@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ERROR_DEFINITIONS,
+  MAX_WIRE_BYTES,
+  MAX_WIRE_STRING_CODE_POINTS,
   STABLE_ERROR_CODES,
+  parseClientWebSocketMessage,
   parseConnectionTicketResponse,
   parseSeatCredentialsResponse,
   parseServerWebSocketMessage,
@@ -16,7 +19,7 @@ import {
   type OnlineClientState
 } from "./onlineReducer";
 import {
-  createSeatCredentialStore,
+  getDefaultSeatCredentialStore,
   type SeatCredentialStore
 } from "./sessionStorage";
 
@@ -43,10 +46,11 @@ interface RequestDependencies {
 }
 
 interface BootstrapDependencies extends RequestDependencies {
-  credentials: SeatCredentialStore;
+  credentials?: SeatCredentialStore;
 }
 
 export interface OnlineRoomDependencies extends BootstrapDependencies {
+  credentials: SeatCredentialStore;
   createWebSocket: (url: string) => ClientSocket;
   scheduler: Scheduler;
 }
@@ -89,6 +93,10 @@ function internalError(): ProtocolError {
 function safeProtocolError(value: unknown): ProtocolError {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return internalError();
   const candidate = value as { code?: unknown; params?: unknown; retryable?: unknown };
+  if (Object.keys(candidate).length !== 3 ||
+      !Object.hasOwn(candidate, "code") ||
+      !Object.hasOwn(candidate, "params") ||
+      !Object.hasOwn(candidate, "retryable")) return internalError();
   if (
     typeof candidate.code !== "string" ||
     !STABLE_ERROR_CODES.includes(candidate.code as ProtocolErrorCode) ||
@@ -99,11 +107,24 @@ function safeProtocolError(value: unknown): ProtocolError {
   ) {
     return internalError();
   }
+  const entries = Object.entries(candidate.params as Record<string, unknown>);
+  if (entries.length > 16) return internalError();
   const params: ProtocolError["params"] = {};
-  for (const [key, entry] of Object.entries(candidate.params as Record<string, unknown>)) {
-    if (typeof entry === "string" || typeof entry === "boolean" ||
-        (typeof entry === "number" && Number.isSafeInteger(entry) && entry >= 0)) {
+  for (const [key, entry] of entries) {
+    const keyLength = Array.from(key).length;
+    if (keyLength < 1 || keyLength > MAX_WIRE_STRING_CODE_POINTS ||
+        /token|ticket|secret|hash|credential|authorization/i.test(key)) return internalError();
+    if (typeof entry === "string") {
+      const valueLength = Array.from(entry).length;
+      if (valueLength < 1 || valueLength > MAX_WIRE_STRING_CODE_POINTS ||
+          /^[A-Za-z0-9_-]{32,}$/.test(entry)) return internalError();
       params[key] = entry;
+    } else if (typeof entry === "boolean") {
+      params[key] = entry;
+    } else if (typeof entry === "number" && Number.isSafeInteger(entry) && entry >= 0) {
+      params[key] = entry;
+    } else {
+      return internalError();
     }
   }
   return {
@@ -114,8 +135,47 @@ function safeProtocolError(value: unknown): ProtocolError {
 }
 
 async function responseText(response: Response): Promise<string> {
+  const contentLength = response.headers.get("content-length");
+  let declaredLength: number | undefined;
+  if (contentLength !== null) {
+    if (!/^(0|[1-9][0-9]*)$/.test(contentLength)) throw new OnlineRequestError(internalError());
+    declaredLength = Number(contentLength);
+    if (!Number.isSafeInteger(declaredLength) || declaredLength > MAX_WIRE_BYTES) {
+      throw new OnlineRequestError(internalError());
+    }
+  }
+  if (!response.body) throw new OnlineRequestError(internalError());
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
   try {
-    return await response.text();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      byteLength += value.byteLength;
+      if (byteLength > MAX_WIRE_BYTES) {
+        await reader.cancel();
+        throw new OnlineRequestError(internalError());
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof OnlineRequestError) throw error;
+    throw new OnlineRequestError(internalError());
+  } finally {
+    reader.releaseLock();
+  }
+  if (declaredLength !== undefined && declaredLength !== byteLength) {
+    throw new OnlineRequestError(internalError());
+  }
+  const bytes = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
     throw new OnlineRequestError(internalError());
   }
@@ -126,9 +186,9 @@ async function requireSuccessText(response: Response): Promise<string> {
   if (response.ok) return text;
   let parsed: unknown;
   try { parsed = JSON.parse(text) as unknown; } catch { parsed = undefined; }
-  const error = parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? safeProtocolError((parsed as { error?: unknown }).error)
-    : internalError();
+  const error = parsed && typeof parsed === "object" && !Array.isArray(parsed) &&
+      Object.keys(parsed).length === 1 && Object.hasOwn(parsed, "error")
+    ? safeProtocolError((parsed as { error?: unknown }).error) : internalError();
   throw new OnlineRequestError(error);
 }
 
@@ -154,7 +214,8 @@ async function requestSeat(
     if (error instanceof OnlineRequestError) throw error;
     throw new OnlineRequestError(internalError());
   }
-  dependencies.credentials.save(credential);
+  const result = (dependencies.credentials ?? getDefaultSeatCredentialStore()).save(credential);
+  if (!result.saved) throw new OnlineRequestError(internalError());
   return { roomCode: credential.roomCode, seatId: credential.seatId };
 }
 
@@ -367,8 +428,15 @@ export function createOnlineRoomClient(
     },
     dispatch(message) {
       if (disposed || state.status !== "connected" || !socket || socket.readyState !== 1) return false;
-      socket.send(JSON.stringify(message));
-      return true;
+      try {
+        const serialized = JSON.stringify(message);
+        if (typeof serialized !== "string") return false;
+        const parsed = parseClientWebSocketMessage(serialized);
+        socket.send(JSON.stringify(parsed));
+        return true;
+      } catch {
+        return false;
+      }
     },
     dispose() {
       if (disposed) return;
@@ -392,7 +460,7 @@ function browserDependencies(): OnlineRoomDependencies {
   return {
     origin: window.location.origin,
     fetch: window.fetch.bind(window),
-    credentials: createSeatCredentialStore(),
+    credentials: getDefaultSeatCredentialStore(),
     createWebSocket: (url) => new WebSocket(url) as unknown as ClientSocket,
     scheduler: {
       setTimeout: (task, delayMs) => window.setTimeout(task, delayMs),
