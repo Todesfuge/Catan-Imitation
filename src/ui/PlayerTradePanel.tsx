@@ -16,6 +16,15 @@ function formatTradeBundle(bundle: ResourceMap, labels: Record<Resource, string>
     .join(", ");
 }
 
+function bundleReason(bundle: ResourceMap, label: "Offered" | "Requested"): string | null {
+  if (resources.some((resource) => !Number.isInteger(bundle[resource]) || bundle[resource] < 0)) {
+    return "Player trade quantities must be non-negative whole numbers.";
+  }
+  return resources.every((resource) => bundle[resource] === 0)
+    ? `${label} bundle must contain at least one resource.`
+    : null;
+}
+
 function ResourceBundleEditor({
   displayLabel,
   labels,
@@ -73,10 +82,15 @@ export function PlayerTradePanel({
   );
   const visibleResourceLabels = locale === "en" ? resourceShortLabels : localizedResourceLabels;
   const publishReason = useMemo(
-    () =>
-      activePlayer
-        ? state.tradePolicy.publishReason(offered, requested)
-        : "No active player is available.",
+    () => {
+      if (!activePlayer) return "No active player is available.";
+      if (!state.tradePolicy.publishEnabled) return state.tradePolicy.publishReason ?? "Player trade is unavailable.";
+      const invalidBundle = bundleReason(offered, "Offered") ?? bundleReason(requested, "Requested");
+      if (invalidBundle) return invalidBundle;
+      return resources.some((resource) => offered[resource] > state.tradePolicy.maxOfferResources[resource])
+        ? "The active player cannot afford the offered resources."
+        : null;
+    },
     [activePlayer, offered, requested, state.tradePolicy]
   );
 
@@ -100,32 +114,34 @@ export function PlayerTradePanel({
           })}
         </p>
         <div className="player-trade-responses">
-          {state.game.players
-            .filter((player) => player.id !== offer.proposerId)
-            .map((player) => {
-              const reason = state.tradePolicy.acceptanceReasons[player.id];
+          {state.controls
+            .filter((control) => control.tradeResponse?.kind === "accept")
+            .map((control) => {
+              const reason = control.tradeResponse?.reason;
               return (
-                <div className="player-trade-response" key={player.id}>
+                <div className="player-trade-response" data-control-id={control.controlId} key={control.controlId}>
                   <button
-                    aria-describedby={`player-trade-${player.id}-reason`}
+                    aria-describedby={`player-trade-${control.controlId}-reason`}
                     disabled={Boolean(reason)}
                     onClick={() =>
-                      dispatch({ type: "ACCEPT_PLAYER_TRADE", playerId: player.id })
+                      dispatch({ type: "trade.respond", controlId: control.controlId, response: "accept" })
                     }
                     type="button"
                   >
-                    {t("trade.acceptAs", { name: player.name })}
+                    {t("trade.acceptAs", { name: control.displayName })}
                   </button>
-                  {reason ? <span id={`player-trade-${player.id}-reason`}>{translateRuleText(locale, reason)}</span> : null}
+                  {reason ? <span id={`player-trade-${control.controlId}-reason`}>{translateRuleText(locale, reason)}</span> : null}
                 </div>
               );
             })}
         </div>
-        {state.game.activePlayerId === offer.proposerId ? (
+        {state.controls.some((control) => control.tradeResponse?.kind === "cancel") ? (
           <button
             className="secondary"
             onClick={() =>
-              dispatch({ type: "CANCEL_PLAYER_TRADE", playerId: offer.proposerId })
+              state.controls
+                .filter((control) => control.tradeResponse?.kind === "cancel")
+                .forEach((control) => dispatch({ type: "trade.respond", controlId: control.controlId, response: "cancel" }))
             }
             type="button"
           >
@@ -146,8 +162,7 @@ export function PlayerTradePanel({
           onClick={() => {
             if (!activePlayer) return;
             dispatch({
-              type: "PUBLISH_PLAYER_TRADE",
-              playerId: activePlayer.id,
+              type: "trade.publish",
               offered,
               requested
             });

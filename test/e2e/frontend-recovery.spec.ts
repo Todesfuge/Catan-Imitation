@@ -195,7 +195,7 @@ test("Commerce controls keep valid named selections across turns", async ({ page
 
   await page.getByRole("button", { name: "Start Gathering" }).click();
   await expect(page.getByLabel("Gathering player")).toHaveCount(1);
-  await page.getByLabel("Gathering player").selectOption("p3");
+  await page.getByLabel("Gathering player").selectOption({ label: "Kay (0 tokens)" });
   await expect(page.getByRole("status")).toContainText("Kay: 0 tokens");
   await expect(page.getByRole("status")).toContainText("4 redemptions remaining");
   await expect(page.getByRole("button", { name: "+Wood (19 bank)" })).toBeDisabled();

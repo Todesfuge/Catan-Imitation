@@ -1,4 +1,7 @@
-import type { BoardEdge, BoardHex, MaritimePort, VertexId } from "../domain/types";
+type VertexId = string;
+interface BoardHexGeometry { readonly q: number; readonly r: number; readonly vertexIds: readonly string[] }
+interface BoardEdgeGeometry { readonly vertexIds: readonly [string, string] }
+interface MaritimePortGeometry { readonly vertexIds: readonly string[] }
 
 export interface BoardPoint {
   x: number;
@@ -24,14 +27,14 @@ function roundCoordinate(value: number) {
   return Math.round(value * 10) / 10;
 }
 
-export function hexCenterPoint(hex: Pick<BoardHex, "q" | "r">): BoardPoint {
+export function hexCenterPoint(hex: Pick<BoardHexGeometry, "q" | "r">): BoardPoint {
   return {
     x: roundCoordinate(centerOrigin.x + Math.sqrt(3) * hexRadius * (hex.q + hex.r / 2)),
     y: roundCoordinate(centerOrigin.y + 1.5 * hexRadius * hex.r)
   };
 }
 
-function hexCornerPoint(hex: BoardHex, vertexIndex: number): BoardVertexPoint {
+function hexCornerPoint(hex: BoardHexGeometry, vertexIndex: number): BoardVertexPoint {
   const center = hexCenterPoint(hex);
   const angle = ((vertexIndex * 60 - 90) * Math.PI) / 180;
 
@@ -42,7 +45,7 @@ function hexCornerPoint(hex: BoardHex, vertexIndex: number): BoardVertexPoint {
   };
 }
 
-export function hexPolygonPoints(hex: BoardHex): BoardVertexPoint[] {
+export function hexPolygonPoints(hex: BoardHexGeometry): BoardVertexPoint[] {
   return hex.vertexIds.map((_, vertexIndex) => hexCornerPoint(hex, vertexIndex));
 }
 
@@ -50,7 +53,7 @@ export function pointsAttribute(points: BoardPoint[]) {
   return points.map((point) => `${point.x},${point.y}`).join(" ");
 }
 
-export function vertexProjection(hexes: BoardHex[], vertexId: VertexId): BoardVertexPoint {
+export function vertexProjection(hexes: readonly BoardHexGeometry[], vertexId: VertexId): BoardVertexPoint {
   const hex = hexes.find((candidate) => candidate.vertexIds.includes(vertexId));
 
   if (!hex) {
@@ -60,14 +63,14 @@ export function vertexProjection(hexes: BoardHex[], vertexId: VertexId): BoardVe
   return hexCornerPoint(hex, hex.vertexIds.indexOf(vertexId));
 }
 
-export function edgeProjection(hexes: BoardHex[], edge: BoardEdge) {
+export function edgeProjection(hexes: readonly BoardHexGeometry[], edge: BoardEdgeGeometry) {
   return {
     from: vertexProjection(hexes, edge.vertexIds[0]),
     to: vertexProjection(hexes, edge.vertexIds[1])
   };
 }
 
-export function portProjection(hexes: BoardHex[], port: MaritimePort) {
+export function portProjection(hexes: readonly BoardHexGeometry[], port: MaritimePortGeometry) {
   const from = vertexProjection(hexes, port.vertexIds[0]);
   const to = vertexProjection(hexes, port.vertexIds[1]);
   const midpoint = {

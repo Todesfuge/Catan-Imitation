@@ -11,26 +11,7 @@ import {
   Trophy,
   Warehouse
 } from "lucide-react";
-import type { CommerceGuildState } from "../domain/expansion/commerceGuild";
-import type { TurnActionAvailability } from "../app/actionAvailability";
-import type { DiceRoll, MatchCommand } from "../domain/match/types";
-import type { PlayerTradeOffer } from "../domain/rules/playerTrade";
-import type {
-  DiceIncome,
-  ExpectedIncomeMatrix,
-  PlayerIncomeRow
-} from "../domain/stats/income";
-import {
-  resources,
-  type BoardEdge,
-  type BoardHex,
-  type Building,
-  type DevelopmentCard,
-  type GameState,
-  type Player,
-  type PlayerId,
-  type ResourceMap
-} from "../domain/types";
+import { resources } from "../domain/types";
 import {
   boardViewBox,
   edgeProjection,
@@ -52,61 +33,190 @@ import {
 } from "./resourceLabels";
 import { formatGameLogEntry, translateRuleText, useI18n } from "./i18n";
 
-export interface GameTablePlayerView extends Omit<Player, "resources" | "developmentCards"> {
-  visibleScore: number;
-  resourceCardCount: number;
-  developmentCardCount: number;
-  resources?: Player["resources"];
-  developmentCards?: DevelopmentCard[];
+export type GameTableResource = (typeof resources)[number];
+export type GameTableResourceMap = Readonly<Record<GameTableResource, number>>;
+
+export interface GameTablePrivateControl {
+  readonly controlId: string;
+  readonly displayName: string;
+  readonly isActive: boolean;
+  readonly resources: GameTableResourceMap;
+  readonly developmentCards: readonly {
+    readonly id: string;
+    readonly kind: "knight" | "victoryPoint" | "roadBuilding" | "yearOfPlenty" | "monopoly";
+    readonly purchasedTurn: number;
+    readonly revealed: boolean;
+  }[];
+  readonly decision?:
+    | { readonly kind: "discard"; readonly count: number }
+    | { readonly kind: "robber" }
+    | { readonly kind: "development" };
+  readonly guildTokens: number;
+  readonly gatheringRemainingAllowance: number;
+  readonly gatheringBankStock: GameTableResourceMap;
+  readonly tradeResponse?: { readonly kind: "accept" | "cancel"; readonly reason?: string };
 }
 
-export interface GameTableGameView extends Omit<GameState, "players" | "developmentDeck"> {
-  players: GameTablePlayerView[];
-  developmentDeckCount: number;
+export interface GameTablePlayerView {
+  readonly id: string;
+  readonly name: string;
+  readonly color: string;
+  readonly visibleScore: number;
+  readonly resourceCardCount: number;
+  readonly developmentCardCount: number;
+  readonly guildTokens: number;
+  readonly vouchers: number;
+  readonly prizeCards: number;
+  readonly knightsPlayed: number;
+  readonly privateResources?: GameTableResourceMap;
 }
 
-export interface GameTableStatisticsView {
-  playerRows: Record<PlayerId, PlayerIncomeRow[]>;
-  diceIncome: Record<number, DiceIncome>;
-  matrix: ExpectedIncomeMatrix;
+export interface GameTableGameView {
+  readonly phase: "setup" | "playing" | "gameOver";
+  readonly players: readonly GameTablePlayerView[];
+  readonly activePlayerId: string;
+  readonly turn: number;
+  readonly round: number;
+  readonly turnState: {
+    readonly phase: "awaitingRoll" | "awaitingDiscards" | "awaitingRobberPlacement" | "awaitingRobberVictim" | "awaitingDevelopmentEffect" | "action";
+    readonly awaitedPlayerIds: readonly string[];
+    readonly pendingRobber?: {
+      readonly eligibleVictimIds: readonly string[];
+    };
+    readonly pendingDevelopmentEffect?: {
+      readonly kind: "roadBuilding" | "yearOfPlenty" | "monopoly";
+      readonly remainingRoads?: number;
+      readonly remainingPicks?: number;
+    };
+  };
+  readonly targetScore: number;
+  readonly board: readonly GameTableBoardHex[];
+  readonly edges: readonly GameTableBoardEdge[];
+  readonly ports: readonly GameTablePort[];
+  readonly buildings: readonly GameTableBuilding[];
+  readonly roads: readonly GameTableRoad[];
+  readonly robberHexId: string;
+  readonly bank: { readonly resources: GameTableResourceMap };
+  readonly log: readonly GameTableLogEntry[];
+  readonly developmentDeckCount: number;
+  readonly setup?: {
+    readonly stage: "settlement" | "road";
+  };
+  readonly winnerId?: string;
 }
 
-export interface GameTableLegalityView {
-  actions: TurnActionAvailability;
-  setupRoadEdgeIds: string[];
-  setupSettlementVertexIds: string[];
-  freeRoadEdgeIds: string[];
+export interface GameTableBoardHex {
+  readonly id: string;
+  readonly terrain: "forest" | "hill" | "pasture" | "field" | "mountain" | "desert";
+  readonly resource: GameTableResource | null;
+  readonly diceNumber: number | null;
+  readonly vertexIds: readonly string[];
+  readonly edgeIds: readonly string[];
+  readonly q: number;
+  readonly r: number;
+}
+export interface GameTableBoardEdge { readonly id: string; readonly hexId: string; readonly vertexIds: readonly [string, string] }
+export interface GameTablePort { readonly id: string; readonly kind: "generic" | "resource"; readonly resource?: GameTableResource; readonly vertexIds: readonly string[] }
+export interface GameTableBuilding { readonly id: string; readonly ownerId: string; readonly vertexId: string; readonly kind: "settlement" | "city" }
+export interface GameTableRoad { readonly id: string; readonly ownerId: string; readonly edgeId: string }
+export interface GameTableLogEntry {
+  readonly id: string;
+  readonly fallbackText: string;
+  readonly messageKey?: string;
+  readonly params?: {
+    readonly playerName?: string;
+    readonly victimName?: string;
+    readonly proposerName?: string;
+    readonly acceptingPlayerName?: string;
+    readonly fromName?: string;
+    readonly toName?: string;
+    readonly total?: number;
+    readonly eventCount?: number;
+    readonly hexId?: string;
+    readonly round?: number;
+    readonly amount?: number;
+  };
 }
 
-export interface GameTableTradePolicy {
-  publishReason(offered: ResourceMap, requested: ResourceMap): string | null;
-  acceptanceReasons: Record<PlayerId, string | null>;
+interface GameTableAvailability { readonly enabled: boolean; readonly reason?: string; readonly targets: readonly string[] }
+export interface GameTableActions {
+  readonly roll: GameTableAvailability;
+  readonly endTurn: GameTableAvailability;
+  readonly road: GameTableAvailability;
+  readonly settlement: GameTableAvailability;
+  readonly city: GameTableAvailability;
+  readonly buyDevelopmentCard: GameTableAvailability;
+  readonly developmentCards: readonly { readonly cardId?: string; readonly count: number; readonly enabled: boolean; readonly kind: "knight" | "roadBuilding" | "yearOfPlenty" | "monopoly"; readonly reason?: string }[];
+  readonly maritime: { readonly enabled: boolean; readonly reason?: string; readonly ratios: Readonly<Record<GameTableResource, number>>; readonly trades: readonly { readonly give: GameTableResource; readonly ratio: number; readonly receives: readonly GameTableResource[] }[] };
+  readonly commerce: {
+    readonly tradeSlots: readonly (GameTableAvailability & { readonly id: string })[];
+    readonly transfer: GameTableAvailability & { readonly maxAmount: number; readonly recipientIds: readonly string[] };
+    readonly startGathering: GameTableAvailability;
+    readonly openAuction: GameTableAvailability;
+    readonly redeemPrize: GameTableAvailability;
+    readonly gatheringPlayers: readonly { readonly id: string; readonly tokens: number; readonly remainingAllowance: number; readonly bankStock: GameTableResourceMap }[];
+  };
 }
 
 export interface GameTableView {
-  game: GameTableGameView;
-  guild: CommerceGuildState;
-  lastDice: DiceRoll | null;
-  pendingPlayerTrade?: PlayerTradeOffer;
-  selectedDiceTotal: number;
-  selectedPlayerId: PlayerId;
-  notice: string | null;
-  statistics: GameTableStatisticsView;
-  legality: GameTableLegalityView;
-  tradePolicy: GameTableTradePolicy;
+  readonly game: GameTableGameView;
+  readonly guild: {
+    readonly tradeSlots: readonly { readonly id: string; readonly requires: Partial<GameTableResourceMap>; readonly tokenReward: number }[];
+    readonly gathering: {
+      readonly phase: "idle" | "redemption" | "auction" | "complete";
+      readonly auctionRound: number;
+      readonly lastAuctionResult?: { readonly winnerName: string; readonly round: number; readonly winningBid: number; readonly outcome: { readonly kind: "resources" | "voucher" | "developmentCard"; readonly resourceCardCount?: number } };
+    };
+  };
+  readonly controls: readonly GameTablePrivateControl[];
+  readonly lastDice: { readonly first: number; readonly second: number; readonly total: number } | null;
+  readonly pendingPlayerTrade?: { readonly proposerId: string; readonly offered: GameTableResourceMap; readonly requested: GameTableResourceMap };
+  readonly selectedDiceTotal: number;
+  readonly selectedPlayerId: string;
+  readonly notice: string | null;
+  readonly statistics: { readonly playerRows: Readonly<Record<string, readonly { readonly diceTotal: number; readonly probability: number; readonly resources: GameTableResourceMap; readonly expected: GameTableResourceMap }[]>>; readonly diceIncome: Readonly<Record<number, { readonly players: Readonly<Record<string, GameTableResourceMap>> }>>; readonly matrix: { readonly totals: Readonly<Record<string, GameTableResourceMap>> } };
+  readonly legality: { readonly actions: GameTableActions; readonly setupControlId?: string; readonly setupRoadEdgeIds: readonly string[]; readonly setupSettlementVertexIds: readonly string[]; readonly freeRoadEdgeIds: readonly string[] };
+  readonly tradePolicy: {
+    readonly publishEnabled: boolean;
+    readonly publishReason?: string;
+    readonly maxOfferResources: GameTableResourceMap;
+  };
 }
 
-export type GameTableUiCommand =
-  | { type: "SELECT_DICE_TOTAL"; diceTotal: number }
-  | { type: "SELECT_PLAYER"; playerId: PlayerId };
+export type GameTableIntent =
+  | { readonly type: "ui.selectDiceTotal"; readonly diceTotal: number }
+  | { readonly type: "ui.selectPlayer"; readonly playerId: string }
+  | { readonly type: "game.new" }
+  | { readonly type: "turn.roll" }
+  | { readonly type: "turn.end" }
+  | { readonly type: "build.road"; readonly edgeId: string }
+  | { readonly type: "build.settlement"; readonly vertexId: string }
+  | { readonly type: "build.city"; readonly buildingId: string }
+  | { readonly type: "setup.settlement"; readonly controlId: string; readonly vertexId: string }
+  | { readonly type: "setup.road"; readonly controlId: string; readonly edgeId: string }
+  | { readonly type: "robber.place"; readonly hexId: string }
+  | { readonly type: "robber.steal"; readonly victimId: string }
+  | { readonly type: "development.buy" }
+  | { readonly type: "development.play"; readonly cardId: string }
+  | { readonly type: "development.chooseResource"; readonly choice: "yearOfPlenty" | "monopoly"; readonly resource: GameTableResource }
+  | { readonly type: "development.placeRoad"; readonly edgeId: string }
+  | { readonly type: "trade.maritime"; readonly give: GameTableResource; readonly receive: GameTableResource }
+  | { readonly type: "trade.publish"; readonly offered: GameTableResourceMap; readonly requested: GameTableResourceMap }
+  | { readonly type: "trade.respond"; readonly controlId: string; readonly response: "accept" | "cancel" }
+  | { readonly type: "commerce.completeSlot"; readonly slotId: string }
+  | { readonly type: "commerce.transfer"; readonly recipientId: string; readonly amount: number }
+  | { readonly type: "commerce.startGathering" }
+  | { readonly type: "commerce.redeem"; readonly controlId: string; readonly resources: Partial<GameTableResourceMap> }
+  | { readonly type: "commerce.openAuction" }
+  | { readonly type: "commerce.redeemPrize" }
+  | { readonly type: "auction.submitBid"; readonly controlId: string; readonly bid: number }
+  | { readonly type: "decision.discard"; readonly controlId: string; readonly resources: GameTableResourceMap };
 
-export type GameTableCommand = MatchCommand | GameTableUiCommand;
-
-export type GameTableDispatch = (command: GameTableCommand) => void;
+export type GameTableDispatch = (intent: GameTableIntent) => void;
 
 type StatsMode = "player" | "dice" | "matrix";
 
-const terrainMarks: Record<BoardHex["terrain"], string> = {
+const terrainMarks: Record<GameTableBoardHex["terrain"], string> = {
   forest: "Fo",
   hill: "Hi",
   pasture: "Pa",
@@ -128,7 +238,7 @@ const dicePipCounts: Record<number, number> = {
   12: 1
 } as const;
 
-function buildingPosition(hexes: BoardHex[], building: Building) {
+function buildingPosition(hexes: readonly GameTableBoardHex[], building: GameTableBuilding) {
   return vertexProjection(hexes, building.vertexId);
 }
 
@@ -137,8 +247,8 @@ function RoadMarker({
   hexes,
   ownerColor
 }: {
-  edge: BoardEdge;
-  hexes: BoardHex[];
+  edge: GameTableBoardEdge;
+  hexes: readonly GameTableBoardHex[];
   ownerColor?: string;
 }) {
   const position = edgeProjection(hexes, edge);
@@ -247,21 +357,13 @@ function BoardView({
                   onClick={
                     canTargetHex
                       ? () =>
-                          dispatch({
-                            type: "PLACE_ROBBER",
-                            playerId: state.game.activePlayerId,
-                            hexId: hex.id
-                          })
+                          dispatch({ type: "robber.place", hexId: hex.id })
                       : undefined
                   }
                   onKeyDown={(event) => {
                     if (canTargetHex && (event.key === "Enter" || event.key === " ")) {
                       event.preventDefault();
-                      dispatch({
-                        type: "PLACE_ROBBER",
-                        playerId: state.game.activePlayerId,
-                        hexId: hex.id
-                      });
+                      dispatch({ type: "robber.place", hexId: hex.id });
                     }
                   }}
                   role={canTargetHex ? "button" : undefined}
@@ -375,6 +477,7 @@ function PlayerPanel({ state }: { state: GameTableView }) {
     <section className="players-panel" aria-label={t("board.players")}>
       {state.game.players.map((player) => {
         const active = player.id === state.game.activePlayerId;
+        const privateResources = player.privateResources;
         return (
           <article className={`player-card ${active ? "active" : ""}`} key={player.id}>
             <div className="player-main">
@@ -401,9 +504,9 @@ function PlayerPanel({ state }: { state: GameTableView }) {
               </span>
             </div>
             <div className="resource-strip compact">
-              {player.resources ? resources.map((resource) => (
+              {privateResources ? resources.map((resource) => (
                 <span className={`resource-token ${resource}`} key={resource}>
-                  {`${locale === "en" ? resourceShortLabels[resource] : t(`resource.${resource}`)} ${player.resources?.[resource] ?? 0}`}
+                  {`${locale === "en" ? resourceShortLabels[resource] : t(`resource.${resource}`)} ${privateResources[resource]}`}
                 </span>
               )) : null}
             </div>
@@ -424,7 +527,12 @@ function RightRail({ state }: { state: GameTableView }) {
         </h2>
         <div aria-live="polite" className="log-list" role="log" tabIndex={0}>
           {state.game.log.map((entry) => (
-            <p key={entry.id}>{formatGameLogEntry(entry, locale)}</p>
+            <p key={entry.id}>{formatGameLogEntry({
+              id: entry.id,
+              message: entry.fallbackText,
+              ...(entry.messageKey ? { messageKey: entry.messageKey as never } : {}),
+              ...(entry.params ? { params: { ...entry.params } } : {})
+            }, locale)}</p>
           ))}
         </div>
       </section>
@@ -488,7 +596,7 @@ function StatsPanel({
             aria-label={t("stats.playerLabel")}
             value={state.selectedPlayerId}
             onChange={(event) =>
-              dispatch({ type: "SELECT_PLAYER", playerId: event.currentTarget.value })
+              dispatch({ type: "ui.selectPlayer", playerId: event.currentTarget.value })
             }
           >
             {state.game.players.map((player) => (
@@ -527,7 +635,7 @@ function StatsPanel({
             aria-label={t("stats.diceLabel")}
             value={state.selectedDiceTotal}
             onChange={(event) =>
-              dispatch({ type: "SELECT_DICE_TOTAL", diceTotal: Number(event.currentTarget.value) })
+              dispatch({ type: "ui.selectDiceTotal", diceTotal: Number(event.currentTarget.value) })
             }
           >
             {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((diceTotal) => (
@@ -613,9 +721,9 @@ export function GameTable({
     return () => window.removeEventListener("keydown", cancelSelection);
   }, [interactionMode]);
 
-  function dispatch(command: GameTableCommand) {
+  function dispatch(intent: GameTableIntent) {
     setInteractionMode(null);
-    dispatchBase(command);
+    dispatchBase(intent);
     setBrowserNotice(null);
   }
 
@@ -657,7 +765,7 @@ export function GameTable({
         <StatsPanel state={state} dispatch={dispatch} />
         <TradeHubPanel state={state} dispatch={dispatch} />
       </div>
-      <TurnFlowPanel game={state.game} dispatch={dispatch} />
+      <TurnFlowPanel game={state.game} gameControls={state.controls} dispatch={dispatch} />
       <ActionDock
         state={state}
         dispatch={dispatch}
@@ -669,7 +777,7 @@ export function GameTable({
         state={state}
         onClose={() => setUtilityPanel(null)}
         onNewGame={() => {
-          dispatch({ type: "START_NEW_GAME" });
+          dispatch({ type: "game.new" });
           setUtilityPanel(null);
         }}
       />

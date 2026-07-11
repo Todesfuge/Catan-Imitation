@@ -115,7 +115,7 @@ export function ActionDock({
         aria-describedby="roll-unavailable-reason"
         data-action="roll-dice"
         disabled={!availability.roll.enabled}
-        onClick={() => activePlayer && dispatch({ type: "ROLL_DICE", playerId: activePlayer.id })}
+        onClick={() => activePlayer && dispatch({ type: "turn.roll" })}
         type="button"
       >
         <Dices size={20} /> {t("action.rollDice")}
@@ -161,7 +161,7 @@ export function ActionDock({
         data-action="buy-development"
         disabled={!availability.buyDevelopmentCard.enabled}
         onClick={() =>
-          activePlayer && dispatch({ type: "BUY_DEVELOPMENT_CARD", playerId: activePlayer.id })
+          activePlayer && dispatch({ type: "development.buy" })
         }
         type="button"
       >
@@ -220,8 +220,7 @@ export function ActionDock({
           onClick={() => {
             if (activePlayer && maritimeGive && maritimeReceive) {
               dispatch({
-                type: "MARITIME_TRADE",
-                playerId: activePlayer.id,
+                type: "trade.maritime",
                 give: maritimeGive,
                 receive: maritimeReceive
               });
@@ -240,7 +239,7 @@ export function ActionDock({
         className="primary"
         data-action="end-turn"
         disabled={!availability.endTurn.enabled}
-        onClick={() => activePlayer && dispatch({ type: "END_TURN", playerId: activePlayer.id })}
+        onClick={() => activePlayer && dispatch({ type: "turn.end" })}
         type="button"
       >
         {t("action.endTurn")}
@@ -251,7 +250,7 @@ export function ActionDock({
           : t("action.noRoll")}
       </div>
       {state.game.phase === "gameOver" ? (
-        <button data-action="new-game" onClick={() => dispatch({ type: "START_NEW_GAME" })} type="button">
+        <button data-action="new-game" onClick={() => dispatch({ type: "game.new" })} type="button">
           {t("action.newGame")}
         </button>
       ) : null}

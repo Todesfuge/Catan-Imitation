@@ -1,7 +1,7 @@
 import React from "react";
 import type { BoardInteractionMode } from "./ActionDock";
 import type {
-  GameTableCommand,
+  GameTableIntent,
   GameTableDispatch,
   GameTableGameView,
   GameTableView
@@ -13,7 +13,7 @@ interface BoardTarget {
   id: string;
   kind: Exclude<NonNullable<BoardInteractionMode>["kind"], "city"> | "city";
   label: string;
-  command: GameTableCommand;
+  command: GameTableIntent;
   shape:
     | { kind: "road"; x1: number; x2: number; y1: number; y2: number }
     | { kind: "vertex"; x: number; y: number };
@@ -24,7 +24,7 @@ function targetForEdge(
   edgeId: string,
   kind: BoardTarget["kind"],
   label: string,
-  command: GameTableCommand
+  command: GameTableIntent
 ): BoardTarget | null {
   const edge = game.edges.find((candidate) => candidate.id === edgeId);
   if (!edge) return null;
@@ -50,7 +50,7 @@ function targetForVertex(
   vertexId: string,
   kind: BoardTarget["kind"],
   label: string,
-  command: GameTableCommand
+  command: GameTableIntent
 ): BoardTarget {
   const position = vertexProjection(game.board, vertexId);
   return {
@@ -69,7 +69,7 @@ function TargetLayer({
   targets: BoardTarget[];
   activate: GameTableDispatch;
 }) {
-  const keyboardActivate = (event: React.KeyboardEvent, command: GameTableCommand) => {
+  const keyboardActivate = (event: React.KeyboardEvent, command: GameTableIntent) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       activate(command);
@@ -154,24 +154,28 @@ export function BoardActionTargets({
   const { t } = useI18n();
   if (!interactionMode) return null;
   const game = state.game;
-  const activate = (command: GameTableCommand) => {
+  const activate = (command: GameTableIntent) => {
     dispatch(command);
     onTargetSelected?.();
   };
   let targets: BoardTarget[] = [];
 
   if (interactionMode.kind === "setupRoad") {
+    if (!state.legality.setupControlId) return null;
+    const controlId = state.legality.setupControlId;
     targets = state.legality.setupRoadEdgeIds.flatMap((edgeId) => {
       const target = targetForEdge(
         game,
         edgeId,
         "setupRoad",
         t("board.placeSetupRoad", { id: edgeId }),
-        { type: "PLACE_SETUP_ROAD", playerId: game.activePlayerId, edgeId }
+        { type: "setup.road", controlId, edgeId }
       );
       return target ? [target] : [];
     });
   } else if (interactionMode.kind === "setupSettlement") {
+    if (!state.legality.setupControlId) return null;
+    const controlId = state.legality.setupControlId;
     targets = state.legality.setupSettlementVertexIds.map((vertexId) =>
       targetForVertex(
         game,
@@ -179,7 +183,7 @@ export function BoardActionTargets({
         vertexId,
         "setupSettlement",
         t("board.placeSetupSettlement", { id: vertexId }),
-        { type: "PLACE_SETUP_SETTLEMENT", playerId: game.activePlayerId, vertexId }
+        { type: "setup.settlement", controlId, vertexId }
       )
     );
   } else {
@@ -191,7 +195,7 @@ export function BoardActionTargets({
           edgeId,
           "road",
           t("board.buildRoad", { id: edgeId }),
-          { type: "BUILD_ROAD", playerId: game.activePlayerId, edgeId }
+          { type: "build.road", edgeId }
         );
         return target ? [target] : [];
       });
@@ -203,7 +207,7 @@ export function BoardActionTargets({
           vertexId,
           "settlement",
           t("board.buildSettlement", { id: vertexId }),
-          { type: "BUILD_SETTLEMENT", playerId: game.activePlayerId, vertexId }
+          { type: "build.settlement", vertexId }
         )
       );
     } else {
@@ -217,7 +221,7 @@ export function BoardActionTargets({
                 building.vertexId,
                 "city",
                 t("board.upgradeCity", { id: buildingId }),
-                { type: "BUILD_CITY", playerId: game.activePlayerId, buildingId }
+                { type: "build.city", buildingId }
               )
             ]
           : [];

@@ -720,6 +720,10 @@ const reasonMessages: Record<AvailabilityReasonCode, (params?: AvailabilityReaso
   BID_ALREADY_SUBMITTED: () => "A bid was already submitted for this round."
 };
 
+export function formatAvailabilityReason(reason?: AvailabilityReason): string | undefined {
+  return reason ? reasonMessages[reason.code](reason.params) : undefined;
+}
+
 function localize<T extends AvailabilityFact<unknown>>(fact: T): Omit<T, "disabledReason"> & { reason?: string } {
   const { disabledReason, ...rest } = fact;
   return {

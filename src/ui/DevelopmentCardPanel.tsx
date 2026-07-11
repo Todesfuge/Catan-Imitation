@@ -19,7 +19,7 @@ export function DevelopmentCardPanel({
       return (
         <section className="turn-flow-panel development-effect-panel" data-development-effect="roadBuilding">
           <strong>{t("development.chooseRoad")}</strong>
-          <span>{t("development.roadsRemaining", { count: effect.remainingRoads })}</span>
+          <span>{t("development.roadsRemaining", { count: effect.remainingRoads ?? 0 })}</span>
         </section>
       );
     }
@@ -32,7 +32,7 @@ export function DevelopmentCardPanel({
       >
         <strong>
           {isPlenty
-            ? t(effect.remainingPicks === 1 ? "development.chooseResource" : "development.chooseResources", { count: effect.remainingPicks })
+            ? t(effect.remainingPicks === 1 ? "development.chooseResource" : "development.chooseResources", { count: effect.remainingPicks ?? 0 })
             : t("development.chooseMonopoly")}
         </strong>
         <div className="development-resource-buttons">
@@ -43,10 +43,8 @@ export function DevelopmentCardPanel({
               key={resource}
               onClick={() =>
                 dispatch({
-                  type: isPlenty
-                    ? "CHOOSE_YEAR_OF_PLENTY_RESOURCE"
-                    : "CHOOSE_MONOPOLY_RESOURCE",
-                  playerId: game.activePlayerId,
+                  type: "development.chooseResource",
+                  choice: isPlenty ? "yearOfPlenty" : "monopoly",
                   resource
                 })
               }
@@ -66,7 +64,8 @@ export function DevelopmentCardPanel({
     return null;
   }
   const availability = state.legality.actions;
-  const victoryPointCount = (activePlayer.developmentCards ?? []).filter(
+  const privateControl = state.controls.find((control) => control.isActive);
+  const victoryPointCount = (privateControl?.developmentCards ?? []).filter(
     (card) => card.kind === "victoryPoint"
   ).length;
 
@@ -85,8 +84,7 @@ export function DevelopmentCardPanel({
             onClick={() =>
               cardAvailability.cardId &&
               dispatch({
-                type: "PLAY_DEVELOPMENT_CARD",
-                playerId: activePlayer.id,
+                type: "development.play",
                 cardId: cardAvailability.cardId
               })
             }
@@ -122,7 +120,7 @@ export function RoadBuildingTargets({
   dispatch
 }: {
   game: GameTableGameView;
-  edgeIds: string[];
+  edgeIds: readonly string[];
   dispatch: GameTableDispatch;
 }) {
   const { t } = useI18n();
@@ -144,7 +142,7 @@ export function RoadBuildingTargets({
     <g className="road-building-target-layer">
       {legalEdges.map(({ edgeId, position }) => {
         const placeRoad = () =>
-          dispatch({ type: "PLACE_FREE_ROAD", playerId: game.activePlayerId, edgeId });
+          dispatch({ type: "development.placeRoad", edgeId });
         return (
           <line
             aria-label={t("development.placeFreeRoad", { edgeId })}
@@ -173,7 +171,7 @@ export function RoadBuildingTargets({
           className="road-building-target"
           key={`visible-${edgeId}`}
           onClick={() =>
-            dispatch({ type: "PLACE_FREE_ROAD", playerId: game.activePlayerId, edgeId })
+            dispatch({ type: "development.placeRoad", edgeId })
           }
           x1={position.from.x}
           x2={position.to.x}

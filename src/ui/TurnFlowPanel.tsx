@@ -1,19 +1,20 @@
 import React, { useEffect, useState } from "react";
 import { emptyResources, resources, type ResourceMap } from "../domain/types";
 import { useI18n } from "./i18n";
-import type { GameTableDispatch, GameTableGameView } from "./GameTable";
+import type { GameTableDispatch, GameTableGameView, GameTableView } from "./GameTable";
 
 export function TurnFlowPanel({
   game,
+  gameControls,
   dispatch
 }: {
   game: GameTableGameView;
+  gameControls: GameTableView["controls"];
   dispatch: GameTableDispatch;
 }) {
   const { locale, t } = useI18n();
-  const pendingPlayerId = Object.keys(game.turnState.pendingDiscards).find(
-    (playerId) => (game.turnState.pendingDiscards[playerId] ?? 0) > 0
-  );
+  const pendingControl = gameControls.find((control) => control.decision?.kind === "discard");
+  const pendingPlayerId = pendingControl?.controlId;
   const [discarded, setDiscarded] = useState<ResourceMap>(emptyResources);
 
   useEffect(() => {
@@ -21,8 +22,8 @@ export function TurnFlowPanel({
   }, [pendingPlayerId]);
 
   if (game.turnState.phase === "awaitingDiscards" && pendingPlayerId) {
-    const player = game.players.find((candidate) => candidate.id === pendingPlayerId);
-    const required = game.turnState.pendingDiscards[pendingPlayerId] ?? 0;
+    const playerName = pendingControl.displayName;
+    const required = pendingControl.decision?.kind === "discard" ? pendingControl.decision.count : 0;
     const selectedTotal = resources.reduce((total, resource) => total + discarded[resource], 0);
     const validSelection =
       selectedTotal === required &&
@@ -30,20 +31,20 @@ export function TurnFlowPanel({
         (resource) =>
           Number.isInteger(discarded[resource]) &&
           discarded[resource] >= 0 &&
-          discarded[resource] <= (player?.resources?.[resource] ?? 0)
+          discarded[resource] <= pendingControl.resources[resource]
       );
 
     return (
       <section className="turn-flow-panel" data-turn-flow="discard">
-        <strong>{t("turn.discardRequired", { name: player?.name ?? pendingPlayerId, count: required })}</strong>
+        <strong>{t("turn.discardRequired", { name: playerName, count: required })}</strong>
         <span>{t("turn.selected", { selected: selectedTotal, required })}</span>
         <div className="turn-flow-resources">
           {resources.map((resource) => (
             <label key={resource}>
               {t(`resource.${resource}`)}
               <input
-                aria-label={locale === "en" ? `${player?.name ?? pendingPlayerId} ${resource} discard` : `${player?.name ?? pendingPlayerId} ${t(`resource.${resource}`)}弃牌`}
-                max={player?.resources?.[resource] ?? 0}
+                aria-label={locale === "en" ? `${playerName} ${resource} discard` : `${playerName} ${t(`resource.${resource}`)}弃牌`}
+                max={pendingControl.resources[resource]}
                 min={0}
                 onChange={(event) =>
                   setDiscarded((current) => ({
@@ -61,7 +62,7 @@ export function TurnFlowPanel({
         <button
           disabled={!validSelection}
           onClick={() =>
-            dispatch({ type: "DISCARD_FOR_SEVEN", playerId: pendingPlayerId, resources: discarded })
+            dispatch({ type: "decision.discard", controlId: pendingPlayerId, resources: discarded })
           }
           type="button"
         >
@@ -92,8 +93,7 @@ export function TurnFlowPanel({
                 key={victimId}
                 onClick={() =>
                   dispatch({
-                    type: "STEAL_ROBBER_RESOURCE",
-                    playerId: game.activePlayerId,
+                    type: "robber.steal",
                     victimId
                   })
                 }
