@@ -1,6 +1,6 @@
 import { PROTOCOL_SCHEMA_VERSION, type PresenceEntry, type RoomSnapshotMessage } from "../../src/online/protocol";
 import { projectRoomView } from "../../src/online/projectRoomView";
-import { hashSecret, hashesMatch, issueConnectionTicket, issueSeatToken } from "../crypto";
+import { hashSecret, issueConnectionTicket, issueSeatToken } from "../crypto";
 import type { Env } from "../env";
 import {
   HttpProtocolError,
@@ -12,8 +12,6 @@ import {
 import {
   RoomLifecycleError,
   createLobby,
-  joinLobby,
-  leaveLobby,
   normalizeNickname
 } from "./roomLifecycle";
 import { RoomStore } from "./roomStore";
@@ -116,39 +114,54 @@ export class RoomDurableObject {
   }
 
   private async join(request: Request): Promise<Response> {
-    const room = await this.requireRoom();
     const nickname = exactNicknameBody(await readJsonObject(request));
     const credentials = await issueSeatToken();
     const seatId = crypto.randomUUID();
-    const updated = joinLobby(room, { seatId, nickname, tokenHash: credentials.seatTokenHash }, Date.now());
-    await this.store.save(updated);
-    return jsonResponse({ roomCode: room.roomCode, seatId, seatToken: credentials.seatToken }, { status: 201 });
+    const updated = await this.store.joinLatest(
+      { seatId, nickname, tokenHash: credentials.seatTokenHash },
+      Date.now()
+    );
+    if (updated === null) throw new HttpProtocolError("ROOM_NOT_FOUND");
+    return jsonResponse({ roomCode: updated.roomCode, seatId, seatToken: credentials.seatToken }, { status: 201 });
   }
 
   private async leave(request: Request, seatId: string): Promise<Response> {
-    const room = await this.requireRoom();
-    await this.authenticate(request, room, seatId);
+    const tokenHash = await hashSecret(parseBearerToken(request.headers));
     const connectedSeatIds = this.ctx.getWebSockets().flatMap((socket) => {
       const value = attachment(socket);
-      return value ? [value.seatId] : [];
+      return value && socket.readyState === WebSocket.OPEN ? [value.seatId] : [];
     });
-    const result = leaveLobby(room, seatId, connectedSeatIds, Date.now());
-    if (result.kind === "deleted") await this.store.delete();
-    else await this.store.save(result.room);
+    let result: Awaited<ReturnType<RoomStore["leaveLatest"]>>;
+    try {
+      result = await this.store.leaveLatest(seatId, tokenHash, connectedSeatIds, Date.now());
+    } catch (error) {
+      if (error instanceof RoomLifecycleError && error.code === "ROOM_ALREADY_STARTED") {
+        throw new HttpProtocolError("COMMAND_NOT_ALLOWED");
+      }
+      throw error;
+    }
+    if (result === "missing") throw new HttpProtocolError("ROOM_NOT_FOUND");
+    if (result === "invalid-token") throw new HttpProtocolError("SEAT_TOKEN_INVALID");
+    for (const socket of this.ctx.getWebSockets()) {
+      if (attachment(socket)?.seatId === seatId && socket.readyState === WebSocket.OPEN) {
+        socket.close(4001, "SEAT_LEFT");
+      }
+    }
+    if (result !== "deleted") this.broadcastPresence(result.room);
     return new Response(null, { status: 204 });
   }
 
   private async ticket(request: Request): Promise<Response> {
-    const room = await this.requireRoom();
-    const seat = await this.authenticate(request, room);
-    const issued = await issueConnectionTicket(Date.now());
-    await this.store.save({
-      ...room,
-      connectionTickets: [
-        ...room.connectionTickets,
-        { ticketHash: issued.ticketHash, seatId: seat.seatId, expiresAt: issued.expiresAt }
-      ]
-    });
+    const now = Date.now();
+    const tokenHash = await hashSecret(parseBearerToken(request.headers));
+    const issued = await issueConnectionTicket(now);
+    const result = await this.store.issueTicketLatest(
+      tokenHash,
+      { ticketHash: issued.ticketHash, expiresAt: issued.expiresAt },
+      now
+    );
+    if (result === "missing") throw new HttpProtocolError("ROOM_NOT_FOUND");
+    if (result === "invalid-token") throw new HttpProtocolError("SEAT_TOKEN_INVALID");
     return jsonResponse({ ticket: issued.ticket, expiresInMs: 30_000 }, { status: 201 });
   }
 
@@ -160,9 +173,9 @@ export class RoomDurableObject {
     if (ticket === null) throw new HttpProtocolError("CONNECTION_TICKET_EXPIRED");
     const ticketHash = await hashSecret(ticket);
     const now = Date.now();
-    if (await this.store.load(now) === null) throw new HttpProtocolError("ROOM_NOT_FOUND");
     const consumed = await this.store.consumeConnectionTicket(ticketHash, now);
-    if (consumed === null) throw new HttpProtocolError("CONNECTION_TICKET_EXPIRED");
+    if (consumed === "missing") throw new HttpProtocolError("ROOM_NOT_FOUND");
+    if (consumed === "invalid-ticket") throw new HttpProtocolError("CONNECTION_TICKET_EXPIRED");
     const { room: updated, seatId } = consumed;
 
     const pair = new WebSocketPair();
@@ -190,21 +203,13 @@ export class RoomDurableObject {
     return room;
   }
 
-  private async authenticate(request: Request, room: PersistedRoom, requiredSeatId?: string) {
-    const tokenHash = await hashSecret(parseBearerToken(request.headers));
-    const seat = room.seats.find((candidate) =>
-      (requiredSeatId === undefined || candidate.seatId === requiredSeatId) &&
-      hashesMatch(candidate.tokenHash, tokenHash)
-    );
-    if (seat === undefined) throw new HttpProtocolError("SEAT_TOKEN_INVALID");
-    return seat;
-  }
-
   private presence(room: PersistedRoom): PresenceEntry[] {
     const counts = new Map<string, number>();
     for (const socket of this.ctx.getWebSockets()) {
       const value = attachment(socket);
-      if (value) counts.set(value.seatId, (counts.get(value.seatId) ?? 0) + 1);
+      if (value && socket.readyState === WebSocket.OPEN) {
+        counts.set(value.seatId, (counts.get(value.seatId) ?? 0) + 1);
+      }
     }
     return [...room.seats]
       .sort((left, right) => left.joinOrder - right.joinOrder)
@@ -233,6 +238,8 @@ export class RoomDurableObject {
 
   private broadcastPresence(room: PersistedRoom): void {
     const message = JSON.stringify({ type: "presence.changed", presence: this.presence(room) });
-    for (const socket of this.ctx.getWebSockets()) socket.send(message);
+    for (const socket of this.ctx.getWebSockets()) {
+      if (socket.readyState === WebSocket.OPEN) socket.send(message);
+    }
   }
 }

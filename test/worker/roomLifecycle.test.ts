@@ -1,6 +1,7 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import worker from "../../worker/index";
+import { hashSecret } from "../../worker/crypto";
 import { RoomDurableObject } from "../../worker/room/RoomDurableObject";
 
 import type { MatchExecutionContext } from "../../src/domain/match/types";
@@ -103,6 +104,7 @@ function auctionRoom(): PersistedRoom {
 class MemoryStorage implements RoomStorage {
   readonly values = new Map<string, unknown>();
   readonly alarms: number[] = [];
+  private transactionTail: Promise<void> = Promise.resolve();
 
   async get(key: string): Promise<unknown> {
     return this.values.get(key);
@@ -123,7 +125,15 @@ class MemoryStorage implements RoomStorage {
   }
 
   async transaction<T>(closure: (transaction: RoomStorage) => Promise<T>): Promise<T> {
-    return closure(this);
+    const previous = this.transactionTail;
+    let release!: () => void;
+    this.transactionTail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      return await closure(this);
+    } finally {
+      release();
+    }
   }
 }
 
@@ -560,13 +570,29 @@ class TestRoomNamespace {
     if (entry === undefined) {
       const storage = new MemoryStorage();
       const sockets: WebSocket[] = [];
+      const closeCalls: Array<{ seatId?: string; code?: number; reason?: string }> = [];
       const state = {
         storage,
         acceptWebSocket: (socket: WebSocket) => {
           socket.accept();
+          const close = socket.close.bind(socket);
+          Object.defineProperty(socket, "close", {
+            value: (code?: number, reason?: string) => {
+              closeCalls.push({
+                seatId: (socket.deserializeAttachment() as { seatId?: string } | null)?.seatId,
+                code,
+                reason
+              });
+              close(code, reason);
+            }
+          });
           sockets.push(socket);
         },
-        getWebSockets: () => sockets
+        getWebSockets: () => sockets.filter((socket) => {
+          const seatId = (socket.deserializeAttachment() as { seatId?: string } | null)?.seatId;
+          return !closeCalls.some((call) => call.seatId === seatId);
+        }),
+        closeCalls
       } as unknown as DurableObjectState;
       entry = { object: new RoomDurableObject(state, {} as Env), state };
       this.rooms.set(name, entry);
@@ -741,6 +767,19 @@ describe("room HTTP routes and authenticated sockets", () => {
       error: { code: "ROOM_ALREADY_STARTED" }
     });
 
+    const startedToken = "S".repeat(43);
+    const startedForDelete = startedRoom();
+    startedForDelete.seats[0].tokenHash = await hashSecret(startedToken);
+    await testRooms.seed("ABC234", startedForDelete);
+    const lockedDelete = await api(
+      `/api/rooms/ABC234/seats/${startedForDelete.seats[0].seatId}`,
+      { method: "DELETE", headers: { authorization: `Bearer ${startedToken}` } }
+    );
+    expect(lockedDelete.status).toBe(403);
+    await expect(lockedDelete.json()).resolves.toEqual({
+      error: { code: "COMMAND_NOT_ALLOWED", params: {}, retryable: false }
+    });
+
     const malformed = await api("/api/rooms", {
       method: "POST",
       body: JSON.stringify({ nickname: "", extra: true })
@@ -849,6 +888,123 @@ describe("room HTTP routes and authenticated sockets", () => {
 
     closeSocket(first);
     closeSocket(second);
+    }
+
+    {
+      const host = await createRoom("Concurrent Host");
+      await joinRoom(host.roomCode, "Concurrent Two");
+      await joinRoom(host.roomCode, "Concurrent Three");
+      const [left, right] = await Promise.all([
+        api(`/api/rooms/${host.roomCode}/join`, {
+          method: "POST",
+          body: JSON.stringify({ nickname: "Concurrent Four A" })
+        }),
+        api(`/api/rooms/${host.roomCode}/join`, {
+          method: "POST",
+          body: JSON.stringify({ nickname: "Concurrent Four B" })
+        })
+      ]);
+      expect([left.status, right.status].sort()).toEqual([201, 409]);
+      const room = await new RoomStore(testRooms.state(host.roomCode).storage).load(Date.now());
+      expect(room?.seats).toHaveLength(4);
+    }
+
+    {
+      const host = await createRoom("Join Leave Host");
+      const leaving = await joinRoom(host.roomCode, "Leaving Guest");
+      const [joined, left] = await Promise.all([
+        api(`/api/rooms/${host.roomCode}/join`, {
+          method: "POST",
+          body: JSON.stringify({ nickname: "Joining Guest" })
+        }),
+        api(`/api/rooms/${host.roomCode}/seats/${leaving.seatId}`, {
+          method: "DELETE",
+          headers: { authorization: `Bearer ${leaving.seatToken}` }
+        })
+      ]);
+      expect(joined.status).toBe(201);
+      expect(left.status).toBe(204);
+      const room = await new RoomStore(testRooms.state(host.roomCode).storage).load(Date.now());
+      expect(room?.seats.map((seat) => seat.nickname)).toEqual([
+        "Join Leave Host",
+        "Joining Guest"
+      ]);
+    }
+
+    {
+      const host = await createRoom("Ticket Leave Host");
+      const leaving = await joinRoom(host.roomCode, "Ticket Leaving Guest");
+      const [ticketResponse, leaveResponse] = await Promise.all([
+        api(`/api/rooms/${host.roomCode}/connection-ticket`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${leaving.seatToken}` }
+        }),
+        api(`/api/rooms/${host.roomCode}/seats/${leaving.seatId}`, {
+          method: "DELETE",
+          headers: { authorization: `Bearer ${leaving.seatToken}` }
+        })
+      ]);
+      expect([201, 401]).toContain(ticketResponse.status);
+      expect(leaveResponse.status).toBe(204);
+      const room = await new RoomStore(testRooms.state(host.roomCode).storage).load(Date.now());
+      expect(room?.seats.some((seat) => seat.seatId === leaving.seatId)).toBe(false);
+      expect(room?.connectionTickets.some((ticket) => ticket.seatId === leaving.seatId)).toBe(false);
+    }
+
+    {
+      const host = await createRoom("Upgrade Race Host");
+      const issued = await issueTicket(host.roomCode, host.seatToken);
+      const [left, right] = await Promise.all([
+        api(`/api/rooms/${host.roomCode}/connect?ticket=${issued.ticket}`, {
+          headers: { upgrade: "websocket" }
+        }),
+        api(`/api/rooms/${host.roomCode}/connect?ticket=${issued.ticket}`, {
+          headers: { upgrade: "websocket" }
+        })
+      ]);
+      expect([left.status, right.status].sort()).toEqual([101, 401]);
+      for (const response of [left, right]) {
+        if (response.webSocket) {
+          response.webSocket.accept();
+          closeSocket(response.webSocket);
+        }
+      }
+    }
+
+    {
+      const host = await createRoom("Socket Leave Host");
+      const guest = await joinRoom(host.roomCode, "Socket Leave Guest");
+      const hostSocket = await connect(host.roomCode, (await issueTicket(host.roomCode, host.seatToken)).ticket);
+      await nextMessage(hostSocket);
+      await nextMessage(hostSocket);
+      const firstPresence = nextMessage(hostSocket);
+      const guestSocketOne = await connect(host.roomCode, (await issueTicket(host.roomCode, guest.seatToken)).ticket);
+      await nextMessage(guestSocketOne);
+      await firstPresence;
+      const secondPresence = nextMessage(hostSocket);
+      const guestSocketTwo = await connect(host.roomCode, (await issueTicket(host.roomCode, guest.seatToken)).ticket);
+      await nextMessage(guestSocketTwo);
+      await secondPresence;
+      const changedPresence = nextMessage(hostSocket);
+      const deleted = await api(`/api/rooms/${host.roomCode}/seats/${guest.seatId}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${guest.seatToken}` }
+      });
+      expect(deleted.status).toBe(204);
+      const closeCalls = (testRooms.state(host.roomCode) as unknown as {
+        closeCalls: Array<{ seatId?: string; code?: number; reason?: string }>;
+      }).closeCalls;
+      expect(closeCalls.filter((call) => call.seatId === guest.seatId)).toEqual([
+        { seatId: guest.seatId, code: 4001, reason: "SEAT_LEFT" },
+        { seatId: guest.seatId, code: 4001, reason: "SEAT_LEFT" }
+      ]);
+      expect(closeCalls.some((call) => call.seatId === host.seatId)).toBe(false);
+      const presence = await changedPresence;
+      expect(presence).toEqual({
+        type: "presence.changed",
+        presence: [{ seatId: host.seatId, connectionCount: 1, online: true }]
+      });
+      closeSocket(hostSocket);
     }
   });
 });

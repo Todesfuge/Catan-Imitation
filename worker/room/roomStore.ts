@@ -3,7 +3,12 @@ import type { MatchState } from "../../src/domain/match/types";
 import type { GameState, Player } from "../../src/domain/types";
 import type { ConnectionTicket, PersistedRoom, PersistedSeat } from "./roomTypes";
 import { hashesMatch } from "../crypto";
-import { refreshRoomActivity } from "./roomLifecycle";
+import {
+  joinLobby,
+  leaveLobby,
+  refreshRoomActivity,
+  type NewSeatInput
+} from "./roomLifecycle";
 
 export const ROOM_RECORD_KEY = "room";
 
@@ -202,13 +207,80 @@ export class RoomStore {
     await this.storage.delete(ROOM_RECORD_KEY);
   }
 
+  private transaction<T>(closure: (storage: RoomStorage) => Promise<T>): Promise<T> {
+    return this.storage.transaction ? this.storage.transaction(closure) : closure(this.storage);
+  }
+
+  async joinLatest(
+    input: NewSeatInput,
+    now: number
+  ): Promise<PersistedRoom | null> {
+    return this.transaction(async (storage) => {
+      const value = await storage.get(ROOM_RECORD_KEY);
+      if (value === undefined) return null;
+      assertPersistedRoom(value);
+      const room = joinLobby(value, input, now);
+      await storage.put(ROOM_RECORD_KEY, room);
+      await storage.setAlarm(room.expiresAt);
+      return room;
+    });
+  }
+
+  async leaveLatest(
+    seatId: string,
+    tokenHash: string,
+    connectedSeatIds: readonly string[],
+    now: number
+  ): Promise<"missing" | "invalid-token" | "deleted" | { room: PersistedRoom }> {
+    return this.transaction(async (storage) => {
+      const value = await storage.get(ROOM_RECORD_KEY);
+      if (value === undefined) return "missing";
+      assertPersistedRoom(value);
+      const seat = value.seats.find((candidate) =>
+        candidate.seatId === seatId && hashesMatch(candidate.tokenHash, tokenHash)
+      );
+      if (seat === undefined) return "invalid-token";
+      const result = leaveLobby(value, seatId, connectedSeatIds, now);
+      if (result.kind === "deleted") {
+        await storage.delete(ROOM_RECORD_KEY);
+        return "deleted";
+      }
+      await storage.put(ROOM_RECORD_KEY, result.room);
+      await storage.setAlarm(result.room.expiresAt);
+      return { room: result.room };
+    });
+  }
+
+  async issueTicketLatest(
+    tokenHash: string,
+    ticket: Omit<ConnectionTicket, "seatId">,
+    now: number
+  ): Promise<"missing" | "invalid-token" | { room: PersistedRoom; seatId: string }> {
+    return this.transaction(async (storage) => {
+      const value = await storage.get(ROOM_RECORD_KEY);
+      if (value === undefined) return "missing";
+      assertPersistedRoom(value);
+      const seat = value.seats.find((candidate) => hashesMatch(candidate.tokenHash, tokenHash));
+      if (seat === undefined) return "invalid-token";
+      const validTickets = value.connectionTickets.filter((candidate) => candidate.expiresAt > now);
+      const room = {
+        ...value,
+        connectionTickets: [...validTickets, { ...ticket, seatId: seat.seatId }]
+      };
+      assertPersistedRoom(room);
+      await storage.put(ROOM_RECORD_KEY, room);
+      await storage.setAlarm(room.expiresAt);
+      return { room, seatId: seat.seatId };
+    });
+  }
+
   async consumeConnectionTicket(
     ticketHash: string,
     now: number
-  ): Promise<{ room: PersistedRoom; seatId: string } | null> {
+  ): Promise<"missing" | "invalid-ticket" | { room: PersistedRoom; seatId: string }> {
     const consume = async (storage: RoomStorage) => {
       const value = await storage.get(ROOM_RECORD_KEY);
-      if (value === undefined) return null;
+      if (value === undefined) return "missing" as const;
       assertPersistedRoom(value);
       const validTickets = value.connectionTickets.filter((ticket) => ticket.expiresAt > now);
       const ticket = validTickets.find((candidate) => hashesMatch(candidate.ticketHash, ticketHash));
@@ -216,7 +288,7 @@ export class RoomStore {
         if (validTickets.length !== value.connectionTickets.length) {
           await storage.put(ROOM_RECORD_KEY, { ...value, connectionTickets: validTickets });
         }
-        return null;
+        return "invalid-ticket" as const;
       }
       const room = refreshRoomActivity({
         ...value,
@@ -227,6 +299,6 @@ export class RoomStore {
       await storage.setAlarm(room.expiresAt);
       return { room, seatId: ticket.seatId };
     };
-    return this.storage.transaction ? this.storage.transaction(consume) : consume(this.storage);
+    return this.transaction(consume);
   }
 }
