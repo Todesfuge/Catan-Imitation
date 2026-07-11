@@ -10,7 +10,8 @@ import {
   parseServerWebSocketMessage,
   type ClientWebSocketMessage,
   type ProtocolError,
-  type ProtocolErrorCode
+  type ProtocolErrorCode,
+  type ServerWebSocketMessage
 } from "./protocol";
 import {
   createInitialOnlineState,
@@ -90,7 +91,20 @@ function internalError(): ProtocolError {
   return { code: "INTERNAL_ERROR", params: {}, retryable: true };
 }
 
-function safeProtocolError(value: unknown): ProtocolError {
+export function sanitizeProtocolError(
+  error: ProtocolError,
+  secrets: readonly string[] = []
+): ProtocolError {
+  for (const entry of Object.values(error.params)) {
+    if (typeof entry !== "string") continue;
+    if (/[A-Za-z0-9_-]{32,}/.test(entry) || secrets.some((secret) => secret.length > 0 && entry.includes(secret))) {
+      return internalError();
+    }
+  }
+  return { ...error, params: { ...error.params } };
+}
+
+function safeProtocolError(value: unknown, secrets: readonly string[] = []): ProtocolError {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return internalError();
   const candidate = value as { code?: unknown; params?: unknown; retryable?: unknown };
   if (Object.keys(candidate).length !== 3 ||
@@ -116,8 +130,7 @@ function safeProtocolError(value: unknown): ProtocolError {
         /token|ticket|secret|hash|credential|authorization/i.test(key)) return internalError();
     if (typeof entry === "string") {
       const valueLength = Array.from(entry).length;
-      if (valueLength < 1 || valueLength > MAX_WIRE_STRING_CODE_POINTS ||
-          /^[A-Za-z0-9_-]{32,}$/.test(entry)) return internalError();
+      if (valueLength < 1 || valueLength > MAX_WIRE_STRING_CODE_POINTS) return internalError();
       params[key] = entry;
     } else if (typeof entry === "boolean") {
       params[key] = entry;
@@ -127,20 +140,28 @@ function safeProtocolError(value: unknown): ProtocolError {
       return internalError();
     }
   }
-  return {
+  return sanitizeProtocolError({
     code: candidate.code as ProtocolErrorCode,
     params,
     retryable: candidate.retryable as boolean
-  };
+  }, secrets);
+}
+
+async function cancelResponseBody(response: Response): Promise<void> {
+  try { await response.body?.cancel(); } catch { /* best-effort resource cleanup */ }
 }
 
 async function responseText(response: Response): Promise<string> {
   const contentLength = response.headers.get("content-length");
   let declaredLength: number | undefined;
   if (contentLength !== null) {
-    if (!/^(0|[1-9][0-9]*)$/.test(contentLength)) throw new OnlineRequestError(internalError());
+    if (!/^(0|[1-9][0-9]*)$/.test(contentLength)) {
+      await cancelResponseBody(response);
+      throw new OnlineRequestError(internalError());
+    }
     declaredLength = Number(contentLength);
     if (!Number.isSafeInteger(declaredLength) || declaredLength > MAX_WIRE_BYTES) {
+      await cancelResponseBody(response);
       throw new OnlineRequestError(internalError());
     }
   }
@@ -181,14 +202,14 @@ async function responseText(response: Response): Promise<string> {
   }
 }
 
-async function requireSuccessText(response: Response): Promise<string> {
+async function requireSuccessText(response: Response, secrets: readonly string[] = []): Promise<string> {
   const text = await responseText(response);
   if (response.ok) return text;
   let parsed: unknown;
   try { parsed = JSON.parse(text) as unknown; } catch { parsed = undefined; }
   const error = parsed && typeof parsed === "object" && !Array.isArray(parsed) &&
       Object.keys(parsed).length === 1 && Object.hasOwn(parsed, "error")
-    ? safeProtocolError((parsed as { error?: unknown }).error) : internalError();
+    ? safeProtocolError((parsed as { error?: unknown }).error, secrets) : internalError();
   throw new OnlineRequestError(error);
 }
 
@@ -256,7 +277,7 @@ export async function requestConnectionTicket(
     throw new OnlineRequestError(internalError());
   }
   try {
-    return parseConnectionTicketResponse(await requireSuccessText(response)).ticket;
+    return parseConnectionTicketResponse(await requireSuccessText(response, [seatToken])).ticket;
   } catch (error) {
     if (error instanceof OnlineRequestError) throw error;
     throw new OnlineRequestError(internalError());
@@ -281,6 +302,14 @@ function terminalAction(error: ProtocolError): OnlineClientAction | undefined {
     return { type: "server.message", message: { type: "protocol.incompatible", error } };
   }
   return undefined;
+}
+
+function sanitizeServerMessage(
+  message: ServerWebSocketMessage,
+  secrets: readonly string[]
+): ServerWebSocketMessage {
+  if (!("error" in message)) return message;
+  return { ...message, error: sanitizeProtocolError(message.error, secrets) };
 }
 
 export function createOnlineRoomClient(
@@ -385,7 +414,10 @@ export function createOnlineRoomClient(
         const data = (event as { data?: unknown }).data;
         if (typeof data !== "string") return;
         try {
-          const message = parseServerWebSocketMessage(data);
+          const message = sanitizeServerMessage(
+            parseServerWebSocketMessage(data),
+            [credential.seatToken, ticket]
+          );
           reduce({ type: "server.message", message });
           if (message.type === "room.expired" || message.type === "protocol.incompatible") {
             clearPending();

@@ -168,6 +168,31 @@ describe("online seat credential storage", () => {
     expect(store.load(roomCode)).toEqual({ roomCode, seatId: "seat-new", seatToken });
     expect(store.load("ABC234")).toBeUndefined();
   });
+
+  it("adopts a different newer persistent credential after a volatile quota fallback", () => {
+    const key = seatCredentialStorageKey(roomCode);
+    const values = new Map<string, string>([[key, JSON.stringify({
+      roomCode,
+      seatId: "seat-old",
+      seatToken: "o".repeat(43)
+    })]]);
+    let quota = true;
+    const storage: StorageLike = {
+      getItem: (candidate) => values.get(candidate) ?? null,
+      setItem: (candidate, value) => {
+        if (quota) throw new DOMException("quota");
+        values.set(candidate, value);
+      },
+      removeItem: (candidate) => void values.delete(candidate)
+    };
+    const store = createSeatCredentialStore(storage);
+    expect(store.save({ roomCode, seatId: "seat-volatile", seatToken })).toEqual({ saved: true, persistent: false });
+    expect(store.load(roomCode)?.seatId).toBe("seat-volatile");
+
+    quota = false;
+    values.set(key, JSON.stringify({ roomCode, seatId: "seat-external", seatToken: "e".repeat(43) }));
+    expect(store.load(roomCode)?.seatId).toBe("seat-external");
+  });
 });
 
 describe("online HTTP bootstrap", () => {
@@ -244,6 +269,17 @@ describe("online HTTP bootstrap", () => {
     }
     expect(caught).toMatchObject({ protocolError: { code: "INTERNAL_ERROR", params: {} } });
     expect(JSON.stringify(caught)).not.toContain(seatToken);
+
+    await expect(requestConnectionTicket(roomCode, seatToken, {
+      origin: "https://game.test",
+      fetch: async () => new Response(JSON.stringify({
+        error: {
+          code: "RATE_LIMITED",
+          params: { detail: `ticket failed: ${seatToken} retry later` },
+          retryable: true
+        }
+      }), { status: 429 })
+    })).rejects.toMatchObject({ protocolError: { code: "INTERNAL_ERROR", params: {} } });
   });
 
   it("cancels a streamed response as soon as the actual body exceeds the wire limit", async () => {
@@ -258,6 +294,22 @@ describe("online HTTP bootstrap", () => {
     await expect(requestConnectionTicket(roomCode, seatToken, {
       origin: "https://game.test",
       fetch: async () => new Response(stream, { status: 201 })
+    })).rejects.toMatchObject({ protocolError: { code: "INTERNAL_ERROR" } });
+    expect(cancelled).toBe(true);
+  });
+
+  it("best-effort cancels the body before rejecting an invalid declared length", async () => {
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new Uint8Array([1])); },
+      cancel() { cancelled = true; }
+    });
+    await expect(requestConnectionTicket(roomCode, seatToken, {
+      origin: "https://game.test",
+      fetch: async () => new Response(stream, {
+        status: 201,
+        headers: { "content-length": String(MAX_WIRE_BYTES + 1) }
+      })
     })).rejects.toMatchObject({ protocolError: { code: "INTERNAL_ERROR" } });
     expect(cancelled).toBe(true);
   });
@@ -419,6 +471,37 @@ describe("online reconnect transport", () => {
     await flush();
     expect(client.getState().notice).toEqual({ code: "INTERNAL_ERROR", params: {}, retryable: true });
     expect(JSON.stringify(client.getState())).not.toContain(seatToken);
+    client.dispose();
+  });
+
+  it("redacts embedded current credentials from WebSocket rejection notices", async () => {
+    const credentials = createSeatCredentialStore(memoryStorage());
+    credentials.save({ roomCode, seatId: "seat-1", seatToken });
+    const socket = new FakeSocket();
+    const ticket = "t".repeat(43);
+    const client = createOnlineRoomClient(roomCode, {
+      origin: "https://game.test",
+      credentials,
+      scheduler: new FakeScheduler(),
+      fetch: async () => new Response(JSON.stringify({ ticket, expiresInMs: 30_000 }), { status: 201 }),
+      createWebSocket: () => socket
+    });
+    client.connect();
+    await flush();
+    socket.readyState = 1;
+    socket.emit("open");
+    socket.emit("message", { data: JSON.stringify({
+      type: "command.rejected",
+      commandId: "11111111-1111-4111-8111-111111111111",
+      error: {
+        code: "RULE_VIOLATION",
+        params: { detail: `seat ${seatToken}; ticket ${ticket}` },
+        retryable: false
+      }
+    }) });
+    expect(client.getState().notice).toEqual({ code: "INTERNAL_ERROR", params: {}, retryable: true });
+    expect(JSON.stringify(client.getState())).not.toContain(seatToken);
+    expect(JSON.stringify(client.getState())).not.toContain(ticket);
     client.dispose();
   });
 

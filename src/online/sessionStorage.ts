@@ -64,13 +64,30 @@ export function createSeatCredentialStore(
   storage: StorageLike | undefined = defaultStorage()
 ): SeatCredentialStore {
   const memory = new Map<string, SeatCredential>();
-  const volatileOverrides = new Set<string>();
+  const unreadable = Symbol("unreadable persistent credential");
+  const volatileOverrides = new Map<string, string | null | typeof unreadable>();
   return {
     load(roomCode) {
       const normalizedRoomCode = normalizeRoomCode(roomCode);
       if (!ROOM_CODE_PATTERN.test(normalizedRoomCode)) return undefined;
       const key = seatCredentialStorageKey(normalizedRoomCode);
-      if (volatileOverrides.has(key)) return memory.get(key);
+      if (volatileOverrides.has(key)) {
+        const observed = volatileOverrides.get(key);
+        if (storage && observed !== unreadable) {
+          try {
+            const current = storage.getItem(key);
+            if (current !== observed && current !== null) {
+              const external = credentialAt(JSON.parse(current) as unknown, normalizedRoomCode);
+              if (external) {
+                volatileOverrides.delete(key);
+                memory.set(key, external);
+                return external;
+              }
+            }
+          } catch { /* preserve the newer volatile credential */ }
+        }
+        return memory.get(key);
+      }
       if (storage) {
         try {
           const serialized = storage.getItem(key);
@@ -98,9 +115,13 @@ export function createSeatCredentialStore(
         return { saved: false, persistent: false };
       }
       const key = seatCredentialStorageKey(normalizedRoomCode);
+      let observed: string | null | typeof unreadable = unreadable;
+      if (storage) {
+        try { observed = storage.getItem(key); } catch { /* storage remains unreadable */ }
+      }
       memory.set(key, safeCredential);
       if (!storage) {
-        volatileOverrides.add(key);
+        volatileOverrides.set(key, unreadable);
         return { saved: true, persistent: false };
       }
       try {
@@ -108,7 +129,7 @@ export function createSeatCredentialStore(
         volatileOverrides.delete(key);
         return { saved: true, persistent: true };
       } catch {
-        volatileOverrides.add(key);
+        volatileOverrides.set(key, observed);
         return { saved: true, persistent: false };
       }
     },
