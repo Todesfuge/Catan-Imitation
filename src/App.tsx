@@ -7,7 +7,7 @@ import {
 } from "./app/localGameState";
 import { GameTable } from "./ui/GameTable";
 
-export default function App() {
+export function LocalGame() {
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialAppState);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -16,3 +16,5 @@ export default function App() {
 
   return <GameTable view={createLocalGameTableView(state)} dispatch={controllerRef.current.dispatch} />;
 }
+
+export default LocalGame;

@@ -1,5 +1,55 @@
 import { expect, test, type Page } from "@playwright/test";
 
+async function openLocal(page: Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Play Local Game" }).click();
+}
+
+test("mode entry keeps Local offline and focuses recoverable Online validation", async ({ page }) => {
+  let apiRequests = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/api/")) apiRequests += 1;
+  });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Play Local Game" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Play Online Game" })).toBeVisible();
+  await page.getByRole("button", { name: "Play Local Game" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".game-shell")).toBeVisible();
+  expect(apiRequests).toBe(0);
+
+  await page.reload();
+  await page.getByRole("button", { name: "Play Online Game" }).click();
+  await page.getByRole("button", { name: "Create room" }).click();
+  const error = page.getByRole("alert");
+  await expect(error).toHaveText("Enter a nickname.");
+  await expect(error).toBeFocused();
+  expect(apiRequests).toBe(0);
+});
+
+for (const viewport of [
+  { name: "desktop", width: 1280, height: 720 },
+  { name: "tablet", width: 768, height: 1024 },
+  { name: "mobile", width: 390, height: 844 }
+]) {
+  test(`${viewport.name} mode and Online entry do not overflow`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Catan Imitation" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+    await page.getByRole("button", { name: "Play Online Game" }).click();
+    await expect(page.getByRole("heading", { name: "Online Game" })).toBeVisible();
+    const measurements = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      shortTargetCount: [...document.querySelectorAll("button")]
+        .filter((button) => button.getBoundingClientRect().height < 44).length
+    }));
+    expect(measurements.documentWidth).toBeLessThanOrEqual(measurements.viewportWidth);
+    expect(measurements.shortTargetCount).toBe(0);
+  });
+}
+
 async function advanceBackToFirstPlayer(page: Page) {
   await page.getByRole("button", { name: "End Turn" }).click();
   for (let otherPlayer = 0; otherPlayer < 3; otherPlayer += 1) {
@@ -24,7 +74,7 @@ async function setDeterministicTotal(page: Page, total: 2 | 3 | 7 | 8) {
 }
 
 test("a zero-token gathering completes without entering an unwinnable auction", async ({ page }) => {
-  await page.goto("/");
+  await openLocal(page);
   await page.getByRole("tab", { name: "Commerce Guild" }).click();
   await page.getByRole("button", { name: "Start Gathering" }).click();
   await page.getByRole("button", { name: "Open Auctions" }).click();
@@ -42,7 +92,7 @@ test("unaffordable actions stay disabled and maritime choices are explicit", asy
   await page.addInitScript(() => {
     Math.random = () => 0;
   });
-  await page.goto("/");
+  await openLocal(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
 
   await expect(page.getByRole("button", { name: "Road", exact: true })).toBeDisabled();
@@ -51,7 +101,7 @@ test("unaffordable actions stay disabled and maritime choices are explicit", asy
 });
 
 test("New Game enters interactive snake-order setup", async ({ page }) => {
-  await page.goto("/");
+  await openLocal(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "Start New Game" }).click();
 
@@ -60,7 +110,7 @@ test("New Game enters interactive snake-order setup", async ({ page }) => {
 });
 
 test("New Game completes all setup pairs and enters normal play", async ({ page }) => {
-  await page.goto("/");
+  await openLocal(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "Start New Game" }).click();
 
@@ -83,7 +133,7 @@ test("explicit maritime choices fund selected Road, Settlement, and City targets
     let call = 0;
     Math.random = () => (call++ % 2 === 0 ? 0 : 0.2);
   });
-  await page.goto("/");
+  await openLocal(page);
 
   for (let p1Turn = 0; p1Turn < 4; p1Turn += 1) {
     await page.getByRole("button", { name: "Roll Dice" }).click();
@@ -184,7 +234,7 @@ test("Commerce controls keep valid named selections across turns", async ({ page
   await page.addInitScript(() => {
     Math.random = () => 0;
   });
-  await page.goto("/");
+  await openLocal(page);
   await page.getByRole("tab", { name: "Commerce Guild" }).click();
 
   await expect(page.getByLabel("Token recipient")).toHaveValue("p2");
@@ -202,7 +252,7 @@ test("Commerce controls keep valid named selections across turns", async ({ page
 });
 
 test("utility dialog owns focus, closes with Escape, and restores its opener", async ({ page }) => {
-  await page.goto("/");
+  await openLocal(page);
   const opener = page.getByRole("button", { name: "Open settings" });
   await opener.click();
 
@@ -216,7 +266,7 @@ test("post-roll guidance describes the current action phase", async ({ page }) =
   await page.addInitScript(() => {
     Math.random = () => 0;
   });
-  await page.goto("/");
+  await openLocal(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
 
   await expect(page.locator(".phase-guidance")).toHaveText("Choose an action or end the turn");
@@ -229,7 +279,7 @@ for (const viewport of [
 ]) {
   test(`${viewport.name} keeps actions contained and board-adjacent`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto("/");
+    await openLocal(page);
 
     const measurements = await page.evaluate(() => {
       const action = document.querySelector(".action-bar")!.getBoundingClientRect();
@@ -282,7 +332,7 @@ for (const viewport of [
 
 test("mobile setup board targets retain a 44px non-scaling hit stroke", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await openLocal(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "Start New Game" }).click();
 
@@ -298,7 +348,7 @@ test("mobile setup board targets retain a 44px non-scaling hit stroke", async ({
 
 test("robber guidance stays readable and log/statistics lists reach their final entries", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto("/");
+  await openLocal(page);
   for (let completedTurn = 0; completedTurn < 8; completedTurn += 1) {
     await setDeterministicTotal(page, 2);
     await page.getByRole("button", { name: "Roll Dice" }).click();
@@ -359,7 +409,7 @@ test("robber guidance stays readable and log/statistics lists reach their final 
 });
 
 test("a public multi-resource offer is visible to every opponent and accepts atomically", async ({ page }) => {
-  await page.goto("/");
+  await openLocal(page);
   await setDeterministicTotal(page, 8);
   await page.getByRole("button", { name: "Roll Dice" }).click();
 
@@ -382,7 +432,7 @@ test("a public multi-resource offer is visible to every opponent and accepts ato
 });
 
 test("public offers cancel explicitly and clear when the proposer ends the turn", async ({ page }) => {
-  await page.goto("/");
+  await openLocal(page);
   await setDeterministicTotal(page, 8);
   await page.getByRole("button", { name: "Roll Dice" }).click();
   await page.getByLabel("Offer Wool").fill("1");
@@ -400,7 +450,7 @@ test("public offers cancel explicitly and clear when the proposer ends the turn"
 });
 
 test("English defaults, Chinese retranslates history, and the locale survives reload", async ({ page }) => {
-  await page.goto("/");
+  await openLocal(page);
   await expect(page.getByRole("heading", { name: "Game Log" })).toBeVisible();
   await setDeterministicTotal(page, 8);
   await page.getByRole("button", { name: "Roll Dice" }).click();
@@ -418,6 +468,7 @@ test("English defaults, Chinese retranslates history, and the locale survives re
   await expect(page.getByText("产出统计")).toBeVisible();
 
   await page.reload();
+  await page.getByRole("button", { name: "开始本地游戏" }).click();
   await expect(page.getByRole("heading", { name: "游戏日志" })).toBeVisible();
   await expect(page.getByRole("button", { name: "掷骰子" })).toBeVisible();
   await expect(page.getByRole("log")).toContainText("欢迎来到卡坦岛仿制版");
@@ -433,7 +484,7 @@ test("English defaults, Chinese retranslates history, and the locale survives re
 
 test("mobile keeps log and dice statistics internally scrollable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await openLocal(page);
   for (let completedTurn = 0; completedTurn < 8; completedTurn += 1) {
     await setDeterministicTotal(page, 2);
     await page.getByRole("button", { name: "Roll Dice" }).click();

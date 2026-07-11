@@ -50,6 +50,10 @@ interface BootstrapDependencies extends RequestDependencies {
   credentials?: SeatCredentialStore;
 }
 
+interface LeaveDependencies extends RequestDependencies {
+  credentials: SeatCredentialStore;
+}
+
 export interface OnlineRoomDependencies extends BootstrapDependencies {
   credentials: SeatCredentialStore;
   createWebSocket: (url: string) => ClientSocket;
@@ -256,6 +260,44 @@ export function joinOnlineRoom(
 ): Promise<OnlineSeatSession> {
   const normalizedRoomCode = normalizeRoomCode(roomCode);
   return requestSeat(`/api/rooms/${encodeURIComponent(normalizedRoomCode)}/join`, nickname, dependencies);
+}
+
+export async function leaveOnlineRoom(
+  session: OnlineSeatSession,
+  dependencies: LeaveDependencies
+): Promise<void> {
+  const roomCode = normalizeRoomCode(session.roomCode);
+  const credential = dependencies.credentials.load(roomCode);
+  if (!credential || credential.seatId !== session.seatId) {
+    throw new OnlineRequestError({ code: "SEAT_TOKEN_INVALID", params: {}, retryable: false });
+  }
+  let response: Response;
+  try {
+    response = await dependencies.fetch(
+      endpoint(
+        dependencies.origin,
+        `/api/rooms/${encodeURIComponent(roomCode)}/seats/${encodeURIComponent(session.seatId)}`
+      ),
+      {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${credential.seatToken}` }
+      }
+    );
+  } catch {
+    throw new OnlineRequestError(internalError());
+  }
+  if (response.status === 204) {
+    await cancelResponseBody(response);
+    dependencies.credentials.remove(roomCode);
+    return;
+  }
+  try {
+    await requireSuccessText(response, [credential.seatToken]);
+  } catch (error) {
+    if (error instanceof OnlineRequestError) throw error;
+    throw new OnlineRequestError(internalError());
+  }
+  throw new OnlineRequestError(internalError());
 }
 
 export async function requestConnectionTicket(
