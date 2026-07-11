@@ -4,7 +4,7 @@ This quickstart describes the intended development workflow after the implementa
 
 ## Prerequisites
 
-- Node.js 20 or newer.
+- Node.js 22 or newer.
 - Corepack with the repository-pinned pnpm version.
 - A Cloudflare account for preview/production deployment only; local tests require no account credentials.
 

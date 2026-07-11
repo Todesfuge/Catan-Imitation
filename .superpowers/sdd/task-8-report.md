@@ -142,3 +142,30 @@ Added:
 - Generated types and dry-run binding output agree with `wrangler.jsonc`.
 - The only remaining concern is the documented non-fatal Windows temp-directory cleanup warning
   in the pinned test pool; it is visible, unsuppressed, and does not leave user DO state.
+
+## Post-review correction: Node.js runtime prerequisite
+
+Review identified that direct `wrangler@4.110.0` declares `engines.node >=22.0.0`, while the
+feature quickstart still allowed Node.js 20 and the package did not declare a Node engine. That
+combination could permit an installation following the documentation but leave all Worker CLI
+commands unsupported. This was a toolchain-prerequisite defect, not a production behavior
+change, so no artificial failing runtime test was created.
+
+The correction is deliberately limited to the two prerequisite owners:
+
+- `package.json` now declares `engines.node: ">=22.0.0"`.
+- `specs/002-cloudflare-online-multiplayer/quickstart.md` now requires Node.js 22 or newer.
+
+A repository search found no other conflicting Node 20 runtime requirement for this feature;
+the existing CI and Pages workflows already use Node 22. Dependency versions and the lockfile
+were not changed, and the known Windows EBUSY warning remains visible and unsuppressed.
+
+Fresh post-review verification on Node v22.14.0:
+
+| Command | Fresh result |
+|---|---|
+| `pnpm install --frozen-lockfile` | Exit 0 with pnpm 11.7.0; already up to date; no lockfile change. |
+| `pnpm smoke:worker` | Exit 0; Vite production build passed and Worker smoke passed 3/3. The already-documented non-fatal EBUSY teardown warning remained visible. |
+| `pnpm build:worker` | Exit 0; browser and Worker TypeScript builds plus Vite production build passed. |
+| `pnpm exec wrangler deploy --dry-run` | Exit 0 using Wrangler 4.110.0; assets and both `ROOMS`/`ASSETS` bindings validated. |
+| `git diff --check` | Exit 0; no whitespace errors. |
