@@ -390,12 +390,12 @@ Files:
 
 Steps:
 
-- [ ] Write failing UI tests for Local/Online selection, create/join validation, room code display/copy, seat order, ready status, host start, host-only controls, online/offline badges, leave lobby, English default, and Chinese translations.
-- [ ] Run `pnpm vitest run test/online/onlineLobbyUi.test.ts`; expect missing UI failures.
-- [ ] Implement the dependency-free mode router and lobby using `useOnlineRoom`; keep Local Game available without any network call.
-- [ ] Add responsive lobby styling and at least 44-pixel interactive targets.
-- [ ] Run the focused test and `pnpm test`; expect all pass.
-- [ ] Commit with `feat: add private online room lobby`.
+- [x] Write failing UI tests for Local/Online selection, create/join validation, room code display/copy, seat order, ready status, host start, host-only controls, online/offline badges, leave lobby, English default, and Chinese translations.
+- [x] Run `pnpm vitest run test/online/onlineLobbyUi.test.ts`; expect missing UI failures.
+- [x] Implement the dependency-free mode router and lobby using `useOnlineRoom`; keep Local Game available without any network call.
+- [x] Add responsive lobby styling and at least 44-pixel interactive targets.
+- [x] Run the focused test and `pnpm test`; expect all pass.
+- [x] Commit with `feat: add private online room lobby`.
 
 ### Task 18 (T018) — Adapt the full table to caller-specific online views
 
