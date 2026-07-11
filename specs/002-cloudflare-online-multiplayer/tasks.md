@@ -367,12 +367,12 @@ Files:
 
 Steps:
 
-- [ ] Write failing tests for origin-local token keys, invalid storage fallback, create/join/ticket calls, complete snapshot replacement, duplicate/out-of-order server messages, 1/2/4/8/15-second capped reconnect schedule, disabled offline dispatch, expired/incompatible terminal states, and multi-tab token reuse.
-- [ ] Run `pnpm vitest run test/online/onlineClient.test.ts`; expect missing-client failures.
-- [ ] Implement the session store, pure online reducer, and transport hook with injectable fetch/WebSocket/scheduler test dependencies.
-- [ ] Ensure the hook never applies game commands locally or stores the seat token in URLs/logs/state snapshots.
-- [ ] Run the focused test; expect all pass.
-- [ ] Commit with `feat: reconnect anonymous online seats`.
+- [x] Write failing tests for origin-local token keys, invalid storage fallback, create/join/ticket calls, complete snapshot replacement, duplicate/out-of-order server messages, 1/2/4/8/15-second capped reconnect schedule, disabled offline dispatch, expired/incompatible terminal states, and multi-tab token reuse.
+- [x] Run `pnpm vitest run test/online/onlineClient.test.ts`; expect missing-client failures.
+- [x] Implement the session store, pure online reducer, and transport hook with injectable fetch/WebSocket/scheduler test dependencies.
+- [x] Ensure the hook never applies game commands locally or stores the seat token in URLs/logs/state snapshots.
+- [x] Run the focused test; expect all pass.
+- [x] Commit with `feat: reconnect anonymous online seats`.
 
 ### Task 17 (T017) — Add Local/Online entry and room lobby
 
