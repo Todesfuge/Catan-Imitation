@@ -1,11 +1,59 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { createInitialAppState } from "../../src/app/gameReducer";
+import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { applyMatchCommand } from "../../src/domain/match/applyMatchCommand";
 import { DeterministicRandomSource } from "../../src/domain/match/random";
 import type {
   DiceRoll,
+  MatchCommand,
   MatchExecutionContext,
   MatchState
 } from "../../src/domain/match/types";
+import { emptyResources, type PlayerId, type ResourceMap } from "../../src/domain/types";
+
+function createContext(values: readonly number[] = []): MatchExecutionContext {
+  let nextLogNumber = 0;
+  return {
+    random: new DeterministicRandomSource(values),
+    nextLogId: () => `test-log-${++nextLogNumber}`,
+    now: () => 1_700_000_000_000
+  };
+}
+
+function toMatchState(state = createInitialAppState()): MatchState {
+  return {
+    game: state.game,
+    guild: state.guild,
+    lastDice: state.lastDice,
+    pendingPlayerTrade: state.pendingPlayerTrade
+  };
+}
+
+function withResources(
+  state: MatchState,
+  resourcesByPlayer: Partial<Record<PlayerId, Partial<ResourceMap>>>
+): MatchState {
+  return {
+    ...state,
+    game: {
+      ...state.game,
+      players: state.game.players.map((player) => ({
+        ...player,
+        resources: {
+          ...player.resources,
+          ...(resourcesByPlayer[player.id] ?? {})
+        }
+      }))
+    }
+  };
+}
+
+function apply(
+  state: MatchState,
+  command: MatchCommand,
+  context = createContext()
+): MatchState {
+  return applyMatchCommand(state, command, context);
+}
 
 describe("match transition foundations", () => {
   it("keeps only synchronized gameplay fields in MatchState", () => {
@@ -52,5 +100,151 @@ describe("match transition foundations", () => {
   it("rejects invalid deterministic random values instead of changing their distribution", () => {
     expect(() => new DeterministicRandomSource([6]).nextInt(6)).toThrow(RangeError);
     expect(() => new DeterministicRandomSource([0]).nextInt(0)).toThrow(RangeError);
+  });
+
+  it("starts setup and applies setup placements through the shared dispatcher", () => {
+    const started = apply(toMatchState(), { type: "START_NEW_GAME" });
+    const vertexId = started.game.board[0].vertexIds[0];
+    const settled = apply(started, {
+      type: "PLACE_SETUP_SETTLEMENT",
+      playerId: "p1",
+      vertexId
+    });
+    const edgeId = settled.game.edges.find((edge) => edge.vertexIds.includes(vertexId))?.id ?? "";
+    const roaded = apply(settled, { type: "PLACE_SETUP_ROAD", playerId: "p1", edgeId });
+
+    expect(started.game.log[0]).toMatchObject({
+      id: "test-log-1",
+      messageKey: "setup.newGameStarted"
+    });
+    expect(settled.game.setup?.stage).toBe("road");
+    expect(roaded.game.activePlayerId).toBe("p2");
+  });
+
+  it("uses injected randomness for dice, seven handling, and robber theft", () => {
+    const context = createContext([2, 3, 0]);
+    const funded = withResources(toMatchState(), { p2: { ore: 1 } });
+    const rolled = apply(funded, { type: "ROLL_DICE", playerId: "p1" }, context);
+    const placed = apply(
+      rolled,
+      { type: "PLACE_ROBBER", playerId: "p1", hexId: "mountain-8" },
+      context
+    );
+    const stolen = apply(
+      placed,
+      { type: "STEAL_ROBBER_RESOURCE", playerId: "p1", victimId: "p2" },
+      context
+    );
+
+    expect(rolled.lastDice).toEqual({ first: 3, second: 4, total: 7 });
+    expect(rolled.game.turnState.phase).toBe("awaitingRobberPlacement");
+    expect(placed.game.turnState.phase).toBe("awaitingRobberVictim");
+    expect(stolen.game.players.find((player) => player.id === "p1")?.resources.ore).toBe(1);
+    expect(stolen.game.turnState.phase).toBe("action");
+  });
+
+  it("applies build, development-card, maritime-trade, and winner orchestration", () => {
+    const context = createContext([0, 0]);
+    const funded = withResources(toMatchState(), {
+      p1: { wood: 5, brick: 5, wool: 5, grain: 5, ore: 5 }
+    });
+    const rolled = apply(funded, { type: "ROLL_DICE", playerId: "p1" }, context);
+    const ownedRoad = rolled.game.roads.find((road) => road.ownerId === "p1");
+    const ownedEdge = rolled.game.edges.find((edge) => edge.id === ownedRoad?.edgeId);
+    const edgeId = rolled.game.edges.find(
+      (edge) =>
+        !rolled.game.roads.some((road) => road.edgeId === edge.id) &&
+        edge.vertexIds.some((vertexId) => ownedEdge?.vertexIds.includes(vertexId))
+    )?.id ?? "";
+    const built = apply(rolled, { type: "BUILD_ROAD", playerId: "p1", edgeId });
+    const bought = apply(built, { type: "BUY_DEVELOPMENT_CARD", playerId: "p1" });
+    const traded = apply(
+      bought,
+      { type: "MARITIME_TRADE", playerId: "p1", give: "wood", receive: "ore" }
+    );
+    const winnerCandidate = {
+      ...toMatchState(),
+      game: { ...toMatchState().game, targetScore: 2 }
+    };
+    const won = apply(
+      winnerCandidate,
+      { type: "ROLL_DICE", playerId: "p1" },
+      createContext([3, 3])
+    );
+
+    expect(built.game.roads.some((road) => road.edgeId === edgeId)).toBe(true);
+    expect(bought.game.log[0].messageKey).toBe("development.bought");
+    expect(traded.game.log[0].messageKey).toBe("trade.maritime");
+    expect(won.game).toMatchObject({ phase: "gameOver", winnerId: "p1" });
+  });
+
+  it("publishes and accepts player trades, then clears unresolved offers at turn end", () => {
+    const context = createContext([0, 0]);
+    const action = withResources(
+      apply(toMatchState(), { type: "ROLL_DICE", playerId: "p1" }, context),
+      { p1: { wood: 2 }, p2: { grain: 2 } }
+    );
+    const offered = { ...emptyResources(), wood: 1 };
+    const requested = { ...emptyResources(), grain: 1 };
+    const published = apply(action, {
+      type: "PUBLISH_PLAYER_TRADE",
+      playerId: "p1",
+      offered,
+      requested
+    });
+    const accepted = apply(published, { type: "ACCEPT_PLAYER_TRADE", playerId: "p2" });
+    const republished = apply(accepted, {
+      type: "PUBLISH_PLAYER_TRADE",
+      playerId: "p1",
+      offered,
+      requested
+    });
+    const ended = apply(republished, { type: "END_TURN", playerId: "p1" });
+
+    expect(published.pendingPlayerTrade).toMatchObject({ proposerId: "p1" });
+    expect(accepted.pendingPlayerTrade).toBeUndefined();
+    expect(accepted.game.log[0].messageKey).toBe("trade.player.accepted");
+    expect(ended.pendingPlayerTrade).toBeUndefined();
+    expect(ended.lastDice).toBeNull();
+  });
+
+  it("applies Commerce Guild actions through the shared dispatcher", () => {
+    const base = toMatchState();
+    const funded = {
+      ...base,
+      game: {
+        ...base.game,
+        players: base.game.players.map((player) =>
+          player.id === "p1" ? { ...player, guildTokens: 1 } : player
+        )
+      }
+    };
+    const started = apply(funded, { type: "START_GATHERING" });
+    const redeemed = apply(started, {
+      type: "REDEEM_GATHERING",
+      playerId: "p1",
+      resources: { wood: 1 }
+    });
+    const auction = apply(redeemed, { type: "OPEN_AUCTION" });
+
+    expect(started.guild.gathering.phase).toBe("redemption");
+    expect(redeemed.game.log[0].messageKey).toBe("guild.redeemedResources");
+    expect(["auction", "complete"]).toContain(auction.guild.gathering.phase);
+  });
+
+  it("throws recoverable domain errors while the local adapter preserves UI state and notice", () => {
+    const state = createInitialAppState();
+    const match = toMatchState(state);
+
+    expect(() =>
+      apply(match, { type: "END_TURN", playerId: "p1" })
+    ).toThrow(/roll/i);
+
+    const selected = gameReducer(state, { type: "SELECT_DICE_TOTAL", diceTotal: 10 });
+    const recovered = gameReducer(selected, { type: "END_TURN", playerId: "p1" });
+
+    expect(recovered.game).toBe(selected.game);
+    expect(recovered.selectedDiceTotal).toBe(10);
+    expect(recovered.notice).toMatch(/roll/i);
   });
 });

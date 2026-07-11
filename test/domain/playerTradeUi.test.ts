@@ -5,9 +5,10 @@ import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
 import { emptyResources } from "../../src/domain/types";
 import { PlayerTradePanel } from "../../src/ui/PlayerTradePanel";
 import { TradeHubPanel } from "../../src/ui/TradeHubPanel";
+import { executeMatchCommandForTest } from "./matchCommandTestUtils";
 
 function createTradeState() {
-  const actionState = gameReducer(createInitialAppState(), {
+  const actionState = executeMatchCommandForTest(createInitialAppState(), {
     type: "ROLL_DICE",
     playerId: "p1",
     dice: [4, 4]

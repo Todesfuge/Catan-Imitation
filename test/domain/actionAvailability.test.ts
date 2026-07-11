@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getActionAvailability } from "../../src/app/actionAvailability";
-import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { createInitialAppState } from "../../src/app/gameReducer";
 import { emptyResources, type ResourceMap } from "../../src/domain/types";
+import { executeMatchCommandForTest } from "./matchCommandTestUtils";
 
 function withActiveResources(resources: Partial<ResourceMap>) {
   const state = createInitialAppState();
@@ -20,7 +21,7 @@ function withActiveResources(resources: Partial<ResourceMap>) {
 
 function enterActionPhase(resources: Partial<ResourceMap> = {}) {
   const state = withActiveResources(resources);
-  return gameReducer(state, {
+  return executeMatchCommandForTest(state, {
     type: "ROLL_DICE",
     playerId: state.game.activePlayerId,
     dice: [1, 1]

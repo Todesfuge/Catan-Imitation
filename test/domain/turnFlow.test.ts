@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   createInitialAppState,
-  unsafeExecuteGameCommandForTests as gameReducer,
-  type AppState,
-  type GameCommand
+  type AppState
 } from "../../src/app/gameReducer";
+import {
+  executeMatchCommandForTest as gameReducer,
+  type TestMatchCommand as GameCommand
+} from "./matchCommandTestUtils";
 import { placeSetupRoad, placeSetupSettlement } from "../../src/domain/rules/building";
 import { createSetupGame } from "../../src/domain/setup";
 import { emptyResources, type PlayerId, type ResourceMap } from "../../src/domain/types";

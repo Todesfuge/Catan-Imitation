@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { gameReducer, createInitialAppState } from "../../src/app/gameReducer";
+import { createInitialAppState } from "../../src/app/gameReducer";
 import { buildCity, buildRoad, buildSettlement } from "../../src/domain/rules/building";
 import { calculatePlayerScore } from "../../src/domain/rules/scoring";
+import { executeMatchCommandForTest } from "./matchCommandTestUtils";
 
 describe("core gameplay rules", () => {
   it("builds roads, settlements, and cities by paying the configured costs", () => {
@@ -72,7 +73,11 @@ describe("core gameplay rules", () => {
   it("roll dice command applies production to player hands and records the roll", () => {
     const state = createInitialAppState();
 
-    const next = gameReducer(state, { type: "ROLL_DICE", playerId: "p1", dice: [4, 4] });
+    const next = executeMatchCommandForTest(state, {
+      type: "ROLL_DICE",
+      playerId: "p1",
+      dice: [4, 4]
+    });
     const p1 = next.game.players.find((player) => player.id === "p1");
     const p2 = next.game.players.find((player) => player.id === "p2");
 

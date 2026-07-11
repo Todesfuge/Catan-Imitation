@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   createInitialAppState,
-  unsafeExecuteGameCommandForTests as gameReducer,
   type AppState
 } from "../../src/app/gameReducer";
+import { executeMatchCommandForTest as gameReducer } from "./matchCommandTestUtils";
 import { emptyResources, resources, type DevelopmentCardKind, type Resource } from "../../src/domain/types";
 
 function withCard(

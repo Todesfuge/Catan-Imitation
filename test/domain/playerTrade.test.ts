@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   createInitialAppState,
   gameReducer,
-  unsafeExecuteGameCommandForTests,
   type AppState
 } from "../../src/app/gameReducer";
+import { executeMatchCommandForTest } from "./matchCommandTestUtils";
 import {
   acceptPlayerTrade,
   createPlayerTradeOffer
@@ -16,7 +16,7 @@ function bundle(values: Partial<ResourceMap>): ResourceMap {
 }
 
 function createActionState(): AppState {
-  const rolled = gameReducer(createInitialAppState(), {
+  const rolled = executeMatchCommandForTest(createInitialAppState(), {
     type: "ROLL_DICE",
     playerId: "p1",
     dice: [1, 1]
@@ -49,7 +49,7 @@ describe("public player resource trade", () => {
     expect(offer.offered).not.toBe(offered);
     expect(offer.requested).not.toBe(requested);
 
-    const published = unsafeExecuteGameCommandForTests(state, {
+    const published = executeMatchCommandForTest(state, {
       type: "PUBLISH_PLAYER_TRADE",
       playerId: "p1",
       offered,
@@ -58,7 +58,7 @@ describe("public player resource trade", () => {
     expect(published.pendingPlayerTrade).toEqual(offer);
 
     expect(() =>
-      unsafeExecuteGameCommandForTests(published, {
+      executeMatchCommandForTest(published, {
         type: "PUBLISH_PLAYER_TRADE",
         playerId: "p1",
         offered: bundle({ wood: 1 }),
@@ -85,7 +85,7 @@ describe("public player resource trade", () => {
 
   it("accepts atomically, conserves each resource, and clears the offer", () => {
     const state = createActionState();
-    const published = unsafeExecuteGameCommandForTests(state, {
+    const published = executeMatchCommandForTest(state, {
       type: "PUBLISH_PLAYER_TRADE",
       playerId: "p1",
       offered: bundle({ wood: 2, brick: 1 }),
@@ -115,7 +115,7 @@ describe("public player resource trade", () => {
       );
     }
 
-    const accepted = unsafeExecuteGameCommandForTests(published, {
+    const accepted = executeMatchCommandForTest(published, {
       type: "ACCEPT_PLAYER_TRADE",
       playerId: "p2"
     });
@@ -176,7 +176,7 @@ describe("public player resource trade", () => {
 
   it("allows active-player cancellation and clears an unresolved offer at end turn", () => {
     const state = createActionState();
-    const published = unsafeExecuteGameCommandForTests(state, {
+    const published = executeMatchCommandForTest(state, {
       type: "PUBLISH_PLAYER_TRADE",
       playerId: "p1",
       offered: bundle({ wood: 1 }),
@@ -184,19 +184,19 @@ describe("public player resource trade", () => {
     });
 
     expect(() =>
-      unsafeExecuteGameCommandForTests(published, {
+      executeMatchCommandForTest(published, {
         type: "CANCEL_PLAYER_TRADE",
         playerId: "p2"
       })
     ).toThrow(/active player/i);
 
-    const cancelled = unsafeExecuteGameCommandForTests(published, {
+    const cancelled = executeMatchCommandForTest(published, {
       type: "CANCEL_PLAYER_TRADE",
       playerId: "p1"
     });
     expect(cancelled.pendingPlayerTrade).toBeUndefined();
 
-    const ended = unsafeExecuteGameCommandForTests(published, {
+    const ended = executeMatchCommandForTest(published, {
       type: "END_TURN",
       playerId: "p1"
     });

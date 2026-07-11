@@ -1,10 +1,11 @@
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { createInitialAppState } from "../../src/app/gameReducer";
 import { emptyResources } from "../../src/domain/types";
 import { ActionDock } from "../../src/ui/ActionDock";
 import { BoardActionTargets } from "../../src/ui/BoardActionTargets";
+import { executeMatchCommandForTest } from "./matchCommandTestUtils";
 
 function createFundedActionState() {
   const initial = createInitialAppState();
@@ -22,7 +23,7 @@ function createFundedActionState() {
       )
     }
   };
-  return gameReducer(funded, {
+  return executeMatchCommandForTest(funded, {
     type: "ROLL_DICE",
     playerId: funded.game.activePlayerId,
     dice: [1, 1]
