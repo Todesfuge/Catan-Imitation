@@ -60,3 +60,35 @@ duplicate implementation path was created.
 - Workers Vitest still reports the known Windows Miniflare temporary-directory `EBUSY`
   cleanup warning after passing runs. It remains visible and does not change the exit code.
 - Ticket storage and atomic single-use consumption intentionally remain for T010/T011.
+
+## Security Review Follow-up
+
+### Red/Green Evidence
+
+- RED: the expanded focused suite ran 16 tests with 2 failures. Equal invalid/non-canonical
+  hash strings were accepted, and malformed or mismatched `Content-Length` values were not
+  consistently rejected.
+- GREEN: `pnpm test:worker -- test/worker/security.test.ts` passed 16/16 after the bounded
+  parser and comparison fixes.
+
+### Fixes
+
+- Hash comparison now requires each input to be exactly 43 base64url characters, decode to
+  exactly 32 bytes, and round-trip to the identical canonical unpadded encoding. Invalid
+  values return `false` before comparison; valid values use exactly 32 byte-wise XOR steps.
+- `Content-Length` now accepts only canonical decimal non-negative safe integers, rejects
+  values above 16 KiB, and must equal the completed stream's actual byte count. The existing
+  streaming hard limit and over-limit cancellation remain in place.
+- Explicit regressions cover invalid UTF-8 bytes and JSON `null`, scalar, and array bodies.
+  All failures retain the stable safe protocol error response and do not echo headers or
+  body data.
+
+### Final Verification
+
+- `pnpm test:worker -- test/worker/security.test.ts` — 16/16 passed.
+- `pnpm test:worker` — 20/20 passed.
+- `pnpm test` — 215/215 passed across 27 files.
+- `pnpm build:worker` — passed.
+- `pnpm build` — passed.
+- The known Windows Miniflare temporary-directory `EBUSY` cleanup warning remains visible
+  after passing Worker tests and does not change the exit code.

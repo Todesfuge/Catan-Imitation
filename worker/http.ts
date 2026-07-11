@@ -49,8 +49,15 @@ export function safeErrorResponse(error: unknown): Response {
 }
 
 async function readBoundedBytes(request: Request): Promise<Uint8Array> {
-  const declaredLength = request.headers.get("content-length");
-  if (declaredLength !== null && Number(declaredLength) > MAX_WIRE_BYTES) ruleViolation();
+  const contentLengthHeader = request.headers.get("content-length");
+  let declaredLength: number | undefined;
+  if (contentLengthHeader !== null) {
+    if (!/^(0|[1-9][0-9]*)$/.test(contentLengthHeader)) ruleViolation();
+    declaredLength = Number(contentLengthHeader);
+    if (!Number.isSafeInteger(declaredLength) || declaredLength > MAX_WIRE_BYTES) {
+      ruleViolation();
+    }
+  }
   if (request.body === null) ruleViolation();
 
   const reader = request.body.getReader();
@@ -70,6 +77,7 @@ async function readBoundedBytes(request: Request): Promise<Uint8Array> {
   } finally {
     reader.releaseLock();
   }
+  if (declaredLength !== undefined && declaredLength !== byteLength) ruleViolation();
 
   const bytes = new Uint8Array(byteLength);
   let offset = 0;

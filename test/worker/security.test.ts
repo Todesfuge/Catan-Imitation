@@ -59,11 +59,30 @@ describe("anonymous credential cryptography", () => {
 
   it("hashes with SHA-256 base64url and compares hashes without plaintext", async () => {
     const abcHash = "ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0";
+    const defHash = await hashSecret("def");
 
     await expect(hashSecret("abc")).resolves.toBe(abcHash);
     expect(hashesMatch(abcHash, abcHash)).toBe(true);
-    expect(hashesMatch(abcHash, `${abcHash.slice(0, -1)}1`)).toBe(false);
-    expect(hashesMatch(abcHash, abcHash.slice(1))).toBe(false);
+    expect(hashesMatch(abcHash, defHash)).toBe(false);
+  });
+
+  it("rejects malformed and non-canonical values before fixed-size hash comparison", () => {
+    const validZeroHash = "A".repeat(43);
+    const invalidHashes = [
+      "!",
+      "A".repeat(42),
+      "A".repeat(44),
+      "A".repeat(1_000_000),
+      `${"A".repeat(42)}+`,
+      `${"A".repeat(42)}B`
+    ];
+
+    expect(hashesMatch(validZeroHash, validZeroHash)).toBe(true);
+    for (const invalid of invalidHashes) {
+      expect(hashesMatch(invalid, invalid)).toBe(false);
+      expect(hashesMatch(validZeroHash, invalid)).toBe(false);
+      expect(hashesMatch(invalid, validZeroHash)).toBe(false);
+    }
   });
 
   it("issues 32-byte one-time ticket data with an exact 30-second expiry", async () => {
@@ -119,6 +138,70 @@ describe("bounded HTTP input", () => {
       const request = new Request("https://game.example/api/rooms", {
         method: "POST",
         headers: { "content-type": contentType },
+        body
+      });
+      await expectSafeProtocolError(readJsonObject(request), "RULE_VIOLATION");
+    }
+  });
+
+  it("rejects malformed, unsafe, and mismatched Content-Length values", async () => {
+    for (const declaredLength of [
+      "garbage",
+      "-1",
+      "1.5",
+      "1,2",
+      "01",
+      String(Number.MAX_SAFE_INTEGER + 1),
+      String(16 * 1024 + 1),
+      "1",
+      "3"
+    ]) {
+      const request = new Request("https://game.example/api/rooms", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": declaredLength
+        },
+        body: "{}"
+      });
+      await expectSafeProtocolError(readJsonObject(request), "RULE_VIOLATION");
+    }
+  });
+
+  it("accepts canonical Content-Length only when it matches actual UTF-8 bytes", async () => {
+    const body = JSON.stringify({ value: "界" });
+    const byteLength = new TextEncoder().encode(body).byteLength;
+    const request = new Request("https://game.example/api/rooms", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(byteLength)
+      },
+      body
+    });
+
+    await expect(readJsonObject(request)).resolves.toEqual({ value: "界" });
+  });
+
+  it("rejects invalid UTF-8, null, scalar, and array JSON values", async () => {
+    const invalidUtf8 = new Uint8Array([0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0x80, 0x22, 0x7d]);
+    const invalidUtf8Request = new Request("https://game.example/api/rooms", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(invalidUtf8.byteLength)
+      },
+      body: invalidUtf8
+    });
+    await expectSafeProtocolError(readJsonObject(invalidUtf8Request), "RULE_VIOLATION");
+
+    for (const body of ["null", "true", "42", '"text"', "[]"]) {
+      const request = new Request("https://game.example/api/rooms", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": String(new TextEncoder().encode(body).byteLength)
+        },
         body
       });
       await expectSafeProtocolError(readJsonObject(request), "RULE_VIOLATION");
