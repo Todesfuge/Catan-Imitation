@@ -80,7 +80,8 @@ function makeSeat(input: NewSeatInput, joinedAt: number, joinOrder: number): Per
     joinedAt,
     joinOrder,
     ready: false,
-    acceptedCommandIds: []
+    acceptedCommandIds: [],
+    commandAttemptTimestamps: []
   };
 }
 

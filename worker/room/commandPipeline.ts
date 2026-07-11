@@ -182,23 +182,51 @@ function safeSend(recipient: CommandRecipient, message: ServerWebSocketMessage):
   }
 }
 
+function safeClose(recipient: CommandRecipient, code: number, reason: string): void {
+  try {
+    recipient.close?.(code, reason);
+  } catch {
+    // Continue terminal cleanup for every remaining peer.
+  }
+}
+
+function expireRoom(recipients: readonly CommandRecipient[]): void {
+  const message: ServerWebSocketMessage = {
+    type: "room.expired",
+    error: error("ROOM_EXPIRED")
+  };
+  for (const recipient of recipients) {
+    safeSend(recipient, message);
+    safeClose(recipient, 4002, "ROOM_EXPIRED");
+  }
+}
+
+function withAttemptTimestamps(
+  room: PersistedRoom,
+  seatId: string,
+  timestamps: readonly number[]
+): PersistedRoom {
+  return {
+    ...room,
+    seats: room.seats.map((seat) => seat.seatId === seatId
+      ? { ...seat, commandAttemptTimestamps: [...timestamps].slice(-10) }
+      : seat)
+  };
+}
+
+function rejectionCode(caught: unknown): ProtocolErrorCode {
+  return caught instanceof RuleViolationError ? "RULE_VIOLATION"
+    : caught instanceof RoomLifecycleError ? "COMMAND_NOT_ALLOWED"
+      : "INTERNAL_ERROR";
+}
+
 export function createCommandPipeline(dependencies: PipelineDependencies) {
   const execute = dependencies.executeMatchCommand ?? applyMatchCommand;
   const project = dependencies.projectRoom ?? projectRoomView;
   const rateLimit = dependencies.rateLimit ?? { maximum: 10, windowMs: 2_000 };
-  const attemptsBySeat = new Map<string, number[]>();
 
   return {
     async handle(input: CommandPipelineInput): Promise<void> {
-      const authenticated = await dependencies.store.mutateLatest(input.now, (room) => ({
-        kind: "unchanged",
-        value: room.seats.some((seat) => seat.seatId === input.seatId)
-      }));
-      const authenticationError: ProtocolErrorCode | undefined =
-        authenticated.kind === "expired" ? "ROOM_EXPIRED"
-          : authenticated.kind === "missing" ? "ROOM_NOT_FOUND"
-            : !authenticated.value ? "COMMAND_NOT_ALLOWED" : undefined;
-
       let parsed: ClientWebSocketMessage;
       try {
         parsed = parseClientWebSocketMessage(input.rawMessage);
@@ -210,11 +238,23 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
               type: "protocol.incompatible",
               error: { ...error("PROTOCOL_INCOMPATIBLE"), params: { expected: PROTOCOL_SCHEMA_VERSION } }
             });
-            recipient.close?.(4004, "PROTOCOL_INCOMPATIBLE");
+            safeClose(recipient, 4004, "PROTOCOL_INCOMPATIBLE");
           }
         }
         return;
       }
+
+      const authenticated = await dependencies.store.mutateLatest(input.now, (room) => ({
+        kind: "unchanged",
+        value: room.seats.some((seat) => seat.seatId === input.seatId)
+      }));
+      if (authenticated.kind === "expired") {
+        expireRoom(input.recipients);
+        return;
+      }
+      const authenticationError: ProtocolErrorCode | undefined =
+        authenticated.kind === "missing" ? "ROOM_NOT_FOUND"
+          : !authenticated.value ? "COMMAND_NOT_ALLOWED" : undefined;
 
       if (authenticationError !== undefined) {
         for (const recipient of input.recipients) {
@@ -224,7 +264,7 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
               type: "protocol.incompatible",
               error: { ...error("PROTOCOL_INCOMPATIBLE"), params: { expected: PROTOCOL_SCHEMA_VERSION } }
             });
-            recipient.close?.(4004, "PROTOCOL_INCOMPATIBLE");
+            safeClose(recipient, 4004, "PROTOCOL_INCOMPATIBLE");
           } else {
             safeSend(recipient, {
               type: "command.rejected", commandId: parsed.commandId, error: error(authenticationError)
@@ -252,10 +292,6 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
         };
       });
 
-      const recent = (attemptsBySeat.get(input.seatId) ?? [])
-        .filter((timestamp) => timestamp > input.now - rateLimit.windowMs);
-      const limited = recent.length >= rateLimit.maximum;
-
       let mutation: LatestRoomMutationResult<MutationOutcome>;
       try {
         mutation = await dependencies.store.mutateLatest<MutationOutcome>(input.now, (room) => {
@@ -269,15 +305,24 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
           if (seat.acceptedCommandIds.some((entry) => entry.commandId === parsed.commandId)) {
             return { kind: "unchanged", value: { kind: "duplicate", commandId: parsed.commandId } };
           }
+          const recent = seat.commandAttemptTimestamps
+            .filter((timestamp) => timestamp > input.now - rateLimit.windowMs);
+          const limited = recent.length >= rateLimit.maximum;
           if (limited) {
             return {
               kind: "unchanged",
               value: { kind: "rejected", commandId: parsed.commandId, code: "RATE_LIMITED" }
             };
           }
+          const admittedRoom = withAttemptTimestamps(
+            room,
+            seat.seatId,
+            [...recent, input.now].sort((left, right) => left - right)
+          );
           if (parsed.expectedVersion !== room.roomVersion) {
             return {
-              kind: "unchanged",
+              kind: "updated",
+              room: admittedRoom,
               value: {
                 kind: "rejected", commandId: parsed.commandId,
                 code: "VERSION_CONFLICT", includeSnapshot: true
@@ -285,24 +330,29 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
             };
           }
 
-          const next = recordAccepted(
-            executeMessage(room, seat, parsed, preparedContext(), execute, input.now),
-            seat.seatId,
-            parsed.commandId
-          );
-          // Projection is pure. Preflight every live seat before the transaction
-          // commits so a projection regression cannot persist an unbroadcastable transition.
-          for (const recipientSeatId of new Set(input.recipients.map((recipient) => recipient.seatId))) {
-            if (!next.seats.some((candidate) => candidate.seatId === recipientSeatId)) continue;
-            snapshot(next, recipientSeatId, input.presence, parsed.commandId, project);
+          try {
+            const next = recordAccepted(
+              executeMessage(admittedRoom, seat, parsed, preparedContext(), execute, input.now),
+              seat.seatId,
+              parsed.commandId
+            );
+            // Projection is pure. Preflight every live seat before the transaction
+            // commits so a projection regression cannot persist an unbroadcastable transition.
+            for (const recipientSeatId of new Set(input.recipients.map((recipient) => recipient.seatId))) {
+              if (!next.seats.some((candidate) => candidate.seatId === recipientSeatId)) continue;
+              snapshot(next, recipientSeatId, input.presence, parsed.commandId, project);
+            }
+            return { kind: "updated", room: next, value: { kind: "accepted", commandId: parsed.commandId } };
+          } catch (caught) {
+            return {
+              kind: "updated",
+              room: admittedRoom,
+              value: { kind: "rejected", commandId: parsed.commandId, code: rejectionCode(caught) }
+            };
           }
-          return { kind: "updated", room: next, value: { kind: "accepted", commandId: parsed.commandId } };
         });
       } catch (caught) {
-        attemptsBySeat.set(input.seatId, [...recent, input.now]);
-        const code = caught instanceof RuleViolationError ? "RULE_VIOLATION"
-          : caught instanceof RoomLifecycleError ? "COMMAND_NOT_ALLOWED"
-            : "INTERNAL_ERROR";
+        const code = rejectionCode(caught);
         for (const recipient of input.recipients) {
           if (recipient.seatId === input.seatId) {
             safeSend(recipient, {
@@ -314,16 +364,18 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
       }
 
       if (mutation.kind === "missing" || mutation.kind === "expired") {
-        const code = mutation.kind === "missing" ? "ROOM_NOT_FOUND" : "ROOM_EXPIRED";
+        if (mutation.kind === "expired") {
+          expireRoom(input.recipients);
+          return;
+        }
         for (const recipient of input.recipients) {
           if (recipient.seatId === input.seatId) {
-            safeSend(recipient, { type: "command.rejected", commandId: parsed.commandId, error: error(code) });
+            safeSend(recipient, { type: "command.rejected", commandId: parsed.commandId, error: error("ROOM_NOT_FOUND") });
           }
         }
         return;
       }
 
-      attemptsBySeat.set(input.seatId, [...recent, input.now]);
       const outcome = mutation.value;
       if (outcome.kind === "accepted") {
         for (const recipient of input.recipients) {

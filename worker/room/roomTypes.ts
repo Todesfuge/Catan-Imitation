@@ -18,6 +18,7 @@ export interface PersistedSeat {
   joinOrder: number;
   ready: boolean;
   acceptedCommandIds: AcceptedCommand[];
+  commandAttemptTimestamps: number[];
 }
 
 export interface ConnectionTicket {

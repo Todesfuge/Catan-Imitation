@@ -66,6 +66,14 @@ function attachment(socket: WebSocket): ConnectionAttachment | undefined {
     : undefined;
 }
 
+function safeCloseSocket(socket: WebSocket, code: number, reason: string): void {
+  try {
+    socket.close(code, reason);
+  } catch {
+    // Continue cleanup or delivery for remaining peers.
+  }
+}
+
 export class RoomDurableObject {
   private readonly store: RoomStore;
   private readonly commands;
@@ -157,7 +165,7 @@ export class RoomDurableObject {
     if (result === "invalid-token") throw new HttpProtocolError("SEAT_TOKEN_INVALID");
     for (const socket of this.ctx.getWebSockets()) {
       if (attachment(socket)?.seatId === seatId && socket.readyState === WebSocket.OPEN) {
-        socket.close(4001, "SEAT_LEFT");
+        safeCloseSocket(socket, 4001, "SEAT_LEFT");
       }
     }
     if (result !== "deleted") this.broadcastPresence(result.room);
@@ -224,7 +232,7 @@ export class RoomDurableObject {
   private async handleWebSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const value = attachment(socket);
     if (value === undefined) {
-      socket.close(4003, "INVALID_ATTACHMENT");
+      safeCloseSocket(socket, 4003, "INVALID_ATTACHMENT");
       return;
     }
     const recipients: CommandRecipient[] = this.ctx.getWebSockets().flatMap((peer) => {
@@ -233,7 +241,7 @@ export class RoomDurableObject {
       return [{
         seatId: peerAttachment.seatId,
         send: (serverMessage) => peer.send(JSON.stringify(serverMessage)),
-        close: (code, reason) => peer.close(code, reason)
+        close: (code, reason) => safeCloseSocket(peer, code, reason)
       }];
     });
     const presence = this.connectedPresence();
@@ -282,11 +290,7 @@ export class RoomDurableObject {
         } catch {
           // A failed peer must not prevent terminal delivery to the others.
         }
-        try {
-          socket.close(4002, "ROOM_EXPIRED");
-        } catch {
-          // Continue closing the remaining peers.
-        }
+        safeCloseSocket(socket, 4002, "ROOM_EXPIRED");
       }
     }
   }

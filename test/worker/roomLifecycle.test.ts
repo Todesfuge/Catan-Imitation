@@ -199,7 +199,8 @@ describe("pure lobby lifecycle", () => {
       tokenHash: HASH,
       joinOrder: 1,
       ready: false,
-      acceptedCommandIds: []
+      acceptedCommandIds: [],
+      commandAttemptTimestamps: []
     });
     expect(JSON.stringify(room)).not.toContain("seatToken");
     expect(room).not.toHaveProperty("presence");
@@ -419,6 +420,18 @@ describe("RoomStore", () => {
       {
         ...roomWithSeats(),
         seats: [{ ...roomWithSeats().seats[0], seatToken: "plaintext" }]
+      },
+      {
+        ...roomWithSeats(),
+        seats: [{ ...roomWithSeats().seats[0], commandAttemptTimestamps: Array.from({ length: 11 }, (_, index) => index) }]
+      },
+      {
+        ...roomWithSeats(),
+        seats: [{ ...roomWithSeats().seats[0], commandAttemptTimestamps: [1, 0] }]
+      },
+      {
+        ...roomWithSeats(),
+        seats: [{ ...roomWithSeats().seats[0], commandAttemptTimestamps: [0.5] }]
       }
     ]) {
       const storage = new MemoryStorage();

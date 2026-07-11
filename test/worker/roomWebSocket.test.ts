@@ -13,7 +13,7 @@ import { createLobby, joinLobby, setLobbyReady, startLobby } from "../../worker/
 import type { PersistedRoom } from "../../worker/room/roomTypes";
 import { RoomDurableObject } from "../../worker/room/RoomDurableObject";
 import type { Env } from "../../worker/env";
-import type { RoomStorage } from "../../worker/room/roomStore";
+import type { LatestRoomMutationResult, RoomStorage } from "../../worker/room/roomStore";
 
 const ids = Array.from({ length: 80 }, (_, index) =>
   `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`
@@ -40,13 +40,15 @@ function playingRoom(): PersistedRoom {
 
 class MemoryCommandStore implements CommandMutationStore {
   commits = 0;
+  calls = 0;
 
   constructor(public room: PersistedRoom | null) {}
 
   async mutateLatest<T>(
     _now: number,
     mutation: (room: PersistedRoom) => LatestRoomMutation<T>
-  ) {
+  ): Promise<LatestRoomMutationResult<T>> {
+    this.calls += 1;
     if (this.room === null) return { kind: "missing" } as const;
     const result = mutation(structuredClone(this.room));
     if (result.kind === "updated") {
@@ -57,16 +59,27 @@ class MemoryCommandStore implements CommandMutationStore {
   }
 }
 
-function recipients(...seatIds: string[]): { recipients: CommandRecipient[]; messages: Map<string, ServerWebSocketMessage[]> } {
+function recipients(...seatIds: string[]): {
+  recipients: CommandRecipient[];
+  messages: Map<string, ServerWebSocketMessage[]>;
+  closes: Map<string, Array<{ code: number; reason: string }>>;
+} {
   const messages = new Map<string, ServerWebSocketMessage[]>();
+  const closes = new Map<string, Array<{ code: number; reason: string }>>();
   return {
     messages,
+    closes,
     recipients: seatIds.map((seatId) => ({
       seatId,
       send(message) {
         const entries = messages.get(seatId) ?? [];
         entries.push(message);
         messages.set(seatId, entries);
+      },
+      close(code, reason) {
+        const entries = closes.get(seatId) ?? [];
+        entries.push({ code, reason });
+        closes.set(seatId, entries);
       }
     }))
   };
@@ -98,6 +111,7 @@ describe("authoritative room command pipeline", () => {
     }
 
     expect(store.commits).toBe(0);
+    expect(store.calls).toBe(0);
     expect(peers.messages.get("seat-1")).toHaveLength(4);
     expect(peers.messages.get("seat-1")!.every((message) =>
       message.type === "protocol.incompatible" && message.error.code === "PROTOCOL_INCOMPATIBLE"
@@ -208,6 +222,7 @@ describe("authoritative room command pipeline", () => {
     await pipeline.handle({ seatId: "seat-1", rawMessage: command(ids[0], version), now: 101, presence: noPresence, recipients: peers.recipients });
 
     expect(store.commits).toBe(1);
+    expect(store.room!.seats[0].commandAttemptTimestamps).toEqual([100]);
     expect(peers.messages.get("seat-1")?.[0]).toMatchObject({ type: "room.snapshot", roomVersion: version + 1, acknowledgedCommandId: ids[0] });
     expect(peers.messages.has("seat-2")).toBe(false);
   });
@@ -228,14 +243,17 @@ describe("authoritative room command pipeline", () => {
     expect(store.room!.seats[0].acceptedCommandIds.map((entry) => entry.commandId)).toEqual(ids.slice(1, 65));
   });
 
-  it("returns a caller-specific snapshot for stale versions without writing", async () => {
+  it("returns a caller-specific snapshot for stale versions without gameplay mutation", async () => {
     const store = new MemoryCommandStore(lobbyRoom());
     const peers = recipients("seat-1", "seat-2");
     const pipeline = createCommandPipeline({ store });
 
     await pipeline.handle({ seatId: "seat-1", rawMessage: command(ids[0], 0), now: 100, presence: noPresence, recipients: peers.recipients });
 
-    expect(store.commits).toBe(0);
+    expect(store.commits).toBe(1);
+    expect(store.room!.roomVersion).toBe(lobbyRoom().roomVersion);
+    expect(store.room!.lastActivityAt).toBe(lobbyRoom().lastActivityAt);
+    expect(store.room!.seats[0].commandAttemptTimestamps).toEqual([100]);
     expect(peers.messages.get("seat-1")?.[0]).toMatchObject({
       type: "command.rejected", commandId: ids[0], error: { code: "VERSION_CONFLICT" },
       snapshot: { type: "room.snapshot", roomVersion: store.room!.roomVersion }
@@ -245,7 +263,8 @@ describe("authoritative room command pipeline", () => {
 
   it("isolates rule and internal failures to the sender without partial write or broadcast", async () => {
     for (const failure of [new RuleViolationError("illegal"), new Error("secret details")]) {
-      const store = new MemoryCommandStore(playingRoom());
+      const original = playingRoom();
+      const store = new MemoryCommandStore(structuredClone(original));
       const peers = recipients("seat-1", "seat-2");
       const pipeline = createCommandPipeline({
         store, createExecutionContext: () => context,
@@ -260,7 +279,13 @@ describe("authoritative room command pipeline", () => {
         now: 100, presence: noPresence, recipients: peers.recipients
       });
 
-      expect(store.commits).toBe(0);
+      expect(store.commits).toBe(1);
+      expect(store.room!.roomVersion).toBe(original.roomVersion);
+      expect(store.room!.lastActivityAt).toBe(original.lastActivityAt);
+      expect(store.room!.expiresAt).toBe(original.expiresAt);
+      expect(store.room!.matchState).toEqual(original.matchState);
+      expect(store.room!.seats[0].acceptedCommandIds).toEqual(original.seats[0].acceptedCommandIds);
+      expect(store.room!.seats[0].commandAttemptTimestamps).toEqual([100]);
       expect(peers.messages.get("seat-1")?.[0]).toMatchObject({
         type: "command.rejected",
         error: { code: failure instanceof RuleViolationError ? "RULE_VIOLATION" : "INTERNAL_ERROR" }
@@ -283,7 +308,10 @@ describe("authoritative room command pipeline", () => {
       presence: noPresence, recipients: peers.recipients
     });
 
-    expect(store.commits).toBe(0);
+    expect(store.commits).toBe(1);
+    expect(store.room!.roomVersion).toBe(lobbyRoom().roomVersion);
+    expect(store.room!.lastActivityAt).toBe(lobbyRoom().lastActivityAt);
+    expect(store.room!.seats[0].commandAttemptTimestamps).toEqual([100]);
     expect(peers.messages.get("seat-1")?.[0]).toMatchObject({
       type: "command.rejected", error: { code: "INTERNAL_ERROR" }
     });
@@ -294,7 +322,7 @@ describe("authoritative room command pipeline", () => {
   it("limits a seat to ten commands per two seconds without corrupting room state", async () => {
     const store = new MemoryCommandStore(lobbyRoom());
     const peers = recipients("seat-1");
-    const pipeline = createCommandPipeline({ store });
+    let pipeline = createCommandPipeline({ store });
     for (let index = 0; index < 11; index += 1) {
       await pipeline.handle({
         seatId: "seat-1", rawMessage: command(ids[index], store.room!.roomVersion, index % 2 === 0),
@@ -308,6 +336,16 @@ describe("authoritative room command pipeline", () => {
       type: "command.rejected", commandId: ids[10], error: { code: "RATE_LIMITED" }
     });
 
+    pipeline = createCommandPipeline({ store });
+    await pipeline.handle({
+      seatId: "seat-1", rawMessage: command(ids[11], store.room!.roomVersion), now: 113,
+      presence: noPresence, recipients: peers.recipients
+    });
+    expect(store.commits).toBe(10);
+    expect(peers.messages.get("seat-1")?.at(-1)).toMatchObject({
+      type: "command.rejected", commandId: ids[11], error: { code: "RATE_LIMITED" }
+    });
+
     await pipeline.handle({
       seatId: "seat-1", rawMessage: command(ids[0], 0), now: 112,
       presence: noPresence, recipients: peers.recipients
@@ -316,6 +354,127 @@ describe("authoritative room command pipeline", () => {
     expect(peers.messages.get("seat-1")?.at(-1)).toMatchObject({
       type: "room.snapshot", acknowledgedCommandId: ids[0]
     });
+  });
+
+  it("expires attempts exactly at the two-second window boundary", async () => {
+    const room = lobbyRoom();
+    room.seats[0].commandAttemptTimestamps = Array.from({ length: 10 }, () => 100);
+    const store = new MemoryCommandStore(room);
+    const peers = recipients("seat-1");
+
+    await createCommandPipeline({ store }).handle({
+      seatId: "seat-1", rawMessage: command(ids[0], room.roomVersion), now: 2_100,
+      presence: noPresence, recipients: peers.recipients
+    });
+
+    expect(store.room!.roomVersion).toBe(room.roomVersion + 1);
+    expect(store.room!.seats[0].commandAttemptTimestamps).toEqual([2_100]);
+  });
+
+  it("emits the exact expired terminal message and safely closes on auth or transaction expiry races", async () => {
+    class ExpiringStore extends MemoryCommandStore {
+      constructor(room: PersistedRoom, private readonly expireOnCall: number) { super(room); }
+
+      override async mutateLatest<T>(
+        now: number,
+        mutation: (room: PersistedRoom) => LatestRoomMutation<T>
+      ) {
+        if (this.calls + 1 === this.expireOnCall) {
+          this.calls += 1;
+          return { kind: "expired", expiredAt: now } as const;
+        }
+        return super.mutateLatest(now, mutation);
+      }
+    }
+
+    for (const scenario of [
+      { expireOnCall: 1, rawMessage: command(ids[0], lobbyRoom().roomVersion) },
+      { expireOnCall: 1, rawMessage: JSON.stringify({ type: "connection.heartbeat" }) },
+      { expireOnCall: 2, rawMessage: command(ids[0], lobbyRoom().roomVersion) }
+    ]) {
+      const store = new ExpiringStore(lobbyRoom(), scenario.expireOnCall);
+      const peers = recipients("seat-1", "seat-2");
+      await createCommandPipeline({ store }).handle({
+        seatId: "seat-1", rawMessage: scenario.rawMessage, now: 100,
+        presence: noPresence, recipients: peers.recipients
+      });
+
+      for (const seatId of ["seat-1", "seat-2"]) {
+        expect(peers.messages.get(seatId)?.[0]).toEqual({
+          type: "room.expired",
+          error: { code: "ROOM_EXPIRED", params: {}, retryable: false }
+        });
+        expect(peers.closes.get(seatId)).toEqual([{ code: 4002, reason: "ROOM_EXPIRED" }]);
+      }
+    }
+
+    const store = new ExpiringStore(lobbyRoom(), 1);
+    const messages: ServerWebSocketMessage[] = [];
+    const pipeline = createCommandPipeline({ store });
+    await expect(pipeline.handle({
+      seatId: "seat-1", rawMessage: command(ids[0], lobbyRoom().roomVersion), now: 100,
+      presence: noPresence,
+      recipients: [
+        { seatId: "seat-1", send: (message) => messages.push(message), close: () => { throw new Error("closed peer"); } },
+        { seatId: "seat-2", send: (message) => messages.push(message), close: vi.fn() }
+      ]
+    })).resolves.toBeUndefined();
+    expect(messages).toHaveLength(2);
+  });
+
+  it("replays the same execution context across a transaction retry and commits and broadcasts once", async () => {
+    let room = playingRoom();
+    const store = new class extends MemoryCommandStore {
+      retriedUpdates = 0;
+
+      override async mutateLatest<T>(
+        now: number,
+        mutation: (current: PersistedRoom) => LatestRoomMutation<T>
+      ) {
+        this.calls += 1;
+        const current = structuredClone(this.room!);
+        const first = mutation(structuredClone(current));
+        const second = mutation(structuredClone(current));
+        expect(first).toEqual(second);
+        if (second.kind === "updated") {
+          this.retriedUpdates += 1;
+          this.room = structuredClone(second.room);
+          this.commits += 1;
+        }
+        return { kind: "active", value: second.value, room: structuredClone(this.room!) } as const;
+      }
+    }(room);
+    const peers = recipients("seat-1", "seat-2", "seat-3");
+    const pipeline = createCommandPipeline({
+      store,
+      prepareExecutionContext: () => () => ({
+        random: { nextInt: () => 0 }, nextLogId: () => "retry-log", now: () => 100
+      }),
+      executeMatchCommand(state, _command, execution) {
+        const first = execution.random.nextInt(6) + 1;
+        const second = execution.random.nextInt(6) + 1;
+        return {
+          ...state,
+          lastDice: { first, second, total: first + second },
+          game: {
+            ...state.game,
+            log: [{ id: execution.nextLogId(), message: "retry proof" }, ...state.game.log]
+          }
+        };
+      }
+    });
+    await pipeline.handle({
+      seatId: "seat-1",
+      rawMessage: JSON.stringify({
+        type: "match.command", commandId: ids[0], expectedVersion: room.roomVersion,
+        command: { type: "ROLL_DICE" }
+      }),
+      now: 100, presence: noPresence, recipients: peers.recipients
+    });
+
+    expect(store.retriedUpdates).toBe(1);
+    expect(store.commits).toBe(1);
+    expect([...peers.messages.values()].flat()).toHaveLength(3);
   });
 
   it("executes through the Durable Object WebSocket adapter against persisted storage", async () => {

@@ -77,7 +77,7 @@ function acceptedCommand(value: unknown): boolean {
 function seat(value: unknown): value is PersistedSeat {
   if (!record(value) || !exactKeys(value, [
     "seatId", "nickname", "normalizedNickname", "tokenHash", "joinedAt",
-    "joinOrder", "ready", "acceptedCommandIds"
+    "joinOrder", "ready", "acceptedCommandIds", "commandAttemptTimestamps"
   ], ["playerId"])) return false;
   return typeof value.seatId === "string" && value.seatId.length > 0 &&
     typeof value.nickname === "string" && [...value.nickname].length >= 1 &&
@@ -89,7 +89,12 @@ function seat(value: unknown): value is PersistedSeat {
     typeof value.ready === "boolean" &&
     (value.playerId === undefined || (typeof value.playerId === "string" && value.playerId.length > 0)) &&
     Array.isArray(value.acceptedCommandIds) && value.acceptedCommandIds.length <= 64 &&
-    value.acceptedCommandIds.every(acceptedCommand);
+    value.acceptedCommandIds.every(acceptedCommand) &&
+    Array.isArray(value.commandAttemptTimestamps) && value.commandAttemptTimestamps.length <= 10 &&
+    value.commandAttemptTimestamps.every((timestamp) => integer(timestamp)) &&
+    value.commandAttemptTimestamps.every((timestamp, index, timestamps) =>
+      index === 0 || timestamps[index - 1] <= timestamp
+    );
 }
 
 function ticket(value: unknown): value is ConnectionTicket {
