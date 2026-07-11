@@ -72,14 +72,14 @@ Files:
 
 Steps:
 
-- [ ] Extend failing parity tests to cover setup, roll, seven/robber, build, development cards, maritime trade, player trade, turn end, guild actions, winner state, and recoverable rule errors through `applyMatchCommand`.
-- [ ] Run `pnpm vitest run test/domain/matchTransition.test.ts`; expect missing-dispatcher failures.
-- [ ] Move the gameplay switch, winner/log orchestration, and injected randomness into `applyMatchCommand`; remove UI commands and caught-notice behavior from the shared command union.
-- [ ] Move local composition into `localGameState.ts` and convert `gameReducer` into a local adapter that maps synchronized commands to the shared dispatcher and handles only UI selections and recoverable notices.
-- [ ] Delete `unsafeExecuteGameCommandForTests` after its callers migrate to the shared public transition.
-- [ ] Run `pnpm test`; expect all existing and new domain tests pass.
-- [ ] Confirm `rg -n "Math\.random|case \"BUILD_|case \"ROLL_DICE" src/app/gameReducer.ts` finds no rule/random ownership.
-- [ ] Commit with `refactor: share authoritative match command execution`.
+- [x] Extend failing parity tests to cover setup, roll, seven/robber, build, development cards, maritime trade, player trade, turn end, guild actions, winner state, and recoverable rule errors through `applyMatchCommand`.
+- [x] Run `pnpm vitest run test/domain/matchTransition.test.ts`; expect missing-dispatcher failures.
+- [x] Move the gameplay switch, winner/log orchestration, and injected randomness into `applyMatchCommand`; remove UI commands and caught-notice behavior from the shared command union.
+- [x] Move local composition into `localGameState.ts` and convert `gameReducer` into a local adapter that maps synchronized commands to the shared dispatcher and handles only UI selections and recoverable notices.
+- [x] Delete `unsafeExecuteGameCommandForTests` after its callers migrate to the shared public transition.
+- [x] Run `pnpm test`; expect all existing and new domain tests pass.
+- [x] Confirm `rg -n "Math\.random|case \"BUILD_|case \"ROLL_DICE" src/app/gameReducer.ts` finds no rule/random ownership.
+- [x] Commit with `refactor: share authoritative match command execution`.
 
 ### Task 4 (T004) — Support deterministic three/four-player match creation
 
