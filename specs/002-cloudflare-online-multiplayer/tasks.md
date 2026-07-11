@@ -119,12 +119,12 @@ Files:
 
 Steps:
 
-- [ ] Write failing tests for every HTTP/WebSocket discriminant in `contracts/protocol.md`, 16 KiB limits, UUID command IDs, non-negative whole bids, absent actor identity, unknown message rejection, and every stable error code.
-- [ ] Run `pnpm vitest run test/online/protocol.test.ts`; expect module-not-found failures.
-- [ ] Implement narrow parsers and TypeScript unions without adding a runtime schema dependency.
-- [ ] Ensure parsed online gameplay commands cannot contain `playerId`, dice values, random functions, full bid maps, or unknown fields.
-- [ ] Run `pnpm vitest run test/online/protocol.test.ts`; expect all pass.
-- [ ] Commit with `feat: define bounded online room protocol`.
+- [x] Write failing tests for every HTTP/WebSocket discriminant in `contracts/protocol.md`, 16 KiB limits, UUID command IDs, non-negative whole bids, absent actor identity, unknown message rejection, and every stable error code.
+- [x] Run `pnpm vitest run test/online/protocol.test.ts`; expect module-not-found failures.
+- [x] Implement narrow parsers and TypeScript unions without adding a runtime schema dependency.
+- [x] Ensure parsed online gameplay commands cannot contain `playerId`, dice values, random functions, full bid maps, or unknown fields.
+- [x] Run `pnpm vitest run test/online/protocol.test.ts`; expect all pass.
+- [x] Commit with `feat: define bounded online room protocol`.
 
 ### Task 6 (T006) — Define public/private room projections
 
