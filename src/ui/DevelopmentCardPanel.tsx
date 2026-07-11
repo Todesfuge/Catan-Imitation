@@ -1,20 +1,15 @@
 import React from "react";
-import { getActionAvailability } from "../app/actionAvailability";
-import type { AppState, GameCommand } from "../app/gameReducer";
-import { getLegalRoadEdgeIds } from "../domain/rules/building";
-import {
-  resources,
-  type GameState
-} from "../domain/types";
+import { resources } from "../domain/types";
 import { edgeProjection } from "./boardGeometry";
+import type { GameTableDispatch, GameTableGameView, GameTableView } from "./GameTable";
 import { translateRuleText, useI18n } from "./i18n";
 
 export function DevelopmentCardPanel({
   state,
   dispatch
 }: {
-  state: AppState;
-  dispatch: (command: GameCommand) => void;
+  state: GameTableView;
+  dispatch: GameTableDispatch;
 }) {
   const { locale, t } = useI18n();
   const game = state.game;
@@ -70,8 +65,8 @@ export function DevelopmentCardPanel({
   if (!activePlayer) {
     return null;
   }
-  const availability = getActionAvailability(state, activePlayer.id);
-  const victoryPointCount = activePlayer.developmentCards.filter(
+  const availability = state.legality.actions;
+  const victoryPointCount = (activePlayer.developmentCards ?? []).filter(
     (card) => card.kind === "victoryPoint"
   ).length;
 
@@ -123,10 +118,12 @@ export function DevelopmentCardPanel({
 
 export function RoadBuildingTargets({
   game,
+  edgeIds,
   dispatch
 }: {
-  game: GameState;
-  dispatch: (command: GameCommand) => void;
+  game: GameTableGameView;
+  edgeIds: string[];
+  dispatch: GameTableDispatch;
 }) {
   const { t } = useI18n();
   const effect = game.turnState.pendingDevelopmentEffect;
@@ -137,7 +134,7 @@ export function RoadBuildingTargets({
     return null;
   }
 
-  const legalEdges = getLegalRoadEdgeIds(game, game.activePlayerId).flatMap((edgeId) => {
+  const legalEdges = edgeIds.flatMap((edgeId) => {
     const edge = game.edges.find((candidate) => candidate.id === edgeId);
     if (!edge) return [];
     return [{ edgeId, position: edgeProjection(game.board, edge) }];

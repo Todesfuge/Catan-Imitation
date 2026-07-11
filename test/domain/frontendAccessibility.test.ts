@@ -17,7 +17,7 @@ describe("frontend accessibility and responsive contracts", () => {
 
   it("exposes selected modes, live notices, and distinct Wood/Wool abbreviations", () => {
     const html = renderToString(createElement(App));
-    const source = readFileSync("src/App.tsx", "utf8");
+    const source = readFileSync("src/ui/GameTable.tsx", "utf8");
 
     expect(html).toContain('aria-pressed="true"');
     expect(source).toContain('role="status"');

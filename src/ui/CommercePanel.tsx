@@ -1,26 +1,22 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowRightLeft, Landmark } from "lucide-react";
-import { getActionAvailability } from "../app/actionAvailability";
-import type { AppState, GameCommand } from "../app/gameReducer";
 import { resources } from "../domain/types";
 import { formatResourceMap, resourceLabels } from "./resourceLabels";
+import type { GameTableDispatch, GameTableView } from "./GameTable";
 import { formatAuctionSummary, translateRuleText, useI18n } from "./i18n";
 
 export function CommercePanel({
   state,
   dispatch
 }: {
-  state: AppState;
-  dispatch: (command: GameCommand) => void;
+  state: GameTableView;
+  dispatch: GameTableDispatch;
 }) {
   const { locale, t } = useI18n();
   const activePlayer = state.game.players.find(
     (player) => player.id === state.game.activePlayerId
   );
-  const availability = useMemo(
-    () => getActionAvailability(state, state.game.activePlayerId),
-    [state]
-  );
+  const availability = state.legality.actions;
   const validRecipients = useMemo(
     () =>
       state.game.players.filter((player) =>

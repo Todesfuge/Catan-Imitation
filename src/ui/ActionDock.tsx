@@ -8,10 +8,9 @@ import {
   ScrollText,
   Timer
 } from "lucide-react";
-import { getActionAvailability } from "../app/actionAvailability";
-import type { AppState, GameCommand } from "../app/gameReducer";
 import { resources, type Resource } from "../domain/types";
 import { DevelopmentCardPanel } from "./DevelopmentCardPanel";
+import type { GameTableDispatch, GameTableView } from "./GameTable";
 import { translate, translateRuleText, useI18n, type Locale } from "./i18n";
 
 export type BoardInteractionMode =
@@ -22,7 +21,7 @@ export type BoardInteractionMode =
   | { kind: "setupRoad" }
   | null;
 
-function phaseGuidance(state: AppState, locale: Locale): string {
+function phaseGuidance(state: GameTableView, locale: Locale): string {
   const activePlayer = state.game.players.find(
     (player) => player.id === state.game.activePlayerId
   );
@@ -71,8 +70,8 @@ export function ActionDock({
   interactionMode,
   onInteractionModeChange
 }: {
-  state: AppState;
-  dispatch: (command: GameCommand) => void;
+  state: GameTableView;
+  dispatch: GameTableDispatch;
   interactionMode: BoardInteractionMode;
   onInteractionModeChange: (mode: BoardInteractionMode) => void;
 }) {
@@ -80,10 +79,7 @@ export function ActionDock({
   const activePlayer = state.game.players.find(
     (player) => player.id === state.game.activePlayerId
   );
-  const availability = useMemo(
-    () => getActionAvailability(state, state.game.activePlayerId),
-    [state]
-  );
+  const availability = state.legality.actions;
   const [maritimeGive, setMaritimeGive] = useState<Resource | "">("");
   const [maritimeReceive, setMaritimeReceive] = useState<Resource | "">("");
 

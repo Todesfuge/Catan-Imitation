@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { createInitialAppState } from "../../src/app/gameReducer";
+import { createLocalGameTableView } from "../../src/app/localGameState";
 import { emptyResources } from "../../src/domain/types";
 import { ActionDock } from "../../src/ui/ActionDock";
 import { BoardActionTargets } from "../../src/ui/BoardActionTargets";
@@ -38,7 +39,7 @@ describe("explicit action interaction", () => {
         dispatch: () => undefined,
         interactionMode: null,
         onInteractionModeChange: () => undefined,
-        state
+        state: createLocalGameTableView(state)
       })
     );
 
@@ -53,7 +54,7 @@ describe("explicit action interaction", () => {
     const html = renderToString(
       createElement(BoardActionTargets, {
         dispatch: () => undefined,
-        state,
+        state: createLocalGameTableView(state),
         interactionMode: { kind: "road" }
       })
     );

@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { createLocalGameTableView } from "../../src/app/localGameState";
 import { emptyResources } from "../../src/domain/types";
 import { PlayerTradePanel } from "../../src/ui/PlayerTradePanel";
 import { TradeHubPanel } from "../../src/ui/TradeHubPanel";
@@ -42,7 +43,7 @@ describe("player trade UI", () => {
   it("renders a five-resource bundle editor and public offer summary", () => {
     const draftHtml = renderToString(
       createElement(PlayerTradePanel, {
-        state: createInitialAppState(),
+        state: createLocalGameTableView(createInitialAppState()),
         dispatch: () => undefined
       })
     );
@@ -54,7 +55,7 @@ describe("player trade UI", () => {
 
     const offerHtml = renderToString(
       createElement(PlayerTradePanel, {
-        state: createTradeState(),
+        state: createLocalGameTableView(createTradeState()),
         dispatch: () => undefined
       })
     ).replaceAll("<!-- -->", "");
@@ -69,7 +70,7 @@ describe("player trade UI", () => {
   it("hosts Player Trade and Commerce Guild as separate tab panels", () => {
     const html = renderToString(
       createElement(TradeHubPanel, {
-        state: createInitialAppState(),
+        state: createLocalGameTableView(createInitialAppState()),
         dispatch: () => undefined
       })
     );

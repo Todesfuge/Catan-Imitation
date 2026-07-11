@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
-import type { AppState, GameCommand } from "../app/gameReducer";
 import { CommercePanel } from "./CommercePanel";
+import type { GameTableDispatch, GameTableView } from "./GameTable";
 import { PlayerTradePanel } from "./PlayerTradePanel";
 import { useI18n } from "./i18n";
 
@@ -10,8 +10,8 @@ export function TradeHubPanel({
   state,
   dispatch
 }: {
-  state: AppState;
-  dispatch: (command: GameCommand) => void;
+  state: GameTableView;
+  dispatch: GameTableDispatch;
 }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<TradeHubTab>("player");

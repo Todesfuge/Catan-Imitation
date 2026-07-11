@@ -1,9 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import type { AppState, GameCommand } from "../app/gameReducer";
-import {
-  getPlayerTradeAcceptanceReason,
-  getPlayerTradePublishReason
-} from "../domain/rules/playerTrade";
 import {
   emptyResources,
   resources,
@@ -11,6 +6,7 @@ import {
   type ResourceMap
 } from "../domain/types";
 import { translateRuleText, useI18n } from "./i18n";
+import type { GameTableDispatch, GameTableView } from "./GameTable";
 import { resourceShortLabels } from "./resourceLabels";
 
 function formatTradeBundle(bundle: ResourceMap, labels: Record<Resource, string>): string {
@@ -62,8 +58,8 @@ export function PlayerTradePanel({
   state,
   dispatch
 }: {
-  state: AppState;
-  dispatch: (command: GameCommand) => void;
+  state: GameTableView;
+  dispatch: GameTableDispatch;
 }) {
   const { locale, t } = useI18n();
   const [offered, setOffered] = useState<ResourceMap>(() => emptyResources());
@@ -79,9 +75,9 @@ export function PlayerTradePanel({
   const publishReason = useMemo(
     () =>
       activePlayer
-        ? getPlayerTradePublishReason(state.game, activePlayer.id, offered, requested)
+        ? state.tradePolicy.publishReason(offered, requested)
         : "No active player is available.",
-    [activePlayer, offered, requested, state.game]
+    [activePlayer, offered, requested, state.tradePolicy]
   );
 
   useEffect(() => {
@@ -107,7 +103,7 @@ export function PlayerTradePanel({
           {state.game.players
             .filter((player) => player.id !== offer.proposerId)
             .map((player) => {
-              const reason = getPlayerTradeAcceptanceReason(state.game, offer, player.id);
+              const reason = state.tradePolicy.acceptanceReasons[player.id];
               return (
                 <div className="player-trade-response" key={player.id}>
                   <button

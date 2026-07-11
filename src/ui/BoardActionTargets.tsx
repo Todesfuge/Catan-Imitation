@@ -1,12 +1,11 @@
 import React from "react";
-import { getActionAvailability } from "../app/actionAvailability";
-import type { AppState, GameCommand } from "../app/gameReducer";
-import {
-  getLegalSetupRoadEdgeIds,
-  getLegalSetupSettlementVertexIds
-} from "../domain/rules/building";
-import type { GameState } from "../domain/types";
 import type { BoardInteractionMode } from "./ActionDock";
+import type {
+  GameTableCommand,
+  GameTableDispatch,
+  GameTableGameView,
+  GameTableView
+} from "./GameTable";
 import { edgeProjection, vertexProjection } from "./boardGeometry";
 import { useI18n } from "./i18n";
 
@@ -14,18 +13,18 @@ interface BoardTarget {
   id: string;
   kind: Exclude<NonNullable<BoardInteractionMode>["kind"], "city"> | "city";
   label: string;
-  command: GameCommand;
+  command: GameTableCommand;
   shape:
     | { kind: "road"; x1: number; x2: number; y1: number; y2: number }
     | { kind: "vertex"; x: number; y: number };
 }
 
 function targetForEdge(
-  game: GameState,
+  game: GameTableGameView,
   edgeId: string,
   kind: BoardTarget["kind"],
   label: string,
-  command: GameCommand
+  command: GameTableCommand
 ): BoardTarget | null {
   const edge = game.edges.find((candidate) => candidate.id === edgeId);
   if (!edge) return null;
@@ -46,12 +45,12 @@ function targetForEdge(
 }
 
 function targetForVertex(
-  game: GameState,
+  game: GameTableGameView,
   id: string,
   vertexId: string,
   kind: BoardTarget["kind"],
   label: string,
-  command: GameCommand
+  command: GameTableCommand
 ): BoardTarget {
   const position = vertexProjection(game.board, vertexId);
   return {
@@ -68,9 +67,9 @@ function TargetLayer({
   activate
 }: {
   targets: BoardTarget[];
-  activate: (command: GameCommand) => void;
+  activate: GameTableDispatch;
 }) {
-  const keyboardActivate = (event: React.KeyboardEvent, command: GameCommand) => {
+  const keyboardActivate = (event: React.KeyboardEvent, command: GameTableCommand) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       activate(command);
@@ -147,22 +146,22 @@ export function BoardActionTargets({
   interactionMode,
   onTargetSelected
 }: {
-  state: AppState;
-  dispatch: (command: GameCommand) => void;
+  state: GameTableView;
+  dispatch: GameTableDispatch;
   interactionMode: BoardInteractionMode;
   onTargetSelected?: () => void;
 }) {
   const { t } = useI18n();
   if (!interactionMode) return null;
   const game = state.game;
-  const activate = (command: GameCommand) => {
+  const activate = (command: GameTableCommand) => {
     dispatch(command);
     onTargetSelected?.();
   };
   let targets: BoardTarget[] = [];
 
   if (interactionMode.kind === "setupRoad") {
-    targets = getLegalSetupRoadEdgeIds(game, game.activePlayerId).flatMap((edgeId) => {
+    targets = state.legality.setupRoadEdgeIds.flatMap((edgeId) => {
       const target = targetForEdge(
         game,
         edgeId,
@@ -173,7 +172,7 @@ export function BoardActionTargets({
       return target ? [target] : [];
     });
   } else if (interactionMode.kind === "setupSettlement") {
-    targets = getLegalSetupSettlementVertexIds(game, game.activePlayerId).map((vertexId) =>
+    targets = state.legality.setupSettlementVertexIds.map((vertexId) =>
       targetForVertex(
         game,
         vertexId,
@@ -184,7 +183,7 @@ export function BoardActionTargets({
       )
     );
   } else {
-    const availability = getActionAvailability(state, game.activePlayerId);
+    const availability = state.legality.actions;
     if (interactionMode.kind === "road") {
       targets = availability.road.targets.flatMap((edgeId) => {
         const target = targetForEdge(

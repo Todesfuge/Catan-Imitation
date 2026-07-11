@@ -4,6 +4,7 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import App from "../../src/App";
 import { createInitialAppState } from "../../src/app/gameReducer";
+import { createLocalGameTableView } from "../../src/app/localGameState";
 import { createDemoGame } from "../../src/domain/setup";
 import { getLegalRoadEdgeIds } from "../../src/domain/rules/building";
 import {
@@ -11,6 +12,10 @@ import {
   RoadBuildingTargets
 } from "../../src/ui/DevelopmentCardPanel";
 import { TurnFlowPanel } from "../../src/ui/TurnFlowPanel";
+
+function tableViewForGame(game: ReturnType<typeof createDemoGame>) {
+  return createLocalGameTableView({ ...createInitialAppState(), game });
+}
 
 describe("product polish UI", () => {
   it("gates initial turn actions until the active player rolls", () => {
@@ -38,7 +43,7 @@ describe("product polish UI", () => {
       }
     };
     const html = renderToString(
-      createElement(TurnFlowPanel, { game, dispatch: () => undefined })
+      createElement(TurnFlowPanel, { game: tableViewForGame(game).game, dispatch: () => undefined })
     );
     const visibleHtml = html.replaceAll("<!-- -->", "");
 
@@ -63,7 +68,7 @@ describe("product polish UI", () => {
       }
     };
     const placementHtml = renderToString(
-      createElement(TurnFlowPanel, { game: placementGame, dispatch: () => undefined })
+      createElement(TurnFlowPanel, { game: tableViewForGame(placementGame).game, dispatch: () => undefined })
     );
     expect(placementHtml).toContain('data-turn-flow="robber-placement"');
     expect(placementHtml).toContain("Move the robber to a different hex");
@@ -85,7 +90,7 @@ describe("product polish UI", () => {
       }
     };
     const victimHtml = renderToString(
-      createElement(TurnFlowPanel, { game: victimGame, dispatch: () => undefined })
+      createElement(TurnFlowPanel, { game: tableViewForGame(victimGame).game, dispatch: () => undefined })
     );
     expect(victimHtml).toContain('data-turn-flow="robber-victim"');
     expect(victimHtml).toContain("Choose a player to steal from");
@@ -114,7 +119,7 @@ describe("product polish UI", () => {
     };
     const html = renderToString(
       createElement(DevelopmentCardPanel, {
-        state: { ...createInitialAppState(), game },
+        state: tableViewForGame(game),
         dispatch: () => undefined
       })
     ).replaceAll("<!-- -->", "");
@@ -148,7 +153,7 @@ describe("product polish UI", () => {
     };
     const plentyHtml = renderToString(
       createElement(DevelopmentCardPanel, {
-        state: { ...createInitialAppState(), game: plentyGame },
+        state: tableViewForGame(plentyGame),
         dispatch: () => undefined
       })
     );
@@ -172,7 +177,7 @@ describe("product polish UI", () => {
     };
     const monopolyHtml = renderToString(
       createElement(DevelopmentCardPanel, {
-        state: { ...createInitialAppState(), game: monopolyGame },
+        state: tableViewForGame(monopolyGame),
         dispatch: () => undefined
       })
     );
@@ -202,7 +207,11 @@ describe("product polish UI", () => {
       createElement(
         "svg",
         null,
-        createElement(RoadBuildingTargets, { game, dispatch: () => undefined })
+        createElement(RoadBuildingTargets, {
+          game: tableViewForGame(game).game,
+          edgeIds: legalEdges,
+          dispatch: () => undefined
+        })
       )
     );
 
@@ -213,7 +222,7 @@ describe("product polish UI", () => {
 
   it("integrates the development-card controls and road targets into the app", () => {
     const html = renderToString(createElement(App));
-    const source = readFileSync("src/App.tsx", "utf8");
+    const source = readFileSync("src/ui/GameTable.tsx", "utf8");
     const actionDockSource = readFileSync("src/ui/ActionDock.tsx", "utf8");
 
     expect(html).toContain('data-development-cards="hand"');
@@ -238,11 +247,12 @@ describe("product polish UI", () => {
 
   it("keeps robber targets accessible and disables actions outside live play", () => {
     const html = renderToString(createElement(App));
-    const source = readFileSync("src/App.tsx", "utf8");
+    const source = readFileSync("src/ui/GameTable.tsx", "utf8");
     const actionDockSource = readFileSync("src/ui/ActionDock.tsx", "utf8");
 
     expect(html).toContain('class="board-svg" role="group"');
-    expect(actionDockSource).toContain("getActionAvailability");
+    expect(actionDockSource).toContain("state.legality.actions");
+    expect(actionDockSource).not.toContain("getActionAvailability");
     expect(source).toContain("<BoardActionTargets");
     expect(source).toContain("canPlaceRobber && hex.id !== state.game.robberHexId");
   });
@@ -326,7 +336,7 @@ describe("product polish UI", () => {
 
   it("keeps turn overlays readable and activity lists independently scrollable", () => {
     const css = readFileSync("src/styles/app.css", "utf8");
-    const appSource = readFileSync("src/App.tsx", "utf8");
+    const appSource = readFileSync("src/ui/GameTable.tsx", "utf8");
     const turnFlowRule = css.match(/\.turn-flow-panel\s*{([^}]*)}/)?.[1] ?? "";
     const logListRule = css.match(/\.log-list\s*{([^}]*)}/)?.[1] ?? "";
     const diceListRule = css.match(/\.dice-income-list\s*{([^}]*)}/)?.[1] ?? "";

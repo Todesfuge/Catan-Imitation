@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
-import type { GameCommand } from "../app/gameReducer";
-import { emptyResources, resources, type GameState, type ResourceMap } from "../domain/types";
+import { emptyResources, resources, type ResourceMap } from "../domain/types";
 import { useI18n } from "./i18n";
+import type { GameTableDispatch, GameTableGameView } from "./GameTable";
 
 export function TurnFlowPanel({
   game,
   dispatch
 }: {
-  game: GameState;
-  dispatch: (command: GameCommand) => void;
+  game: GameTableGameView;
+  dispatch: GameTableDispatch;
 }) {
   const { locale, t } = useI18n();
   const pendingPlayerId = Object.keys(game.turnState.pendingDiscards).find(
@@ -30,7 +30,7 @@ export function TurnFlowPanel({
         (resource) =>
           Number.isInteger(discarded[resource]) &&
           discarded[resource] >= 0 &&
-          discarded[resource] <= (player?.resources[resource] ?? 0)
+          discarded[resource] <= (player?.resources?.[resource] ?? 0)
       );
 
     return (
@@ -43,7 +43,7 @@ export function TurnFlowPanel({
               {t(`resource.${resource}`)}
               <input
                 aria-label={locale === "en" ? `${player?.name ?? pendingPlayerId} ${resource} discard` : `${player?.name ?? pendingPlayerId} ${t(`resource.${resource}`)}弃牌`}
-                max={player?.resources[resource] ?? 0}
+                max={player?.resources?.[resource] ?? 0}
                 min={0}
                 onChange={(event) =>
                   setDiscarded((current) => ({

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import type { AppState } from "../app/gameReducer";
+import type { GameTableView } from "./GameTable";
 import { useI18n } from "./i18n";
 
 export type UtilityPanel = "settings" | "rulebook" | "info" | null;
@@ -12,7 +12,7 @@ export function UtilityDialog({
   onClose
 }: {
   panel: UtilityPanel;
-  state: AppState;
+  state: GameTableView;
   onNewGame: () => void;
   onClose: () => void;
 }) {

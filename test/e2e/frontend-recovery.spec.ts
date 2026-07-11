@@ -23,15 +23,16 @@ async function setDeterministicTotal(page: Page, total: 2 | 3 | 7 | 8) {
   }, total);
 }
 
-test("an invalid command keeps the game mounted, reports a notice, and clears after success", async ({ page }) => {
+test("a zero-token gathering completes without entering an unwinnable auction", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("tab", { name: "Commerce Guild" }).click();
   await page.getByRole("button", { name: "Start Gathering" }).click();
   await page.getByRole("button", { name: "Open Auctions" }).click();
-  await page.getByRole("button", { name: "Resolve Blind Box" }).click();
-
   await expect(page.locator("#root .game-shell")).toBeVisible();
-  await expect(page.getByRole("status")).toContainText(/positive bid/i);
+  await expect(page.getByRole("log")).toContainText(
+    "The Commerce Guild auction ended because no player has guild tokens."
+  );
+  await expect(page.getByRole("button", { name: "Resolve Blind Box" })).toHaveCount(0);
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "Start New Game" }).click();
   await expect(page.getByRole("status")).toHaveCount(0);
@@ -424,9 +425,10 @@ test("English defaults, Chinese retranslates history, and the locale survives re
   await page.getByRole("tab", { name: "商业公会" }).click();
   await page.getByRole("button", { name: "开始集会" }).click();
   await page.getByRole("button", { name: "开启拍卖" }).click();
-  await page.getByLabel("Voyage1969").fill("1");
-  await page.getByRole("button", { name: "结算盲盒" }).click();
-  await expect(page.getByRole("status")).toContainText("Voyage1969 的出价超过了可用公会代币");
+  await expect(page.getByRole("log")).toContainText(
+    "没有玩家持有公会代币，商业公会拍卖已结束。"
+  );
+  await expect(page.getByLabel("Voyage1969")).toHaveCount(0);
 });
 
 test("mobile keeps log and dice statistics internally scrollable", async ({ page }) => {
