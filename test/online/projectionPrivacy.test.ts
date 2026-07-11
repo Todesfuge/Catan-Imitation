@@ -315,6 +315,141 @@ describe("caller-specific room projection privacy", () => {
     });
   });
 
+  it("accepts only dice totals from 2 through 12 when every other field is valid", () => {
+    const room = createRoom();
+    room.matchState!.game.log = [
+      ...[1, 13, 222_222_223].map((total) => ({
+        id: `invalid-dice-total-${total}`,
+        message: "raw",
+        messageKey: "dice.rolled" as const,
+        params: { playerName: "Voyage1969", total, eventCount: 0 }
+      })),
+      ...[2, 12].map((total) => ({
+        id: `valid-dice-total-${total}`,
+        message: "raw",
+        messageKey: "dice.rolled" as const,
+        params: { playerName: "Voyage1969", total, eventCount: 0 }
+      }))
+    ];
+
+    expect(projectRoomView(room, "seat-1").publicState.game!.log.map(({ id }) => id)).toEqual([
+      "valid-dice-total-2",
+      "valid-dice-total-12"
+    ]);
+  });
+
+  it("bounds production eventCount by the current public building count", () => {
+    const room = createRoom();
+    const buildingCount = room.matchState!.game.buildings.length;
+    room.matchState!.game.log = [
+      {
+        id: "invalid-production-count",
+        message: "raw",
+        messageKey: "dice.rolled",
+        params: { playerName: "Voyage1969", total: 8, eventCount: buildingCount + 1 }
+      },
+      ...[0, buildingCount].map((eventCount) => ({
+        id: `valid-production-count-${eventCount}`,
+        message: "raw",
+        messageKey: "dice.rolled" as const,
+        params: { playerName: "Voyage1969", total: 8, eventCount }
+      }))
+    ];
+
+    expect(projectRoomView(room, "seat-1").publicState.game!.log.map(({ id }) => id)).toEqual([
+      "valid-production-count-0",
+      `valid-production-count-${buildingCount}`
+    ]);
+  });
+
+  it("accepts only Commerce auction rounds from 1 through 3", () => {
+    const room = createRoom();
+    room.matchState!.game.log = [0, 4, 222_222_224, 1, 3].map((round) => ({
+      id: `${round === 1 || round === 3 ? "valid" : "invalid"}-auction-round-${round}`,
+      message: "raw",
+      messageKey: "guild.auctionRoundNoBids",
+      params: { round }
+    }));
+
+    expect(projectRoomView(room, "seat-1").publicState.game!.log.map(({ id }) => id)).toEqual([
+      "valid-auction-round-1",
+      "valid-auction-round-3"
+    ]);
+  });
+
+  it("bounds token-transfer amounts by the current public guild-token total", () => {
+    const room = createRoom();
+    const tokenTotal = room.matchState!.game.players.reduce(
+      (total, player) => total + player.guildTokens,
+      0
+    );
+    room.matchState!.game.log = [0, tokenTotal + 1, 1, tokenTotal].map((amount) => ({
+      id: `${amount >= 1 && amount <= tokenTotal ? "valid" : "invalid"}-token-amount-${amount}`,
+      message: "raw",
+      messageKey: "guild.tokensTransferred",
+      params: { fromName: "Voyage1969", amount, toName: "Loss" }
+    }));
+
+    expect(projectRoomView(room, "seat-1").publicState.game!.log.map(({ id }) => id)).toEqual([
+      "valid-token-amount-1",
+      `valid-token-amount-${tokenTotal}`
+    ]);
+  });
+
+  it("accepts only per-resource auction quantities from 0 through 19", () => {
+    const invalidRoom = createRoom();
+    const invalidResources = { wood: 20, brick: 0, wool: 0, grain: 0, ore: 0 };
+    invalidRoom.matchState!.guild.gathering.lastAuctionResult = {
+      winnerId: "p2",
+      winnerName: "Loss",
+      round: 1,
+      winningBid: 4,
+      outcome: { kind: "resources", resources: invalidResources }
+    };
+    invalidRoom.matchState!.game.log = [
+      {
+        id: "invalid-resource-quantity",
+        message: "raw",
+        messageKey: "guild.auctionResolved",
+        params: {
+          winnerName: "Loss",
+          bid: 4,
+          round: 1,
+          outcomeKind: "resources",
+          ...invalidResources
+        }
+      }
+    ];
+    const invalidView = projectRoomView(invalidRoom, "seat-1");
+    expect(invalidView.publicState.game!.log).toEqual([]);
+    expect(invalidView.publicState.guild?.gathering.lastAuctionResult).toBeUndefined();
+
+    const validRoom = createRoom();
+    const boundaryResources = { wood: 19, brick: 0, wool: 0, grain: 19, ore: 0 };
+    validRoom.matchState!.guild.gathering.lastAuctionResult = {
+      winnerId: "p2",
+      winnerName: "Loss",
+      round: 3,
+      winningBid: 4,
+      outcome: { kind: "resources", resources: boundaryResources }
+    };
+    validRoom.matchState!.game.log = [
+      {
+        id: "valid-resource-quantity",
+        message: "raw",
+        messageKey: "guild.auctionResolved",
+        params: {
+          winnerName: "Loss",
+          bid: 4,
+          round: 3,
+          outcomeKind: "resources",
+          ...boundaryResources
+        }
+      }
+    ];
+    expect(projectRoomView(validRoom, "seat-1").publicState.game!.log).toHaveLength(1);
+  });
+
   it("isolates every caller and reveals a blind-box card kind only in the winner's private hand", () => {
     const room = createRoom();
 

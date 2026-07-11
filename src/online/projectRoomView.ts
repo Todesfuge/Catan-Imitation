@@ -46,7 +46,15 @@ export interface ProjectableRoomState {
   };
 }
 
-type LogParamKind = "playerName" | "resource" | "cardKind" | "hexId" | "integer";
+type LogParamKind =
+  | "playerName"
+  | "resource"
+  | "cardKind"
+  | "hexId"
+  | "diceTotal"
+  | "productionEventCount"
+  | "auctionRound"
+  | "tokenTransferAmount";
 
 const developmentCardKinds: readonly DevelopmentCardKind[] = [
   "knight",
@@ -70,7 +78,11 @@ const noParamLogKeys = new Set<GameMessageKey>([
 const safeLogParamSchemas: Partial<
   Record<GameMessageKey, Readonly<Record<string, LogParamKind>>>
 > = {
-  "dice.rolled": { playerName: "playerName", total: "integer", eventCount: "integer" },
+  "dice.rolled": {
+    playerName: "playerName",
+    total: "diceTotal",
+    eventCount: "productionEventCount"
+  },
   "robber.discardCompleted": { playerName: "playerName" },
   "robber.moved": { hexId: "hexId" },
   "robber.stolen": { playerName: "playerName", victimName: "playerName" },
@@ -89,11 +101,11 @@ const safeLogParamSchemas: Partial<
   },
   "guild.tokensTransferred": {
     fromName: "playerName",
-    amount: "integer",
+    amount: "tokenTransferAmount",
     toName: "playerName"
   },
   "guild.redeemedResources": { playerName: "playerName" },
-  "guild.auctionRoundNoBids": { round: "integer" },
+  "guild.auctionRoundNoBids": { round: "auctionRound" },
   "guild.prizeRedeemed": { playerName: "playerName" }
 };
 
@@ -101,6 +113,8 @@ interface LogProjectionContext {
   playerNames: ReadonlySet<string>;
   playerNameById: ReadonlyMap<string, string>;
   hexIds: ReadonlySet<string>;
+  buildingCount: number;
+  totalGuildTokens: number;
   lastAuctionResult?: AuctionSummaryData;
 }
 
@@ -152,12 +166,39 @@ function isNonNegativeSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
+function isIntegerInRange(value: unknown, minimum: number, maximum: number): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= minimum &&
+    value <= maximum
+  );
+}
+
+function isAuctionRound(value: unknown): value is number {
+  return isIntegerInRange(value, 1, 3);
+}
+
+function isResourceQuantity(value: unknown): value is number {
+  return isIntegerInRange(value, 0, 19);
+}
+
 function isSafeLogParam(
   value: unknown,
   kind: LogParamKind,
   context: LogProjectionContext
 ): value is string | number {
-  if (kind === "integer") return isNonNegativeSafeInteger(value);
+  if (kind === "diceTotal") return isIntegerInRange(value, 2, 12);
+  if (kind === "productionEventCount") {
+    return isIntegerInRange(value, 0, context.buildingCount);
+  }
+  if (kind === "auctionRound") return isAuctionRound(value);
+  if (kind === "tokenTransferAmount") {
+    return (
+      Number.isSafeInteger(context.totalGuildTokens) &&
+      isIntegerInRange(value, 1, context.totalGuildTokens)
+    );
+  }
   if (typeof value !== "string") return false;
   if (kind === "playerName") return context.playerNames.has(value);
   if (kind === "resource") return resources.includes(value as (typeof resources)[number]);
@@ -176,7 +217,7 @@ function matchingAuctionResult(
     !result ||
     !params ||
     !winnerName ||
-    !isNonNegativeSafeInteger(result.round) ||
+    !isAuctionRound(result.round) ||
     !isNonNegativeSafeInteger(result.winningBid) ||
     params.winnerName !== winnerName ||
     params.round !== result.round ||
@@ -204,7 +245,7 @@ function projectAuctionLog(
   if (matched.result.outcome.kind === "resources") {
     for (const resource of resources) {
       const amount = matched.result.outcome.resources[resource];
-      if (!isNonNegativeSafeInteger(amount) || entry.params?.[resource] !== amount) {
+      if (!isResourceQuantity(amount) || entry.params?.[resource] !== amount) {
         return undefined;
       }
       params[resource] = amount;
@@ -240,7 +281,7 @@ function projectOutcome(outcome: BlindBoxOutcome): PublicBlindBoxOutcomeView | u
     let resourceCardCount = 0;
     for (const resource of resources) {
       const amount = outcome.resources[resource];
-      if (!isNonNegativeSafeInteger(amount)) return undefined;
+      if (!isResourceQuantity(amount)) return undefined;
       resourceCardCount += amount;
     }
     if (!Number.isSafeInteger(resourceCardCount)) return undefined;
@@ -266,7 +307,7 @@ function projectGuild(
     last &&
     lastOutcome &&
     winnerName &&
-    isNonNegativeSafeInteger(last.round) &&
+    isAuctionRound(last.round) &&
     isNonNegativeSafeInteger(last.winningBid)
       ? {
           winnerId: last.winnerId,
@@ -325,6 +366,8 @@ function projectGame(
     playerNames: new Set(playerNameById.values()),
     playerNameById,
     hexIds: new Set(game.board.map((hex) => hex.id)),
+    buildingCount: game.buildings.length,
+    totalGuildTokens: game.players.reduce((total, player) => total + player.guildTokens, 0),
     lastAuctionResult: match.guild.gathering.lastAuctionResult
   };
   return {
