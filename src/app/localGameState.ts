@@ -1,8 +1,7 @@
 import { createCommerceGuild } from "../domain/expansion/commerceGuild";
 import type { MatchCommand, MatchExecutionContext, MatchState } from "../domain/match/types";
 import type { RandomSource } from "../domain/match/random";
-import { createDemoGame } from "../domain/setup";
-import type { MatchSeat } from "../domain/match/createMatch";
+import { createDemoGame, defaultMatchSeats } from "../domain/setup";
 import type { PlayerId } from "../domain/types";
 
 export interface UiState {
@@ -30,12 +29,7 @@ class LocalRandomSource implements RandomSource {
 
 let logCounter = 0;
 
-export const localMatchSeats: readonly MatchSeat[] = [
-  { nickname: "Voyage1969" },
-  { nickname: "Loss" },
-  { nickname: "Kay" },
-  { nickname: "Amias" }
-];
+export const localMatchSeats = defaultMatchSeats;
 
 export const localMatchExecutionContext: MatchExecutionContext = {
   random: new LocalRandomSource(),
@@ -52,7 +46,7 @@ export function createUiState(selectedPlayerId: PlayerId): UiState {
 }
 
 export function createInitialAppState(): AppState {
-  const game = createDemoGame(localMatchSeats.map((seat) => seat.nickname));
+  const game = createDemoGame();
   return {
     game,
     guild: createCommerceGuild(),

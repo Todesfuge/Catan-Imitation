@@ -3,6 +3,8 @@ import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
 import { applyMatchCommand } from "../../src/domain/match/applyMatchCommand";
 import { createSetupMatch } from "../../src/domain/match/createMatch";
 import { DeterministicRandomSource } from "../../src/domain/match/random";
+import { createDevelopmentDeck } from "../../src/domain/rules/developmentCards";
+import { createDemoGame, createSetupGame } from "../../src/domain/setup";
 import type {
   DiceRoll,
   MatchCommand,
@@ -126,6 +128,33 @@ describe("match transition foundations", () => {
         context
       )
     ).toThrow(/three or four/i);
+  });
+
+  it("keeps createSetupGame as a no-argument compatibility wrapper", () => {
+    const unsafeCreateSetupGame = createSetupGame as unknown as (
+      playerNames: readonly string[],
+      developmentDeck?: ReturnType<typeof createDevelopmentDeck>
+    ) => ReturnType<typeof createSetupGame>;
+
+    expect(() => unsafeCreateSetupGame(["One", "Two"])).toThrow(/does not accept arguments/i);
+    expect(() =>
+      unsafeCreateSetupGame(["One", "Two", "Three", "Four", "Five"])
+    ).toThrow(/does not accept arguments/i);
+    expect(() =>
+      unsafeCreateSetupGame(
+        ["One", "Two", "Three"],
+        createDevelopmentDeck(["monopoly"])
+      )
+    ).toThrow(/does not accept arguments/i);
+  });
+
+  it("does not parameterize the legacy demo-game helper", () => {
+    const unsafeCreateDemoGame = createDemoGame as unknown as (
+      playerNames: readonly string[]
+    ) => ReturnType<typeof createDemoGame>;
+
+    expect(unsafeCreateDemoGame(["One", "Two", "Three"]).players.map((player) => player.name))
+      .toEqual(["Voyage1969", "Loss", "Kay", "Amias"]);
   });
 
   it("keeps only synchronized gameplay fields in MatchState", () => {
