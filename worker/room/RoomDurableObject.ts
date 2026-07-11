@@ -204,6 +204,14 @@ export class RoomDurableObject {
   }
 
   async webSocketClose(_socket: WebSocket): Promise<void> {
+    await this.socketEnded();
+  }
+
+  async webSocketError(_socket: WebSocket, _error: unknown): Promise<void> {
+    await this.socketEnded();
+  }
+
+  private async socketEnded(): Promise<void> {
     const now = Date.now();
     const result = await this.store.lookup(now);
     if (result.kind !== "active") return;
@@ -218,33 +226,32 @@ export class RoomDurableObject {
 
   async alarm(): Promise<void> {
     const now = Date.now();
-    const result = await this.store.lookup(now);
-    if (result.kind !== "active") {
-      await this.ctx.storage.deleteAlarm();
-      return;
-    }
-    if (result.room.expiresAt > now) {
-      await this.store.deferExpiry(result.room.expiresAt);
-      return;
-    }
-
-    const openSockets = this.ctx.getWebSockets().filter(
+    const hasOpenSocket = this.ctx.getWebSockets().some(
       (socket) => socket.readyState === WebSocket.OPEN
     );
-    if (openSockets.length > 0) {
-      await this.store.deferExpiry(now + ROOM_RETENTION_MS);
-      return;
-    }
+    const result = await this.store.handleExpiryAlarm(
+      now,
+      hasOpenSocket,
+      now + ROOM_RETENTION_MS
+    );
+    if (result.kind !== "expired") return;
 
-    await this.store.expire(now);
     const message = JSON.stringify({
       type: "room.expired",
       error: { code: "ROOM_EXPIRED", params: {}, retryable: false }
     });
     for (const socket of this.ctx.getWebSockets()) {
       if (socket.readyState === WebSocket.OPEN) {
-        socket.send(message);
-        socket.close(4002, "ROOM_EXPIRED");
+        try {
+          socket.send(message);
+        } catch {
+          // A failed peer must not prevent terminal delivery to the others.
+        }
+        try {
+          socket.close(4002, "ROOM_EXPIRED");
+        } catch {
+          // Continue closing the remaining peers.
+        }
       }
     }
   }

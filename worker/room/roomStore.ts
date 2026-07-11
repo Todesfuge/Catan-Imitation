@@ -27,6 +27,13 @@ export type RoomLookup =
   | { kind: "expired"; expiredAt: number }
   | { kind: "missing" };
 
+export type ExpiryAlarmResult =
+  | { kind: "expired" }
+  | { kind: "refreshed"; expiresAt: number }
+  | { kind: "deferred"; nextAlarmAt: number }
+  | { kind: "missing" }
+  | { kind: "alreadyExpired" };
+
 export class RoomSchemaError extends Error {
   constructor() {
     super("Persisted room schema is incompatible.");
@@ -250,16 +257,39 @@ export class RoomStore {
     await this.storage.deleteAlarm();
   }
 
-  async expire(expiredAt: number): Promise<void> {
-    await this.transaction(async (storage) => {
-      await storage.delete(ROOM_RECORD_KEY);
-      await storage.put(ROOM_EXPIRED_KEY, { schemaVersion: 1, expiredAt });
-      await storage.deleteAlarm();
-    });
-  }
-
   async deferExpiry(until: number): Promise<void> {
     await this.storage.setAlarm(until);
+  }
+
+  handleExpiryAlarm(
+    now: number,
+    openConnections: boolean,
+    deferredUntil: number
+  ): Promise<ExpiryAlarmResult> {
+    return this.transaction(async (storage) => {
+      const current = await readStoredRoom(storage, now);
+      if (current.kind === "missing") {
+        await storage.deleteAlarm();
+        return { kind: "missing" };
+      }
+      if (current.kind === "expired") {
+        await storage.deleteAlarm();
+        return { kind: "alreadyExpired" };
+      }
+      if (current.room.expiresAt > now) {
+        await storage.setAlarm(current.room.expiresAt);
+        return { kind: "refreshed", expiresAt: current.room.expiresAt };
+      }
+      if (openConnections) {
+        await storage.setAlarm(deferredUntil);
+        return { kind: "deferred", nextAlarmAt: deferredUntil };
+      }
+
+      await storage.delete(ROOM_RECORD_KEY);
+      await storage.put(ROOM_EXPIRED_KEY, { schemaVersion: 1, expiredAt: now });
+      await storage.deleteAlarm();
+      return { kind: "expired" };
+    });
   }
 
   private transaction<T>(closure: (storage: RoomStorage) => Promise<T>): Promise<T> {
