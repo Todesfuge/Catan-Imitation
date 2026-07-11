@@ -1,4 +1,5 @@
 import { resources, type Resource, type ResourceMap } from "../domain/types";
+import type { ResourceCost } from "../domain/expansion/commerceGuild";
 
 export const PROTOCOL_SCHEMA_VERSION = 1 as const;
 export const MAX_WIRE_BYTES = 16 * 1024;
@@ -68,7 +69,7 @@ export interface ConnectionTicketResponse {
   expiresInMs: number;
 }
 
-export type NetworkMatchCommand =
+export type OnlineMatchCommand =
   | { type: "PLACE_SETUP_SETTLEMENT"; vertexId: string }
   | { type: "PLACE_SETUP_ROAD"; edgeId: string }
   | { type: "ROLL_DICE" }
@@ -93,7 +94,7 @@ export type NetworkMatchCommand =
   | { type: "TRANSFER_TOKENS"; toPlayerId: string; amount: number }
   | { type: "START_GATHERING" }
   | { type: "OPEN_AUCTION" }
-  | { type: "REDEEM_GATHERING"; resources: ResourceMap }
+  | { type: "REDEEM_GATHERING"; resources: ResourceCost }
   | { type: "REDEEM_PRIZE" };
 
 interface VersionedClientMessage {
@@ -104,7 +105,7 @@ interface VersionedClientMessage {
 export type ClientWebSocketMessage =
   | (VersionedClientMessage & { type: "room.ready"; ready: boolean })
   | (VersionedClientMessage & { type: "room.start" })
-  | (VersionedClientMessage & { type: "match.command"; command: NetworkMatchCommand })
+  | (VersionedClientMessage & { type: "match.command"; command: OnlineMatchCommand })
   | (VersionedClientMessage & { type: "auction.submitBid"; amount: number })
   | { type: "connection.heartbeat" };
 
@@ -250,6 +251,17 @@ function resourceMapAt(value: unknown, path: string): ResourceMap {
   };
 }
 
+function resourceCostAt(value: unknown, path: string): ResourceCost {
+  const object = exactObject(value, path, [], resources);
+  const cost: ResourceCost = {};
+  for (const resource of resources) {
+    if (Object.hasOwn(object, resource)) {
+      cost[resource] = integerAt(object[resource], `${path}.${resource}`);
+    }
+  }
+  return cost;
+}
+
 function versionedFields(object: JsonObject): VersionedClientMessage {
   return {
     commandId: commandIdAt(object.commandId, "message.commandId"),
@@ -291,21 +303,21 @@ export function parseConnectionTicketResponse(text: string): ConnectionTicketRes
   };
 }
 
-function noPayloadCommand(object: JsonObject, type: NetworkMatchCommand["type"]): NetworkMatchCommand {
+function noPayloadCommand(object: JsonObject, type: OnlineMatchCommand["type"]): OnlineMatchCommand {
   exactObject(object, "message.command", ["type"]);
-  return { type } as NetworkMatchCommand;
+  return { type } as OnlineMatchCommand;
 }
 
-function oneStringCommand<K extends string, T extends NetworkMatchCommand["type"]>(
+function oneStringCommand<K extends string, T extends OnlineMatchCommand["type"]>(
   object: JsonObject,
   type: T,
   key: K
-): NetworkMatchCommand {
+): OnlineMatchCommand {
   exactObject(object, "message.command", ["type", key]);
-  return { type, [key]: stringAt(object[key], `message.command.${key}`) } as NetworkMatchCommand;
+  return { type, [key]: stringAt(object[key], `message.command.${key}`) } as OnlineMatchCommand;
 }
 
-function parseNetworkMatchCommand(value: unknown): NetworkMatchCommand {
+function parseOnlineMatchCommand(value: unknown): OnlineMatchCommand {
   const object = objectAt(value, "message.command");
   const type = stringAt(object.type, "message.command.type");
 
@@ -358,10 +370,13 @@ function parseNetworkMatchCommand(value: unknown): NetworkMatchCommand {
         requested: resourceMapAt(object.requested, "message.command.requested")
       };
     }
-    case "DISCARD_FOR_SEVEN":
-    case "REDEEM_GATHERING": {
+    case "DISCARD_FOR_SEVEN": {
       exactObject(object, "message.command", ["type", "resources"]);
       return { type, resources: resourceMapAt(object.resources, "message.command.resources") };
+    }
+    case "REDEEM_GATHERING": {
+      exactObject(object, "message.command", ["type", "resources"]);
+      return { type, resources: resourceCostAt(object.resources, "message.command.resources") };
     }
     case "TRANSFER_TOKENS": {
       exactObject(object, "message.command", ["type", "toPlayerId", "amount"]);
@@ -389,7 +404,7 @@ export function parseClientWebSocketMessage(text: string): ClientWebSocketMessag
       return { type, ...versionedFields(object) };
     case "match.command":
       exactObject(object, "message", ["type", "commandId", "expectedVersion", "command"]);
-      return { type, ...versionedFields(object), command: parseNetworkMatchCommand(object.command) };
+      return { type, ...versionedFields(object), command: parseOnlineMatchCommand(object.command) };
     case "auction.submitBid":
       exactObject(object, "message", ["type", "commandId", "expectedVersion", "amount"]);
       return {

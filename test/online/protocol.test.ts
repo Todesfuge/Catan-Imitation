@@ -14,7 +14,8 @@ import {
   parseNicknameRequest,
   parseSeatCredentialsResponse,
   parseClientWebSocketMessage,
-  parseServerWebSocketMessage
+  parseServerWebSocketMessage,
+  type OnlineMatchCommand
 } from "../../src/online/protocol";
 
 const commandId = "123e4567-e89b-42d3-a456-426614174000";
@@ -190,6 +191,72 @@ describe("client WebSocket messages", () => {
         })
       )
     ).toThrow("resources.wood");
+  });
+
+  it("accepts bounded partial gathering costs without filling missing resources", () => {
+    const partialCommand: OnlineMatchCommand = {
+      type: "REDEEM_GATHERING",
+      resources: { wood: 1 }
+    };
+    const partialMessage = {
+      type: "match.command",
+      commandId,
+      expectedVersion: 0,
+      command: partialCommand
+    };
+    expect(parseClientWebSocketMessage(wire(partialMessage))).toEqual(partialMessage);
+
+    for (const resources of [{}, { wood: 0 }]) {
+      const structurallySafeMessage = {
+        ...partialMessage,
+        command: { type: "REDEEM_GATHERING", resources }
+      };
+      expect(parseClientWebSocketMessage(wire(structurallySafeMessage))).toEqual(
+        structurallySafeMessage
+      );
+    }
+
+    const fullResources = { wood: 1, brick: 0, wool: 0, grain: 0, ore: 0 };
+    const fullMessage = {
+      ...partialMessage,
+      command: { type: "REDEEM_GATHERING", resources: fullResources }
+    };
+    expect(parseClientWebSocketMessage(wire(fullMessage))).toEqual(fullMessage);
+
+    for (const resources of [
+      { gold: 1 },
+      { wood: -1 },
+      { wood: 0.5 },
+      { wood: Number.MAX_SAFE_INTEGER + 1 },
+      { wood: "1" },
+      { wood: null }
+    ]) {
+      expect(() =>
+        parseClientWebSocketMessage(
+          wire({
+            type: "match.command",
+            commandId,
+            expectedVersion: 0,
+            command: { type: "REDEEM_GATHERING", resources }
+          })
+        )
+      ).toThrow(ProtocolValidationError);
+    }
+
+    expect(() =>
+      parseClientWebSocketMessage(
+        wire({
+          type: "match.command",
+          commandId,
+          expectedVersion: 0,
+          command: {
+            type: "PUBLISH_PLAYER_TRADE",
+            offered: { wood: 1 },
+            requested: { wood: 0, brick: 1, wool: 0, grain: 0, ore: 0 }
+          }
+        })
+      )
+    ).toThrow("message.command.offered.brick is required");
   });
 
   it.each([
