@@ -12,7 +12,11 @@
     "smoke:ui": "node scripts/smoke-ui.mjs",
     "test": "vitest run",
     "test:e2e": "pnpm build && playwright test",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:worker": "pnpm build && vitest run --config vitest.worker.config.ts",
+    "build:worker": "pnpm build && tsc -p tsconfig.worker.json",
+    "dev:worker": "pnpm build && wrangler dev --host 127.0.0.1",
+    "smoke:worker": "pnpm build && vitest run --config vitest.worker.config.ts test/worker/workerSmoke.test.ts"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -20,12 +24,14 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.8.70",
     "@playwright/test": "^1.61.1",
     "@types/react": "18.3.18",
     "@types/react-dom": "18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.7.2",
     "vite": "^5.4.14",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "wrangler": "4.110.0"
   }
 }
