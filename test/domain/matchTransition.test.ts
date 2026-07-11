@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
 import { applyMatchCommand } from "../../src/domain/match/applyMatchCommand";
+import { createSetupMatch } from "../../src/domain/match/createMatch";
 import { DeterministicRandomSource } from "../../src/domain/match/random";
 import type {
   DiceRoll,
@@ -60,6 +61,73 @@ afterEach(() => {
 });
 
 describe("match transition foundations", () => {
+  it("creates stable three-player identities from caller nicknames in snake order", () => {
+    const match = createSetupMatch(
+      [{ nickname: "Ada" }, { nickname: "Grace" }, { nickname: "Linus" }],
+      createContext(Array.from({ length: 24 }, () => 0))
+    );
+
+    expect(match.game.players.map(({ id, name, color }) => ({ id, name, color }))).toEqual([
+      { id: "p1", name: "Ada", color: "#f2f2f2" },
+      { id: "p2", name: "Grace", color: "#ef4444" },
+      { id: "p3", name: "Linus", color: "#f97316" }
+    ]);
+    expect(new Set(match.game.players.map((player) => player.id)).size).toBe(3);
+    expect(new Set(match.game.players.map((player) => player.color)).size).toBe(3);
+    expect(match.game.setup?.order).toEqual(["p1", "p2", "p3", "p3", "p2", "p1"]);
+    expect(match.game.activePlayerId).toBe("p1");
+  });
+
+  it("creates the four-player snake order with the fourth stable identity", () => {
+    const match = createSetupMatch(
+      ["One", "Two", "Three", "Four"].map((nickname) => ({ nickname })),
+      createContext(Array.from({ length: 24 }, () => 0))
+    );
+
+    expect(match.game.players[3]).toMatchObject({
+      id: "p4",
+      name: "Four",
+      color: "#2563eb"
+    });
+    expect(match.game.setup?.order).toEqual([
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p4",
+      "p3",
+      "p2",
+      "p1"
+    ]);
+  });
+
+  it("shuffles the development deck only through injected deterministic randomness", () => {
+    const mathRandom = vi.spyOn(Math, "random");
+    const match = createSetupMatch(
+      ["One", "Two", "Three"].map((nickname) => ({ nickname })),
+      createContext(Array.from({ length: 24 }, () => 0))
+    );
+
+    expect(match.game.developmentDeck).toHaveLength(25);
+    expect(match.game.developmentDeck[0].id).toBe("dev-2-knight");
+    expect(match.game.developmentDeck.at(-1)?.id).toBe("dev-1-knight");
+    expect(mathRandom).not.toHaveBeenCalled();
+  });
+
+  it("rejects match creation outside the supported three or four seats", () => {
+    const context = createContext();
+
+    expect(() =>
+      createSetupMatch(["One", "Two"].map((nickname) => ({ nickname })), context)
+    ).toThrow(/three or four/i);
+    expect(() =>
+      createSetupMatch(
+        ["One", "Two", "Three", "Four", "Five"].map((nickname) => ({ nickname })),
+        context
+      )
+    ).toThrow(/three or four/i);
+  });
+
   it("keeps only synchronized gameplay fields in MatchState", () => {
     const appState = createInitialAppState();
     const lastDice: DiceRoll = { first: 3, second: 5, total: 8 };
@@ -107,7 +175,11 @@ describe("match transition foundations", () => {
   });
 
   it("starts setup and applies setup placements through the shared dispatcher", () => {
-    const started = apply(toMatchState(), { type: "START_NEW_GAME" });
+    const started = apply(
+      toMatchState(),
+      { type: "START_NEW_GAME" },
+      createContext(Array.from({ length: 24 }, () => 0))
+    );
     const vertexId = started.game.board[0].vertexIds[0];
     const settled = apply(started, {
       type: "PLACE_SETUP_SETTLEMENT",

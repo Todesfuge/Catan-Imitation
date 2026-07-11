@@ -17,13 +17,13 @@ function createPlayer(id: string, name: string, color: string): Player {
   };
 }
 
-function createPlayers(): Player[] {
-  return [
-    createPlayer("p1", "Voyage1969", "#f2f2f2"),
-    createPlayer("p2", "Loss", "#ef4444"),
-    createPlayer("p3", "Kay", "#f97316"),
-    createPlayer("p4", "Amias", "#2563eb")
-  ];
+const defaultPlayerNames = ["Voyage1969", "Loss", "Kay", "Amias"];
+const playerColors = ["#f2f2f2", "#ef4444", "#f97316", "#2563eb"];
+
+function createPlayers(playerNames: readonly string[] = defaultPlayerNames): Player[] {
+  return playerNames.map((name, index) =>
+    createPlayer(`p${index + 1}`, name, playerColors[index])
+  );
 }
 
 function createBank() {
@@ -54,7 +54,7 @@ function getEdgeTouchingVertex(edges: BoardEdge[], vertexId: string): BoardEdge 
   return edge;
 }
 
-export function createDemoGame(): GameState {
+export function createDemoGame(playerNames: readonly string[] = defaultPlayerNames): GameState {
   const { board, edges, ports } = createStandardBoardData();
   const pastureEight = getHex(board, "pasture-8");
   const mountainEight = getHex(board, "mountain-8");
@@ -65,7 +65,7 @@ export function createDemoGame(): GameState {
 
   return {
     phase: "playing",
-    players: createPlayers(),
+    players: createPlayers(playerNames),
     activePlayerId: "p1",
     turn: 1,
     round: 1,
@@ -113,12 +113,16 @@ export function createDemoGame(): GameState {
   };
 }
 
-export function createSetupGame(): GameState {
+export function createSetupGame(
+  playerNames: readonly string[] = defaultPlayerNames,
+  developmentDeck = createDevelopmentDeck()
+): GameState {
   const { board, edges, ports } = createStandardBoardData();
+  const playerIds = playerNames.map((_, index) => `p${index + 1}`);
 
   return {
     phase: "setup",
-    players: createPlayers(),
+    players: createPlayers(playerNames),
     activePlayerId: "p1",
     turn: 1,
     round: 1,
@@ -131,9 +135,9 @@ export function createSetupGame(): GameState {
     roads: [],
     robberHexId: "desert",
     bank: createBank(),
-    developmentDeck: createDevelopmentDeck(),
+    developmentDeck,
     setup: {
-      order: ["p1", "p2", "p3", "p4", "p4", "p3", "p2", "p1"],
+      order: [...playerIds, ...playerIds.slice().reverse()],
       placementIndex: 0,
       stage: "settlement"
     },

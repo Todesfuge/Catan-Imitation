@@ -12,7 +12,6 @@ import {
   type TradeSlot
 } from "../expansion/commerceGuild";
 import { RuleViolationError } from "../errors";
-import { createSetupGame } from "../setup";
 import {
   buildCity,
   buildRoad,
@@ -63,6 +62,7 @@ import {
   type PlayerId
 } from "../types";
 import { toUnitIntervalRandom } from "./random";
+import { createSetupMatch } from "./createMatch";
 import type { MatchCommand, MatchExecutionContext, MatchState } from "./types";
 
 function log(
@@ -180,17 +180,19 @@ export function applyMatchCommand(
 ): MatchState {
   switch (command.type) {
     case "START_NEW_GAME": {
-      const game = createSetupGame();
+      const created = createSetupMatch(
+        state.game.players.map((player) => ({ nickname: player.name })),
+        context
+      );
       return {
+        ...created,
         game: {
-          ...game,
+          ...created.game,
           log: [
             log(context, "New game setup started.", "setup.newGameStarted"),
-            ...game.log
+            ...created.game.log
           ]
-        },
-        guild: createCommerceGuild(),
-        lastDice: null
+        }
       };
     }
     case "PLACE_SETUP_SETTLEMENT":

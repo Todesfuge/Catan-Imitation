@@ -1,11 +1,52 @@
 import { describe, expect, it } from "vitest";
 import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { createSetupMatch } from "../../src/domain/match/createMatch";
+import { DeterministicRandomSource } from "../../src/domain/match/random";
 import {
   getLegalSetupRoadEdgeIds,
   getLegalSetupSettlementVertexIds
 } from "../../src/domain/rules/building";
 
 describe("complete local-game setup interaction", () => {
+  it("completes a three-player setup using the generated snake order", () => {
+    const match = createSetupMatch(
+      ["One", "Two", "Three"].map((nickname) => ({ nickname })),
+      {
+        random: new DeterministicRandomSource(Array.from({ length: 24 }, () => 0)),
+        nextLogId: () => "unused",
+        now: () => 0
+      }
+    );
+    let game = match.game;
+
+    while (game.phase === "setup") {
+      const playerId = game.activePlayerId;
+      if (game.setup?.stage === "settlement") {
+        game = gameReducer(
+          { ...match, game, selectedDiceTotal: 8, selectedPlayerId: playerId, notice: null },
+          {
+            type: "PLACE_SETUP_SETTLEMENT",
+            playerId,
+            vertexId: getLegalSetupSettlementVertexIds(game, playerId)[0]
+          }
+        ).game;
+      } else {
+        game = gameReducer(
+          { ...match, game, selectedDiceTotal: 8, selectedPlayerId: playerId, notice: null },
+          {
+            type: "PLACE_SETUP_ROAD",
+            playerId,
+            edgeId: getLegalSetupRoadEdgeIds(game, playerId)[0]
+          }
+        ).game;
+      }
+    }
+
+    expect(game.activePlayerId).toBe("p1");
+    expect(game.buildings).toHaveLength(6);
+    expect(game.roads).toHaveLength(6);
+  });
+
   it("starts a new game in setup and exposes the current legal placement targets", () => {
     const state = gameReducer(createInitialAppState(), { type: "START_NEW_GAME" });
 
