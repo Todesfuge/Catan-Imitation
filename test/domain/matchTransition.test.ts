@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
 import { applyMatchCommand } from "../../src/domain/match/applyMatchCommand";
 import { DeterministicRandomSource } from "../../src/domain/match/random";
@@ -54,6 +54,10 @@ function apply(
 ): MatchState {
   return applyMatchCommand(state, command, context);
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("match transition foundations", () => {
   it("keeps only synchronized gameplay fields in MatchState", () => {
@@ -230,6 +234,47 @@ describe("match transition foundations", () => {
     expect(started.guild.gathering.phase).toBe("redemption");
     expect(redeemed.game.log[0].messageKey).toBe("guild.redeemedResources");
     expect(["auction", "complete"]).toContain(auction.guild.gathering.phase);
+  });
+
+  it("uses injected randomness for a won Commerce Guild blind box", () => {
+    const mathRandom = vi.spyOn(Math, "random").mockReturnValue(0.6);
+    const base = toMatchState();
+    const auction = {
+      ...base,
+      game: {
+        ...base.game,
+        players: base.game.players.map((player) =>
+          player.id === "p1" ? { ...player, guildTokens: 2 } : player
+        )
+      },
+      guild: {
+        ...base.guild,
+        gathering: {
+          ...base.guild.gathering,
+          phase: "auction" as const,
+          auctionRound: 1
+        }
+      }
+    };
+    const beforeCards =
+      auction.game.players.find((player) => player.id === "p1")?.developmentCards.length ?? 0;
+
+    const resolved = apply(
+      auction,
+      { type: "RESOLVE_AUCTION", bids: { p1: 1, p2: 0, p3: 0, p4: 0 } },
+      createContext([0xffff_ffff])
+    );
+
+    expect(resolved.guild.gathering.lastAuctionResult).toMatchObject({
+      winnerId: "p1",
+      winningBid: 1,
+      outcome: { kind: "developmentCard" }
+    });
+    expect(
+      resolved.game.players.find((player) => player.id === "p1")?.developmentCards
+    ).toHaveLength(beforeCards + 1);
+    expect(resolved.game.log[0].messageKey).toBe("guild.auctionResolved");
+    expect(mathRandom).not.toHaveBeenCalled();
   });
 
   it("throws recoverable domain errors while the local adapter preserves UI state and notice", () => {

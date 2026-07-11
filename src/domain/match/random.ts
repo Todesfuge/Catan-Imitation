@@ -2,6 +2,13 @@ export interface RandomSource {
   nextInt(maxExclusive: number): number;
 }
 
+const UINT32_RANGE = 0x1_0000_0000;
+
+/** Adapt an unbiased 32-bit integer draw to the existing [0, 1) callback contract. */
+export function toUnitIntervalRandom(random: RandomSource): () => number {
+  return () => random.nextInt(UINT32_RANGE) / UINT32_RANGE;
+}
+
 /** Predictable finite random source for tests and deterministic simulations. */
 export class DeterministicRandomSource implements RandomSource {
   private index = 0;

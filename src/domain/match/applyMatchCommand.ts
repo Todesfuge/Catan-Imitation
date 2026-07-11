@@ -62,6 +62,7 @@ import {
   type GameState,
   type PlayerId
 } from "../types";
+import { toUnitIntervalRandom } from "./random";
 import type { MatchCommand, MatchExecutionContext, MatchState } from "./types";
 
 function log(
@@ -551,7 +552,7 @@ export function applyMatchCommand(
         state.game,
         command.playerId,
         command.victimId,
-        () => context.random.nextInt(0x1_0000_0000) / 0x1_0000_0000
+        toUnitIntervalRandom(context.random)
       );
       const resolvedGame = withWinnerState(stolenGame, command.playerId);
       return {
@@ -702,7 +703,12 @@ export function applyMatchCommand(
     }
     case "RESOLVE_AUCTION": {
       assertGameInProgress(state.game);
-      const result = resolveAuctionRound(state.game, state.guild, command.bids);
+      const result = resolveAuctionRound(
+        state.game,
+        state.guild,
+        command.bids,
+        toUnitIntervalRandom(context.random)
+      );
       if (result.kind === "noBid") {
         return {
           ...state,
