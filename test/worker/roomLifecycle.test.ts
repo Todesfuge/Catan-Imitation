@@ -1,5 +1,7 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import worker from "../../worker/index";
+import { RoomDurableObject } from "../../worker/room/RoomDurableObject";
 
 import type { MatchExecutionContext } from "../../src/domain/match/types";
 import {
@@ -118,6 +120,10 @@ class MemoryStorage implements RoomStorage {
     this.alarms.push(
       scheduledTime instanceof Date ? scheduledTime.getTime() : scheduledTime
     );
+  }
+
+  async transaction<T>(closure: (transaction: RoomStorage) => Promise<T>): Promise<T> {
+    return closure(this);
   }
 }
 
@@ -530,18 +536,319 @@ describe("RoomStore", () => {
     expect(storage.values.has(ROOM_RECORD_KEY)).toBe(false);
   });
 
-  it("integrates with real Durable Object storage and alarm scheduling", async () => {
-    const stub = env.ROOMS.getByName("task-10-real-room-store");
-    const now = Date.now();
-    const room = roomWithSeats(1, now);
+});
 
-    await runInDurableObject(stub, async (_instance, state) => {
-      const store = new RoomStore(state.storage);
-      expect(await store.createIfEmpty(room)).toBe("created");
-      expect(await store.load(now)).toEqual(room);
-      expect(await state.storage.getAlarm()).toBe(room.expiresAt);
-      await store.delete();
-      expect(await store.load(now)).toBeNull();
+const ORIGIN = "https://example.com";
+
+class TestRoomNamespace {
+  private readonly rooms = new Map<string, { object: RoomDurableObject; state: DurableObjectState }>();
+  attempts = 0;
+
+  constructor(private readonly collide = false) {}
+
+  getByName(name: string): any {
+    this.attempts += 1;
+    if (this.collide) {
+      return {
+        fetch: () => Promise.resolve(new Response("collision", {
+          status: 409,
+          headers: { "x-room-code-collision": "1" }
+        }))
+      };
+    }
+    let entry = this.rooms.get(name);
+    if (entry === undefined) {
+      const storage = new MemoryStorage();
+      const sockets: WebSocket[] = [];
+      const state = {
+        storage,
+        acceptWebSocket: (socket: WebSocket) => {
+          socket.accept();
+          sockets.push(socket);
+        },
+        getWebSockets: () => sockets
+      } as unknown as DurableObjectState;
+      entry = { object: new RoomDurableObject(state, {} as Env), state };
+      this.rooms.set(name, entry);
+    }
+    const object = entry.object;
+    return { fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+      object.fetch(input instanceof Request ? input : new Request(input, init))
+    };
+  }
+
+  state(name: string): DurableObjectState {
+    const state = this.rooms.get(name)?.state;
+    if (state === undefined) throw new Error(`missing room ${name}`);
+    return state;
+  }
+
+  async seed(name: string, room: PersistedRoom): Promise<void> {
+    this.getByName(name);
+    await this.state(name).storage.put(ROOM_RECORD_KEY, room);
+  }
+}
+
+const testRooms = new TestRoomNamespace();
+const testEnv = {
+  ROOMS: testRooms,
+  ASSETS: { fetch: () => new Response("asset") }
+} as unknown as Env;
+
+async function api(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("origin", ORIGIN);
+  if (init.body !== undefined) headers.set("content-type", "application/json");
+  return worker.fetch(new Request(`${ORIGIN}${path}`, { ...init, headers }), testEnv);
+}
+
+async function createRoom(nickname = "Host") {
+  const response = await api("/api/rooms", {
+    method: "POST",
+    body: JSON.stringify({ nickname })
+  });
+  expect(response.status).toBe(201);
+  return response.json() as Promise<{
+    roomCode: string;
+    seatId: string;
+    seatToken: string;
+  }>;
+}
+
+async function joinRoom(roomCode: string, nickname: string) {
+  const response = await api(`/api/rooms/${roomCode.toLowerCase()}/join`, {
+    method: "POST",
+    body: JSON.stringify({ nickname })
+  });
+  expect(response.status).toBe(201);
+  return response.json() as Promise<{
+    roomCode: string;
+    seatId: string;
+    seatToken: string;
+  }>;
+}
+
+async function issueTicket(roomCode: string, seatToken: string) {
+  const response = await api(`/api/rooms/${roomCode}/connection-ticket`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${seatToken}` }
+  });
+  expect(response.status).toBe(201);
+  return response.json() as Promise<{ ticket: string; expiresInMs: number }>;
+}
+
+async function connect(roomCode: string, ticket: string): Promise<WebSocket> {
+  const response = await api(
+    `/api/rooms/${roomCode}/connect?ticket=${encodeURIComponent(ticket)}`,
+    { headers: { upgrade: "websocket" } }
+  );
+  if (response.status !== 101) {
+    throw new Error(`upgrade ${response.status}: ${await response.text()}`);
+  }
+  const socket = response.webSocket;
+  if (socket === null) throw new Error("expected upgraded WebSocket");
+  socket.accept();
+  return socket;
+}
+
+function nextMessage(socket: WebSocket): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    socket.addEventListener("message", (event) => {
+      try {
+        resolve(JSON.parse(String(event.data)) as Record<string, unknown>);
+      } catch (error) {
+        reject(error);
+      }
+    }, { once: true });
+    socket.addEventListener("error", () => reject(new Error("socket error")), { once: true });
+  });
+}
+
+function closeSocket(socket: WebSocket): void {
+  socket.close(1000, "done");
+}
+
+describe("room HTTP routes and authenticated sockets", () => {
+  it("covers persisted room routes, errors, tickets, attachments, and presence", async () => {
+    {
+      const stub = env.ROOMS.getByName("task-10-real-room-store");
+      const now = Date.now();
+      const room = roomWithSeats(1, now);
+      await runInDurableObject(stub, async (_instance, state) => {
+        const store = new RoomStore(state.storage);
+        expect(await store.createIfEmpty(room)).toBe("created");
+        expect(await store.load(now)).toEqual(room);
+        expect(await state.storage.getAlarm()).toBe(room.expiresAt);
+        await store.delete();
+        expect(await store.load(now)).toBeNull();
+      });
+    }
+
+    {
+    const collisions = new TestRoomNamespace(true);
+    const collisionResponse = await worker.fetch(new Request(`${ORIGIN}/api/rooms`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json" },
+      body: JSON.stringify({ nickname: "Collision Host" })
+    }), { ...testEnv, ROOMS: collisions } as unknown as Env);
+    expect(collisions.attempts).toBe(8);
+    expect(collisionResponse.status).toBe(500);
+
+    const host = await createRoom(" Host ");
+    expect(host.roomCode).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+    expect(host.seatId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(host.seatToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+    const guest = await joinRoom(host.roomCode, "Guest");
+    expect(guest.roomCode).toBe(host.roomCode);
+
+    const duplicate = await api(`/api/rooms/${host.roomCode}/join`, {
+      method: "POST",
+      body: JSON.stringify({ nickname: " guest " })
     });
+    expect(duplicate.status).toBe(422);
+    await expect(duplicate.json()).resolves.toMatchObject({
+      error: { code: "RULE_VIOLATION", retryable: false }
+    });
+
+    const invalidDelete = await api(
+      `/api/rooms/${host.roomCode}/seats/${guest.seatId}`,
+      { method: "DELETE", headers: { authorization: `Bearer ${host.seatToken}` } }
+    );
+    expect(invalidDelete.status).toBe(401);
+
+    const deleted = await api(`/api/rooms/${host.roomCode}/seats/${guest.seatId}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${guest.seatToken}` }
+    });
+    expect(deleted.status).toBe(204);
+    }
+
+    {
+    const missing = await api("/api/rooms/ABC234/join", {
+      method: "POST",
+      body: JSON.stringify({ nickname: "Guest" })
+    });
+    expect(missing.status).toBe(404);
+
+    await testRooms.seed("ABC234", startedRoom());
+    const started = await api("/api/rooms/abc234/join", {
+      method: "POST",
+      body: JSON.stringify({ nickname: "Late" })
+    });
+    expect(started.status).toBe(409);
+    await expect(started.json()).resolves.toMatchObject({
+      error: { code: "ROOM_ALREADY_STARTED" }
+    });
+
+    const malformed = await api("/api/rooms", {
+      method: "POST",
+      body: JSON.stringify({ nickname: "", extra: true })
+    });
+    expect(malformed.status).toBe(422);
+
+    const invalidCode = await api("/api/rooms/ABC01I/join", {
+      method: "POST",
+      body: JSON.stringify({ nickname: "Guest" })
+    });
+    expect(invalidCode.status).toBe(422);
+
+    const host = await createRoom("Full Host");
+    await joinRoom(host.roomCode, "Two");
+    await joinRoom(host.roomCode, "Three");
+    await joinRoom(host.roomCode, "Four");
+    const full = await api(`/api/rooms/${host.roomCode}/join`, {
+      method: "POST",
+      body: JSON.stringify({ nickname: "Five" })
+    });
+    expect(full.status).toBe(409);
+    await expect(full.json()).resolves.toMatchObject({ error: { code: "ROOM_FULL" } });
+    }
+
+    {
+    const host = await createRoom("Socket Host");
+    const invalidAuth = await api(`/api/rooms/${host.roomCode}/connection-ticket`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${"x".repeat(43)}` }
+    });
+    expect(invalidAuth.status).toBe(401);
+
+    const issued = await issueTicket(host.roomCode, host.seatToken);
+    expect(issued.expiresInMs).toBe(30_000);
+    expect(issued.ticket).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const first = await connect(host.roomCode, issued.ticket);
+    const snapshot = await nextMessage(first);
+    expect(snapshot).toMatchObject({
+      type: "room.snapshot",
+      schemaVersion: 1,
+      lifecycle: "lobby",
+      privateState: { seatId: host.seatId, seatTokenPresent: true }
+    });
+
+    const consumed = await api(
+      `/api/rooms/${host.roomCode}/connect?ticket=${encodeURIComponent(issued.ticket)}`,
+      { headers: { upgrade: "websocket" } }
+    );
+    expect(consumed.status).toBe(401);
+    await expect(consumed.json()).resolves.toMatchObject({
+      error: { code: "CONNECTION_TICKET_EXPIRED", retryable: true }
+    });
+    closeSocket(first);
+
+    const expiring = await issueTicket(host.roomCode, host.seatToken);
+    const ticketHash = await import("../../worker/crypto").then(({ hashSecret }) =>
+      hashSecret(expiring.ticket)
+    );
+    const expiringState = testRooms.state(host.roomCode);
+    const expiringStore = new RoomStore(expiringState.storage);
+    const expiringRoom = await expiringStore.load(Date.now());
+    if (expiringRoom === null) throw new Error("expected room");
+    await expiringState.storage.put(ROOM_RECORD_KEY, {
+      ...expiringRoom,
+      connectionTickets: expiringRoom.connectionTickets.map((candidate) =>
+        candidate.ticketHash === ticketHash ? { ...candidate, expiresAt: Date.now() - 1 } : candidate
+      )
+    });
+    const expired = await api(
+      `/api/rooms/${host.roomCode}/connect?ticket=${encodeURIComponent(expiring.ticket)}`,
+      { headers: { upgrade: "websocket" } }
+    );
+    expect(expired.status).toBe(401);
+    }
+
+    {
+    const host = await createRoom("Presence Host");
+    const firstTicket = await issueTicket(host.roomCode, host.seatToken);
+    const first = await connect(host.roomCode, firstTicket.ticket);
+    await nextMessage(first);
+
+    const secondTicket = await issueTicket(host.roomCode, host.seatToken);
+    const second = await connect(host.roomCode, secondTicket.ticket);
+    const secondSnapshot = await nextMessage(second);
+    expect(secondSnapshot.presence).toEqual([
+      { seatId: host.seatId, connectionCount: 2, online: true }
+    ]);
+
+    const state = testRooms.state(host.roomCode);
+    {
+      const sockets = state.getWebSockets();
+      expect(sockets).toHaveLength(2);
+      for (const socket of sockets) {
+        expect(socket.deserializeAttachment()).toEqual({
+          seatId: host.seatId,
+          connectionId: expect.any(String),
+          connectedAt: expect.any(Number)
+        });
+        const serialized = JSON.stringify(socket.deserializeAttachment());
+        expect(serialized).not.toContain(host.seatToken);
+        expect(serialized).not.toContain(firstTicket.ticket);
+      }
+      const room = await new RoomStore(state.storage).load(Date.now());
+      expect(room).not.toHaveProperty("presence");
+    }
+
+    closeSocket(first);
+    closeSocket(second);
+    }
   });
 });

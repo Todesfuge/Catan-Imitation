@@ -2,6 +2,8 @@ import type { CommerceGuildState } from "../../src/domain/expansion/commerceGuil
 import type { MatchState } from "../../src/domain/match/types";
 import type { GameState, Player } from "../../src/domain/types";
 import type { ConnectionTicket, PersistedRoom, PersistedSeat } from "./roomTypes";
+import { hashesMatch } from "../crypto";
+import { refreshRoomActivity } from "./roomLifecycle";
 
 export const ROOM_RECORD_KEY = "room";
 
@@ -10,6 +12,7 @@ export interface RoomStorage {
   put(key: string, value: unknown): Promise<void>;
   delete(key: string): Promise<boolean | void>;
   setAlarm(scheduledTime: number | Date): Promise<void>;
+  transaction?<T>(closure: (transaction: RoomStorage) => Promise<T>): Promise<T>;
 }
 
 export class RoomSchemaError extends Error {
@@ -197,5 +200,33 @@ export class RoomStore {
 
   async delete(): Promise<void> {
     await this.storage.delete(ROOM_RECORD_KEY);
+  }
+
+  async consumeConnectionTicket(
+    ticketHash: string,
+    now: number
+  ): Promise<{ room: PersistedRoom; seatId: string } | null> {
+    const consume = async (storage: RoomStorage) => {
+      const value = await storage.get(ROOM_RECORD_KEY);
+      if (value === undefined) return null;
+      assertPersistedRoom(value);
+      const validTickets = value.connectionTickets.filter((ticket) => ticket.expiresAt > now);
+      const ticket = validTickets.find((candidate) => hashesMatch(candidate.ticketHash, ticketHash));
+      if (ticket === undefined) {
+        if (validTickets.length !== value.connectionTickets.length) {
+          await storage.put(ROOM_RECORD_KEY, { ...value, connectionTickets: validTickets });
+        }
+        return null;
+      }
+      const room = refreshRoomActivity({
+        ...value,
+        connectionTickets: validTickets.filter((candidate) => candidate !== ticket)
+      }, now);
+      assertPersistedRoom(room);
+      await storage.put(ROOM_RECORD_KEY, room);
+      await storage.setAlarm(room.expiresAt);
+      return { room, seatId: ticket.seatId };
+    };
+    return this.storage.transaction ? this.storage.transaction(consume) : consume(this.storage);
   }
 }
