@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getActionAvailability } from "../../src/app/actionAvailability";
+import {
+  getActionAvailability,
+  getActionAvailabilityFacts
+} from "../../src/app/actionAvailability";
 import { createInitialAppState } from "../../src/app/gameReducer";
 import { emptyResources, type ResourceMap } from "../../src/domain/types";
 import { executeMatchCommandForTest } from "./matchCommandTestUtils";
@@ -88,5 +91,30 @@ describe("turn action availability", () => {
     expect(active.commerce.transfer.maxAmount).toBe(2);
     expect(active.commerce.redeemPrize.enabled).toBe(false);
     expect(active.commerce.gatheringPlayers[0].remainingAllowance).toBe(4);
+  });
+
+  it("reports a required pre-roll development decision instead of claiming the dice were rolled", () => {
+    const state = createInitialAppState();
+    const playerId = state.game.activePlayerId;
+    const facts = getActionAvailabilityFacts(
+      {
+        ...state,
+        game: {
+          ...state.game,
+          turnState: {
+            phase: "awaitingDevelopmentEffect",
+            pendingDiscards: {},
+            pendingDevelopmentEffect: {
+              kind: "monopoly",
+              playerId,
+              resumePhase: "awaitingRoll"
+            }
+          }
+        }
+      },
+      playerId
+    );
+
+    expect(facts.roll.disabledReason).toEqual({ code: "REQUIRED_DECISION" });
   });
 });

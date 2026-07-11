@@ -14,6 +14,7 @@ import {
   projectRoomView,
   type ProjectableRoomState
 } from "../../src/online/projectRoomView";
+import { executeMatchCommandForTest } from "../domain/matchCommandTestUtils";
 
 const ownCard: DevelopmentCard = {
   id: "own-card-id",
@@ -748,5 +749,86 @@ describe("caller-specific room projection privacy", () => {
       targets: resources,
       bankStock: { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 }
     });
+  });
+
+  it("gates public-trade cancellation and acceptance by authoritative turn facts", () => {
+    const room = createRoom();
+    const pendingStates: GameState["turnState"][] = [
+      {
+        phase: "awaitingDevelopmentEffect",
+        pendingDiscards: {},
+        pendingDevelopmentEffect: {
+          kind: "monopoly",
+          playerId: "p1",
+          resumePhase: "action"
+        }
+      },
+      {
+        phase: "awaitingRobberPlacement",
+        pendingDiscards: {},
+        pendingRobber: {
+          source: "seven",
+          resumePhase: "action",
+          eligibleVictimIds: []
+        }
+      }
+    ];
+
+    for (const turnState of pendingStates) {
+      room.matchState!.game = { ...room.matchState!.game, turnState };
+      expect(projectRoomView(room, "seat-1").allowedActions!.publicTrade.cancel).toMatchObject({
+        enabled: false,
+        disabledReason: { code: "REQUIRED_DECISION" }
+      });
+      expect(projectRoomView(room, "seat-2").allowedActions!.publicTrade.accept.enabled).toBe(
+        false
+      );
+    }
+
+    room.matchState!.game = {
+      ...room.matchState!.game,
+      phase: "gameOver",
+      turnState: { phase: "action", pendingDiscards: {} }
+    };
+    expect(projectRoomView(room, "seat-1").allowedActions!.publicTrade.cancel).toMatchObject({
+      enabled: false,
+      disabledReason: { code: "GAME_OVER" }
+    });
+    expect(projectRoomView(room, "seat-2").allowedActions!.publicTrade.accept).toMatchObject({
+      enabled: false,
+      disabledReason: { code: "GAME_OVER" }
+    });
+
+    room.matchState!.game = {
+      ...room.matchState!.game,
+      phase: "playing",
+      activePlayerId: "p2",
+      turnState: { phase: "action", pendingDiscards: {} }
+    };
+    expect(projectRoomView(room, "seat-3").allowedActions!.publicTrade.accept).toMatchObject({
+      enabled: false,
+      disabledReason: { code: "PLAYER_TRADE_PROPOSER_NOT_ACTIVE" }
+    });
+  });
+
+  it("does not expose proposer affordability through public-trade acceptance", () => {
+    const room = createRoom();
+    room.matchState!.game = {
+      ...room.matchState!.game,
+      turnState: { phase: "action", pendingDiscards: {} },
+      players: room.matchState!.game.players.map((player) =>
+        player.id === "p1"
+          ? { ...player, resources: { ...player.resources, wood: 0 } }
+          : player
+      )
+    };
+
+    expect(projectRoomView(room, "seat-2").allowedActions!.publicTrade.accept.enabled).toBe(true);
+    expect(() =>
+      executeMatchCommandForTest(room.matchState!, {
+        type: "ACCEPT_PLAYER_TRADE",
+        playerId: "p2"
+      })
+    ).toThrow(/proposer.*afford/i);
   });
 });

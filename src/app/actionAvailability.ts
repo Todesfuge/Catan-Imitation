@@ -54,6 +54,7 @@ export type AvailabilityReasonCode =
   | "DEVELOPMENT_EFFECT_NOT_PENDING"
   | "NO_PENDING_PLAYER_TRADE"
   | "PLAYER_TRADE_ALREADY_OPEN"
+  | "PLAYER_TRADE_PROPOSER_NOT_ACTIVE"
   | "CANNOT_ACCEPT_OWN_TRADE"
   | "CANNOT_AFFORD_PLAYER_TRADE"
   | "WAITING_FOR_REQUIRED_PLAYERS"
@@ -156,6 +157,28 @@ export interface MatchActionAvailabilityFacts extends TurnActionAvailabilityFact
   };
 }
 
+export interface SealedBidAvailabilityFact {
+  enabled: boolean;
+  disabledReason?: AvailabilityReason;
+  round: number;
+  maxAmount: number;
+  submitted: boolean;
+}
+
+export interface OnlineActionAvailabilityFacts extends MatchActionAvailabilityFacts {
+  sealedBid: SealedBidAvailabilityFact;
+}
+
+export interface SealedBidAvailabilityInput {
+  round: number;
+  submitted: boolean;
+}
+
+export interface OnlineActionAvailabilityContext {
+  connectedPlayerIds?: readonly PlayerId[];
+  sealedBid?: SealedBidAvailabilityInput;
+}
+
 export interface TurnActionAvailability {
   roll: ActionAvailability;
   endTurn: ActionAvailability;
@@ -224,6 +247,111 @@ function normalActionReason(game: GameState, playerId: PlayerId): AvailabilityRe
 
 function fromReason(reason: AvailabilityReason | undefined): AvailabilityFact {
   return reason ? { enabled: false, disabledReason: reason, targets: [] } : enabled();
+}
+
+function awaitedPlayerIds(game: GameState): PlayerId[] {
+  if (game.turnState.phase === "awaitingDiscards") {
+    return Object.keys(game.turnState.pendingDiscards);
+  }
+  if (
+    game.turnState.phase === "awaitingRobberPlacement" ||
+    game.turnState.phase === "awaitingRobberVictim" ||
+    game.turnState.phase === "awaitingDevelopmentEffect"
+  ) {
+    return [game.activePlayerId];
+  }
+  return [];
+}
+
+export function getRequiredPlayerWaitingReason(
+  game: GameState,
+  viewerPlayerId: PlayerId,
+  connectedPlayerIds?: readonly PlayerId[]
+): AvailabilityReason | undefined {
+  const awaited = awaitedPlayerIds(game);
+  if (awaited.length === 0 || awaited.includes(viewerPlayerId)) return undefined;
+
+  if (connectedPlayerIds) {
+    const connected = new Set(connectedPlayerIds);
+    const offlinePlayerIds = awaited.filter((playerId) => !connected.has(playerId));
+    if (offlinePlayerIds.length > 0) {
+      return { code: "REQUIRED_PLAYER_OFFLINE", params: { playerIds: offlinePlayerIds } };
+    }
+  }
+
+  return awaited.length === 1
+    ? { code: "WAITING_FOR_ACTIVE_PLAYER", params: { playerId: awaited[0] } }
+    : { code: "WAITING_FOR_REQUIRED_PLAYERS", params: { playerIds: awaited } };
+}
+
+function withWaitingReason<T extends AvailabilityFact<unknown>>(
+  fact: T,
+  reason: AvailabilityReason | undefined
+): T {
+  return fact.enabled || !reason ? fact : { ...fact, disabledReason: reason };
+}
+
+export function applyRequiredPlayerWaitingFacts(
+  facts: MatchActionAvailabilityFacts,
+  reason: AvailabilityReason | undefined
+): MatchActionAvailabilityFacts {
+  if (!reason) return facts;
+  return {
+    ...facts,
+    roll: withWaitingReason(facts.roll, reason),
+    endTurn: withWaitingReason(facts.endTurn, reason),
+    road: withWaitingReason(facts.road, reason),
+    settlement: withWaitingReason(facts.settlement, reason),
+    city: withWaitingReason(facts.city, reason),
+    buyDevelopmentCard: withWaitingReason(facts.buyDevelopmentCard, reason),
+    developmentCards: facts.developmentCards.map((card) =>
+      card.enabled ? card : { ...card, disabledReason: reason }
+    ),
+    maritime:
+      facts.maritime.enabled
+        ? facts.maritime
+        : { ...facts.maritime, disabledReason: reason },
+    commerce: {
+      ...facts.commerce,
+      tradeSlots: facts.commerce.tradeSlots.map((slot) => withWaitingReason(slot, reason)),
+      transfer: withWaitingReason(facts.commerce.transfer, reason),
+      redeemPrize: withWaitingReason(facts.commerce.redeemPrize, reason)
+    },
+    decisions: {
+      discard: withWaitingReason(facts.decisions.discard, reason),
+      robberHex: withWaitingReason(facts.decisions.robberHex, reason),
+      robberVictim: withWaitingReason(facts.decisions.robberVictim, reason),
+      freeRoad: withWaitingReason(facts.decisions.freeRoad, reason),
+      yearOfPlenty: withWaitingReason(facts.decisions.yearOfPlenty, reason),
+      monopoly: withWaitingReason(facts.decisions.monopoly, reason)
+    }
+  };
+}
+
+export function getSealedBidAvailabilityFact(
+  state: ActionAvailabilityState,
+  playerId: PlayerId,
+  input?: SealedBidAvailabilityInput
+): SealedBidAvailabilityFact {
+  const player = state.game.players.find((candidate) => candidate.id === playerId);
+  if (!player) throw new Error(`Unknown player: ${playerId}`);
+  const round = input?.round ?? state.guild.gathering.auctionRound;
+  const submitted = input?.submitted ?? false;
+  const disabledReason =
+    state.game.phase !== "playing" || state.guild.gathering.phase !== "auction" || !input
+      ? { code: "AUCTION_NOT_OPEN" as const }
+      : submitted
+        ? { code: "BID_ALREADY_SUBMITTED" as const }
+        : player.guildTokens === 0
+          ? { code: "NO_GUILD_TOKENS" as const }
+          : undefined;
+  return {
+    enabled: !disabledReason,
+    round,
+    maxAmount: player.guildTokens,
+    submitted,
+    ...(disabledReason ? { disabledReason } : {})
+  };
 }
 
 function buildFact<TTarget>(
@@ -330,9 +458,11 @@ export function getActionAvailabilityFacts(
           ? disabled("GAME_OVER")
           : game.activePlayerId !== playerId
             ? disabled("NOT_YOUR_TURN")
-            : game.turnState.phase !== "awaitingRoll"
-              ? disabled("ALREADY_ROLLED")
-              : enabled(),
+            : game.turnState.phase === "awaitingRoll"
+              ? enabled()
+              : game.turnState.phase === "action"
+                ? disabled("ALREADY_ROLLED")
+                : disabled("REQUIRED_DECISION"),
     endTurn: fromReason(normalReason),
     road,
     settlement,
@@ -504,18 +634,47 @@ export function getActionAvailabilityFacts(
       cancel:
         !offer
           ? disabled("NO_PENDING_PLAYER_TRADE")
-          : offer.proposerId !== playerId
-            ? disabled("NOT_YOUR_TURN")
-            : enabled(),
+          : normalReason
+            ? fromReason(normalReason)
+            : offer.proposerId !== playerId
+              ? disabled("NOT_YOUR_TURN")
+              : enabled(),
       accept:
         !offer
           ? disabled("NO_PENDING_PLAYER_TRADE")
-          : offer.proposerId === playerId
-            ? disabled("CANNOT_ACCEPT_OWN_TRADE")
-            : !canAffordRequested
-              ? disabled("CANNOT_AFFORD_PLAYER_TRADE")
-              : enabled()
+          : game.phase === "setup"
+            ? disabled("GAME_SETUP")
+            : game.phase === "gameOver"
+              ? disabled("GAME_OVER")
+              : game.activePlayerId !== offer.proposerId
+                ? disabled("PLAYER_TRADE_PROPOSER_NOT_ACTIVE")
+                : game.turnState.phase === "awaitingRoll"
+                  ? disabled("ROLL_REQUIRED")
+                  : game.turnState.phase !== "action"
+                    ? disabled("REQUIRED_DECISION")
+                    : offer.proposerId === playerId
+                      ? disabled("CANNOT_ACCEPT_OWN_TRADE")
+                      : !canAffordRequested
+                        ? disabled("CANNOT_AFFORD_PLAYER_TRADE")
+                        : enabled()
     }
+  };
+}
+
+export function getOnlineActionAvailabilityFacts(
+  state: ActionAvailabilityState,
+  playerId: PlayerId,
+  context: OnlineActionAvailabilityContext = {}
+): OnlineActionAvailabilityFacts {
+  const facts = getActionAvailabilityFacts(state, playerId);
+  const waitingReason = getRequiredPlayerWaitingReason(
+    state.game,
+    playerId,
+    context.connectedPlayerIds
+  );
+  return {
+    ...applyRequiredPlayerWaitingFacts(facts, waitingReason),
+    sealedBid: getSealedBidAvailabilityFact(state, playerId, context.sealedBid)
   };
 }
 
@@ -551,6 +710,7 @@ const reasonMessages: Record<AvailabilityReasonCode, (params?: AvailabilityReaso
   DEVELOPMENT_EFFECT_NOT_PENDING: () => "No development-card choice is pending.",
   NO_PENDING_PLAYER_TRADE: () => "No player trade is open.",
   PLAYER_TRADE_ALREADY_OPEN: () => "A player trade is already open.",
+  PLAYER_TRADE_PROPOSER_NOT_ACTIVE: () => "The player who published this offer is no longer active.",
   CANNOT_ACCEPT_OWN_TRADE: () => "The active player cannot accept their own offer.",
   CANNOT_AFFORD_PLAYER_TRADE: () => "The requested resources are not affordable.",
   WAITING_FOR_REQUIRED_PLAYERS: () => "Waiting for required players.",
