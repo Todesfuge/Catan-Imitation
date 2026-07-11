@@ -50,12 +50,12 @@ Files:
 
 Steps:
 
-- [ ] Write failing type/runtime tests for `MatchState`, `MatchExecutionContext`, deterministic log IDs, deterministic dice values, and exclusion of `selectedDiceTotal`, `selectedPlayerId`, and `notice` from synchronized state.
-- [ ] Run `pnpm vitest run test/domain/matchTransition.test.ts`; expect module-not-found/type failures.
-- [ ] Add the match types and `RandomSource.nextInt(maxExclusive)` with rejection-safe Worker implementation deferred to T010 and a deterministic test implementation.
-- [ ] Move `DiceRoll` and synchronized fields to `MatchState`; keep a temporary local adapter shape in `gameReducer.ts` so existing callers compile.
-- [ ] Run `pnpm vitest run test/domain/matchTransition.test.ts test/domain/gameplay.test.ts`; expect all pass.
-- [ ] Commit with `refactor: define shared match execution state`.
+- [x] Write failing type/runtime tests for `MatchState`, `MatchExecutionContext`, deterministic log IDs, deterministic dice values, and exclusion of `selectedDiceTotal`, `selectedPlayerId`, and `notice` from synchronized state.
+- [x] Run `pnpm vitest run test/domain/matchTransition.test.ts`; expect module-not-found/type failures.
+- [x] Add the match types and `RandomSource.nextInt(maxExclusive)` with cryptographic Worker implementation deferred to T009/T013 and a deterministic test implementation.
+- [x] Move `DiceRoll` and synchronized fields to `MatchState`; keep a temporary local adapter shape in `gameReducer.ts` so existing callers compile.
+- [x] Run `pnpm vitest run test/domain/matchTransition.test.ts test/domain/gameplay.test.ts`; expect all pass.
+- [x] Commit with `refactor: define shared match execution state`.
 
 ### Task 3 (T003) — Extract the authoritative match command dispatcher
 
