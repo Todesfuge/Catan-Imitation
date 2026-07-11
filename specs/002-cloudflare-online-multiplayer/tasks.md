@@ -314,16 +314,16 @@ Files:
 
 Steps:
 
-- [ ] Write failing tests for per-seat zero/positive bids, replacement before completion, token affordability, submitted-seat status, own-bid visibility, hidden opponent/losing values, persistence across eviction, all-zero round advancement, positive resolution, bid clearing, and development-card outcome redaction.
-- [ ] Run the two focused suites; expect sealed-bid failures.
-- [ ] Implement bid persistence and resolve only when every locked seat has submitted; call the shared corrected auction transition once and clear bid state before projection.
-- [ ] Run `pnpm test:worker -- test/worker/roomWebSocket.test.ts` and `pnpm vitest run test/online/projectionPrivacy.test.ts`; expect all pass.
-- [ ] Commit with `feat: add private Commerce Guild bidding`.
+- [x] Write failing tests for per-seat zero/positive bids, replacement before completion, token affordability, submitted-seat status, own-bid visibility, hidden opponent/losing values, persistence across eviction, all-zero round advancement, positive resolution, bid clearing, and development-card outcome redaction.
+- [x] Run the two focused suites; expect sealed-bid failures.
+- [x] Implement bid persistence and resolve only when every locked seat has submitted; call the shared corrected auction transition once and clear bid state before projection.
+- [x] Run `pnpm test:worker -- test/worker/roomWebSocket.test.ts` and `pnpm vitest run test/online/projectionPrivacy.test.ts`; expect all pass.
+- [x] Commit with `feat: add private Commerce Guild bidding`.
 
 Phase C exit gate:
 
-- [ ] Run `pnpm test`, `pnpm test:worker`, `pnpm build:worker`, and `pnpm exec wrangler deploy --dry-run`.
-- [ ] Review eviction evidence, secret-free logs, raw-state imports, and all HTTP/WebSocket error paths.
+- [x] Run `pnpm test`, `pnpm test:worker`, `pnpm build:worker`, and `pnpm exec wrangler deploy --dry-run`.
+- [x] Review eviction evidence, secret-free logs, raw-state imports, and all HTTP/WebSocket error paths.
 
 ## Phase D: Online React Experience
 
