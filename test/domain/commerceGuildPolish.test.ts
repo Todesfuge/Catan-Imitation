@@ -96,6 +96,8 @@ describe("Commerce Guild polish", () => {
     const result = resolveAuctionRound(game, guild, { p2: 2 }, () => 0.9);
     const p2 = result.game.players.find((player) => player.id === "p2");
 
+    expect(result.kind).toBe("won");
+    if (result.kind !== "won") throw new Error("Expected a winning auction result.");
     expect(result.outcome).toMatchObject({ kind: "developmentCard", card: "monopoly" });
     expect(result.game.developmentDeck.map((card) => card.kind)).toEqual(["knight"]);
     expect(p2?.developmentCards.map((card) => card.kind)).toEqual(["monopoly"]);

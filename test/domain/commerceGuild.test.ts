@@ -97,6 +97,8 @@ describe("Commerce Guild", () => {
     const redeemed = redeemPrizeCards(resolved.game, "p2");
     const p2 = redeemed.players.find((player) => player.id === "p2");
 
+    expect(resolved.kind).toBe("won");
+    if (resolved.kind !== "won") throw new Error("Expected a winning auction result.");
     expect(resolved.winnerId).toBe("p2");
     expect(resolved.outcome.kind).toBe("voucher");
     expect(resolved.guild.gathering.auctionRound).toBe(2);

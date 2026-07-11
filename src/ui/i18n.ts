@@ -185,6 +185,8 @@ const messages = {
   "guild.tokensTransferred": { en: "{fromName} transferred {amount} guild token(s) to {toName}.", "zh-CN": "{fromName} 向 {toName} 转移了 {amount} 枚公会代币。" },
   "guild.gatheringStarted": { en: "The Commerce Guild gathering has started.", "zh-CN": "商业公会集会已开始。" },
   "guild.auctionOpened": { en: "The Commerce Guild auction phase is open.", "zh-CN": "商业公会拍卖阶段已开启。" },
+  "guild.auctionNoEligibleBidders": { en: "The Commerce Guild auction ended because no player has guild tokens.", "zh-CN": "没有玩家持有公会代币，商业公会拍卖已结束。" },
+  "guild.auctionRoundNoBids": { en: "No bids were placed in Commerce Guild auction round {round}.", "zh-CN": "商业公会第 {round} 轮拍卖无人出价。" },
   "guild.redeemedResources": { en: "{playerName} redeemed guild tokens for resources.", "zh-CN": "{playerName} 使用公会代币兑换了资源。" },
   "guild.auctionResolved": { en: "{winnerName} won auction round {round} with {bid} token(s): {outcome}.", "zh-CN": "{winnerName} 以 {bid} 枚代币赢得第 {round} 轮拍卖：{outcome}。" },
   "guild.prizeRedeemed": { en: "{playerName} redeemed vouchers for prize cards.", "zh-CN": "{playerName} 使用兑换券换取了奖品卡。" }

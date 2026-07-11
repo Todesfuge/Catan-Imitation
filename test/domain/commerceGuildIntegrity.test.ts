@@ -113,6 +113,8 @@ describe("Commerce Guild resource integrity", () => {
       sequenceRandom([0.1, 0, 0, 0])
     );
 
+    expect(result.kind).toBe("won");
+    if (result.kind !== "won") throw new Error("Expected a winning auction result.");
     expect(result.outcome).toMatchObject({
       kind: "resources",
       resources: { wood: 1 }
@@ -146,6 +148,8 @@ describe("Commerce Guild resource integrity", () => {
         sequenceRandom([0.1, 0, resourceRoll, resourceRoll])
       );
 
+      expect(result.kind).toBe("won");
+      if (result.kind !== "won") throw new Error("Expected a winning auction result.");
       expect(result.outcome).toMatchObject({
         kind: "resources",
         resources: { [resource]: 1 }
@@ -238,9 +242,9 @@ describe("Commerce Guild resource integrity", () => {
       ).toThrow(/finite|whole/i);
     }
     expect(() => redeemGatheringResources(game, redemptionGuild, "p1", {})).toThrow(/resource/i);
-    expect(() => resolveAuctionRound(game, auctionState, { p1: 0 }, () => 0.6)).toThrow(
-      /positive bid/i
-    );
+    const passedAuction = resolveAuctionRound(game, auctionState, { p1: 0 }, () => 0.6);
+    expect(passedAuction.kind).toBe("noBid");
+    expect(passedAuction.guild.gathering.auctionRound).toBe(2);
 
     const richGame = withPlayer(game, "p1", (player) => ({
       ...player,

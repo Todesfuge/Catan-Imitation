@@ -115,6 +115,8 @@ export type GameMessageKey =
   | "guild.tokensTransferred"
   | "guild.gatheringStarted"
   | "guild.auctionOpened"
+  | "guild.auctionNoEligibleBidders"
+  | "guild.auctionRoundNoBids"
   | "guild.redeemedResources"
   | "guild.auctionResolved"
   | "guild.prizeRedeemed";

@@ -691,19 +691,28 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
           ]
         }
       };
-    case "OPEN_AUCTION":
+    case "OPEN_AUCTION": {
       assertGameInProgress(state.game);
+      const guild = openGuildAuction(state.game, state.guild);
+      const noEligibleBidders = guild.gathering.phase === "complete";
       return {
         ...state,
-        guild: openGuildAuction(state.guild),
+        guild,
         game: {
           ...state.game,
           log: [
-            log("The Commerce Guild auction phase is open.", "guild.auctionOpened"),
+            noEligibleBidders
+              ? log(
+                  "The Commerce Guild auction ended because no player has guild tokens.",
+                  "guild.auctionNoEligibleBidders",
+                  { round: guild.gathering.auctionRound }
+                )
+              : log("The Commerce Guild auction phase is open.", "guild.auctionOpened"),
             ...state.game.log
           ]
         }
       };
+    }
     case "REDEEM_GATHERING": {
       assertGameInProgress(state.game);
       const result = redeemGatheringResources(state.game, state.guild, command.playerId, command.resources);
@@ -726,6 +735,19 @@ function executeGameCommand(state: AppState, command: GameCommand): AppState {
     case "RESOLVE_AUCTION": {
       assertGameInProgress(state.game);
       const result = resolveAuctionRound(state.game, state.guild, command.bids);
+      if (result.kind === "noBid") {
+        return {
+          ...state,
+          game: {
+            ...result.game,
+            log: [
+              log(result.summary, "guild.auctionRoundNoBids", { round: result.round }),
+              ...result.game.log
+            ]
+          },
+          guild: result.guild
+        };
+      }
       const outcomeParams: Record<string, string | number> =
         result.outcome.kind === "resources"
           ? { outcomeKind: result.outcome.kind, ...result.outcome.resources }

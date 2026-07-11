@@ -56,12 +56,21 @@ export interface GuildResult {
   guild: CommerceGuildState;
 }
 
-export interface AuctionResult extends GuildResult {
+export interface AuctionWonResult extends GuildResult {
+  kind: "won";
   winnerId: PlayerId;
   winningBid: number;
   outcome: BlindBoxOutcome;
   summary: string;
 }
+
+export interface AuctionNoBidResult extends GuildResult {
+  kind: "noBid";
+  round: number;
+  summary: string;
+}
+
+export type AuctionResult = AuctionWonResult | AuctionNoBidResult;
 
 const defaultTradeSlots: TradeSlot[] = [
   { id: "wood-contract", requires: { wood: 2 }, tokenReward: 2 },
@@ -272,12 +281,16 @@ export function maybeStartGuildGathering(
   };
 }
 
-export function openGuildAuction(guild: CommerceGuildState): CommerceGuildState {
+export function openGuildAuction(
+  game: GameState,
+  guild: CommerceGuildState
+): CommerceGuildState {
+  const hasEligibleBidder = game.players.some((player) => player.guildTokens > 0);
   return {
     ...guild,
     gathering: {
       ...guild.gathering,
-      phase: "auction",
+      phase: hasEligibleBidder ? "auction" : "complete",
       auctionRound: 1
     }
   };
@@ -360,7 +373,7 @@ function turnOrderFromActive(game: GameState): PlayerId[] {
 function pickAuctionWinner(
   game: GameState,
   bids: Record<PlayerId, number>
-): { winnerId: PlayerId; winningBid: number } {
+): { winnerId: PlayerId; winningBid: number } | undefined {
   const turnOrder = turnOrderFromActive(game);
   const validBids = Object.entries(bids).filter(([playerId, bid]) => {
     assertWholeNumber(bid, "Auction bid");
@@ -371,10 +384,6 @@ function pickAuctionWinner(
     return bid > 0 && player.guildTokens >= bid;
   });
 
-  if (validBids.length === 0) {
-    throw new RuleViolationError("Auction requires at least one affordable positive bid.");
-  }
-
   validBids.sort((left, right) => {
     if (right[1] !== left[1]) {
       return right[1] - left[1];
@@ -382,10 +391,10 @@ function pickAuctionWinner(
     return turnOrder.indexOf(left[0]) - turnOrder.indexOf(right[0]);
   });
 
-  return {
+  return validBids.length > 0 ? {
     winnerId: validBids[0][0],
     winningBid: validBids[0][1]
-  };
+  } : undefined;
 }
 
 function rollResourceBundle(random: () => number): ResourceMap {
@@ -496,7 +505,29 @@ export function resolveAuctionRound(
     throw new RuleViolationError("Guild gathering is not in auction phase.");
   }
 
-  const { winnerId, winningBid } = pickAuctionWinner(game, bids);
+  const winner = pickAuctionWinner(game, bids);
+  const round = guild.gathering.auctionRound;
+  const nextRound = round + 1;
+  if (!winner) {
+    const summary = `No bids were placed in Commerce Guild auction round ${round}.`;
+    return {
+      kind: "noBid",
+      game,
+      guild: {
+        ...guild,
+        gathering: {
+          ...guild.gathering,
+          auctionRound: nextRound,
+          phase: nextRound > 3 ? "complete" : "auction",
+          lastAuctionSummary: summary
+        }
+      },
+      round,
+      summary
+    };
+  }
+
+  const { winnerId, winningBid } = winner;
   const paidGame = updatePlayer(game, winnerId, (player) => ({
     ...player,
     guildTokens: player.guildTokens - winningBid
@@ -504,11 +535,11 @@ export function resolveAuctionRound(
   const resolvedOutcome = resolveBlindBoxOutcome(paidGame, winnerId, random);
   const outcome = resolvedOutcome.outcome;
   const rewardedGame = resolvedOutcome.game;
-  const nextRound = guild.gathering.auctionRound + 1;
   const winnerName = getPlayer(game, winnerId).name;
-  const summary = `${winnerName} won auction round ${guild.gathering.auctionRound} with ${winningBid} token(s): ${describeBlindBoxOutcome(outcome)}.`;
+  const summary = `${winnerName} won auction round ${round} with ${winningBid} token(s): ${describeBlindBoxOutcome(outcome)}.`;
 
   return {
+    kind: "won",
     game: rewardedGame,
     guild: {
       ...guild,
@@ -521,7 +552,7 @@ export function resolveAuctionRound(
         lastAuctionResult: {
           winnerId,
           winnerName,
-          round: guild.gathering.auctionRound,
+          round,
           winningBid,
           outcome
         }
