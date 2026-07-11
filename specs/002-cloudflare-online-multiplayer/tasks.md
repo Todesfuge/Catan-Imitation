@@ -234,12 +234,12 @@ Files:
 
 Steps:
 
-- [ ] Write failing tests for room-code alphabet/normalization, collision-safe create, unique normalized nicknames, 1–20 character validation, join order, 4-seat cap, ready toggles, host-only start, three/four-seat start, host transfer, voluntary lobby leave, post-start lock, schema rejection, and version increments.
-- [ ] Run the focused Worker suite; expect missing-room failures.
-- [ ] Implement pure room lifecycle transitions and a store that validates schema version, persists one room record, removes expired tickets, and schedules `expiresAt`.
-- [ ] Ensure match start calls `createSetupMatch` with the locked seat order and stores token hashes only.
-- [ ] Run `pnpm test:worker -- test/worker/roomLifecycle.test.ts`; expect all pass.
-- [ ] Commit with `feat: persist online room lobbies`.
+- [x] Write failing tests for room-code alphabet/normalization, collision-safe create, unique normalized nicknames, 1–20 character validation, join order, 4-seat cap, ready toggles, host-only start, three/four-seat start, host transfer, voluntary lobby leave, post-start lock, schema rejection, and version increments.
+- [x] Run the focused Worker suite; expect missing-room failures.
+- [x] Implement pure room lifecycle transitions and a store that validates schema version, persists one room record, removes expired tickets, and schedules `expiresAt`.
+- [x] Ensure match start calls `createSetupMatch` with the locked seat order and stores token hashes only.
+- [x] Run `pnpm test:worker -- test/worker/roomLifecycle.test.ts`; expect all pass.
+- [x] Commit with `feat: persist online room lobbies`.
 
 ### Task 11 (T011) — Add HTTP room routes and one-time WebSocket upgrade
 
