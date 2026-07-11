@@ -453,6 +453,7 @@ describe("online reducer", () => {
     });
     expect(next.snapshot).toEqual(snapshot(3));
     expect(next.notice?.code).toBe("VERSION_CONFLICT");
+    expect(next.noticeCommandId).toBe("11111111-1111-4111-8111-111111111111");
   });
 
   it("makes expired and incompatible messages terminal", () => {

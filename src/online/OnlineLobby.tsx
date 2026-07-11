@@ -11,13 +11,33 @@ import {
   type OnlineSeatSession
 } from "./useOnlineRoom";
 import type { PublicRoomState, PublicSeatView } from "./view";
-import { translate, useI18n, type Locale, type MessageKey } from "../ui/i18n";
+import { translate, type Locale, type MessageKey } from "../ui/i18n";
 
 const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
 
 type ValidationError = "nicknameRequired" | "nicknameTooLong" | "roomCodeInvalid";
 type CopyState = "idle" | "copied" | "failed";
-type BusyRoomAction = "ready" | "start" | "leave" | null;
+type PendingRoomAction = "ready" | "start";
+
+export interface PendingRoomCommand {
+  action: PendingRoomAction;
+  commandId: string;
+}
+
+function LobbyLocaleSwitch({
+  locale,
+  onLocaleChange
+}: {
+  locale: Locale;
+  onLocaleChange: (locale: Locale) => void;
+}) {
+  return (
+    <div className="mode-locale" aria-label={translate(locale, "mode.language")} role="group">
+      <button aria-pressed={locale === "en"} onClick={() => onLocaleChange("en")} type="button">English</button>
+      <button aria-pressed={locale === "zh-CN"} onClick={() => onLocaleChange("zh-CN")} type="button">简体中文</button>
+    </div>
+  );
+}
 
 export interface NormalizedLobbyValue {
   value: string;
@@ -58,6 +78,7 @@ export interface OnlineLobbyEntryViewProps {
   onValidationError?: (error: EntryError) => void;
   errorRef?: RefObject<HTMLDivElement>;
   locale?: Locale;
+  onLocaleChange?: (locale: Locale) => void;
 }
 
 function validationEntryError(error: ValidationError, field: EntryError["field"]): EntryError {
@@ -83,7 +104,8 @@ export function OnlineLobbyEntryView({
   onBack,
   onValidationError = () => undefined,
   errorRef,
-  locale = "en"
+  locale = "en",
+  onLocaleChange = () => undefined
 }: OnlineLobbyEntryViewProps) {
   const t = (key: MessageKey) => translate(locale, key);
   const create = () => {
@@ -102,7 +124,10 @@ export function OnlineLobbyEntryView({
     <main className="online-shell">
       <section className="online-entry" aria-labelledby="online-entry-title">
         <header className="online-heading">
-          <button className="text-button" onClick={onBack} type="button">{t("online.back")}</button>
+          <div className="online-heading__controls">
+            <button className="text-button" onClick={onBack} type="button">{t("online.back")}</button>
+            {LobbyLocaleSwitch({ locale, onLocaleChange })}
+          </div>
           <p className="mode-entry__eyebrow">{t("online.eyebrow")}</p>
           <h1 id="online-entry-title">{t("online.title")}</h1>
           <p>{t("online.intro")}</p>
@@ -149,7 +174,7 @@ export function OnlineLobbyEntryView({
               autoComplete="off"
               className="room-code-input"
               id="join-room-code"
-              maxLength={6}
+              maxLength={32}
               onChange={(event) => onRoomCodeChange(event.currentTarget.value.toUpperCase())}
               spellCheck={false}
               value={roomCode}
@@ -208,7 +233,8 @@ export interface OnlineRoomViewProps {
   seatId: string;
   state: OnlineClientState;
   copyState: CopyState;
-  busyAction: BusyRoomAction;
+  pendingCommand?: PendingRoomCommand | null;
+  leavePending?: boolean;
   onCopy: () => void;
   onReadyChange: (ready: boolean) => void;
   onStart: () => void;
@@ -217,6 +243,7 @@ export interface OnlineRoomViewProps {
   onExit?: () => void;
   actionNotice?: MessageKey | null;
   locale?: Locale;
+  onLocaleChange?: (locale: Locale) => void;
 }
 
 const connectionKeys: Record<OnlineClientState["status"], MessageKey> = {
@@ -228,12 +255,31 @@ const connectionKeys: Record<OnlineClientState["status"], MessageKey> = {
   incompatible: "online.status.incompatible"
 };
 
+function protocolNoticeKey(code: ProtocolErrorCode): MessageKey {
+  const keys: Record<ProtocolErrorCode, MessageKey> = {
+    ROOM_NOT_FOUND: "online.error.roomNotFound",
+    ROOM_FULL: "online.error.roomFull",
+    ROOM_ALREADY_STARTED: "online.error.roomStarted",
+    SEAT_TOKEN_INVALID: "online.error.seatInvalid",
+    CONNECTION_TICKET_EXPIRED: "online.error.connectionExpired",
+    VERSION_CONFLICT: "online.error.versionConflict",
+    COMMAND_NOT_ALLOWED: "online.error.commandNotAllowed",
+    RULE_VIOLATION: "online.error.commandNotAllowed",
+    RATE_LIMITED: "online.error.rateLimited",
+    ROOM_EXPIRED: "online.error.roomExpired",
+    PROTOCOL_INCOMPATIBLE: "online.error.protocolIncompatible",
+    INTERNAL_ERROR: "online.error.internal"
+  };
+  return keys[code];
+}
+
 export function OnlineRoomView({
   roomCode,
   seatId,
   state,
   copyState,
-  busyAction,
+  pendingCommand = null,
+  leavePending = false,
   onCopy,
   onReadyChange,
   onStart,
@@ -241,7 +287,8 @@ export function OnlineRoomView({
   onReconnect,
   onExit = () => undefined,
   actionNotice = null,
-  locale = "en"
+  locale = "en",
+  onLocaleChange = () => undefined
 }: OnlineRoomViewProps) {
   const t = (key: MessageKey) => translate(locale, key);
   const projected = lobbyState(state);
@@ -263,20 +310,25 @@ export function OnlineRoomView({
           <span className={`connection-badge connection-badge--${state.status}`} role="status">
             {t(connectionKeys[state.status])}
           </span>
+          {LobbyLocaleSwitch({ locale, onLocaleChange })}
         </header>
         <div className="room-code-card">
           <div>
             <span>{t("online.roomCode")}</span>
             <strong aria-label={t("online.roomCode")}>{roomCode}</strong>
           </div>
-          <button aria-label={t("online.copyCodeAria")} onClick={onCopy} type="button">
+          <button aria-label={t("online.copyCodeAria")} disabled={terminal} onClick={onCopy} type="button">
             {copyState === "copied" ? t("online.copied") : t("online.copy")}
           </button>
         </div>
         <p aria-live="polite" className={`copy-status copy-status--${copyState}`} role="status">
           {copyState === "failed" ? t("online.copyFailed") : copyState === "copied" ? t("online.copySuccess") : ""}
         </p>
-        {actionNotice ? <p className="online-action-error" role="alert">{t(actionNotice)}</p> : null}
+        {state.notice || actionNotice ? (
+          <p className="online-action-error" role="alert">
+            {t(state.notice ? protocolNoticeKey(state.notice.code) : actionNotice!)}
+          </p>
+        ) : null}
         {state.snapshot?.lifecycle === "playing" || state.snapshot?.lifecycle === "finished" ? (
           <section className="online-transition" aria-live="polite">
             <h2>{t("online.gameStarting")}</h2>
@@ -311,7 +363,7 @@ export function OnlineRoomView({
             <div className="online-room__actions">
               <button
                 aria-label={ownSeat?.ready ? t("online.setNotReadyAria") : t("online.setReadyAria")}
-                disabled={!ownSeat || state.status !== "connected" || busyAction !== null}
+                disabled={!ownSeat || state.status !== "connected" || pendingCommand !== null || leavePending}
                 onClick={() => onReadyChange(!ownSeat?.ready)}
                 type="button"
               >
@@ -321,7 +373,7 @@ export function OnlineRoomView({
                 <button
                   aria-label={t("online.startAria")}
                   className="primary-button"
-                  disabled={!canStart || busyAction !== null}
+                  disabled={!canStart || pendingCommand !== null || leavePending}
                   onClick={onStart}
                   type="button"
                 >
@@ -331,7 +383,7 @@ export function OnlineRoomView({
               <button
                 aria-label={t("online.leave")}
                 className="danger-button"
-                disabled={!inLobby || busyAction !== null}
+                disabled={!inLobby || pendingCommand !== null || leavePending}
                 onClick={onLeave}
                 type="button"
               >
@@ -396,63 +448,96 @@ function ConnectedOnlineRoom({
   session,
   services,
   onExit,
-  locale
+  locale,
+  onLocaleChange
 }: {
   session: OnlineSeatSession;
   services: OnlineLobbyServices;
   onExit: () => void;
   locale: Locale;
+  onLocaleChange: (locale: Locale) => void;
 }) {
   const room = services.useRoom(session.roomCode);
   const [copyState, setCopyState] = useState<CopyState>("idle");
-  const [busyAction, setBusyAction] = useState<BusyRoomAction>(null);
+  const [pendingCommand, setPendingCommand] = useState<PendingRoomCommand | null>(null);
+  const pendingCommandRef = useRef<PendingRoomCommand | null>(null);
+  const [leavePending, setLeavePending] = useState(false);
+  const leavePendingRef = useRef(false);
   const [actionNotice, setActionNotice] = useState<MessageKey | null>(null);
   const version = room.state.snapshot?.roomVersion ?? 0;
-  const dispatch = (message: Parameters<typeof room.dispatch>[0], action: Exclude<BusyRoomAction, null>) => {
+  const clearPendingCommand = () => {
+    pendingCommandRef.current = null;
+    setPendingCommand(null);
+  };
+  useEffect(() => {
+    const current = pendingCommandRef.current;
+    if (!current) return;
+    const acknowledged = room.state.snapshot?.acknowledgedCommandId === current.commandId;
+    const rejected = room.state.noticeCommandId === current.commandId;
+    const connectionReset = room.state.status !== "connected";
+    if (acknowledged || rejected || connectionReset) clearPendingCommand();
+  }, [
+    room.state.noticeCommandId,
+    room.state.snapshot?.acknowledgedCommandId,
+    room.state.status
+  ]);
+  useEffect(() => () => {
+    pendingCommandRef.current = null;
+    leavePendingRef.current = false;
+  }, []);
+  const dispatch = (
+    action: PendingRoomAction,
+    createMessage: (commandId: string) => Parameters<typeof room.dispatch>[0]
+  ) => {
+    if (pendingCommandRef.current || leavePendingRef.current) return;
+    const commandId = services.createCommandId();
+    const pending = { action, commandId };
+    pendingCommandRef.current = pending;
+    setPendingCommand(pending);
     setActionNotice(null);
-    setBusyAction(action);
-    if (!room.dispatch(message)) {
+    if (!room.dispatch(createMessage(commandId))) {
       setActionNotice("online.error.actionFailed");
-      setBusyAction(null);
+      clearPendingCommand();
     }
-    else window.setTimeout(() => setBusyAction(null), 250);
   };
   const leave = async () => {
-    setBusyAction("leave");
+    if (leavePendingRef.current || pendingCommandRef.current) return;
+    leavePendingRef.current = true;
+    setLeavePending(true);
     try {
       setActionNotice(null);
       await services.leaveRoom(session);
       onExit();
     } catch {
       setActionNotice("online.error.leaveFailed");
-      setBusyAction(null);
+      leavePendingRef.current = false;
+      setLeavePending(false);
     }
   };
+  const terminal = room.state.status === "expired" || room.state.status === "incompatible";
   return (
     <OnlineRoomView
       actionNotice={actionNotice}
-      busyAction={busyAction}
       copyState={copyState}
+      leavePending={leavePending}
       locale={locale}
       onCopy={() => {
+        if (terminal) return;
         void services.copyText(session.roomCode)
           .then(() => setCopyState("copied"))
           .catch(() => setCopyState("failed"));
       }}
       onExit={onExit}
       onLeave={() => { void leave(); }}
-      onReadyChange={(ready) => dispatch({
-        type: "room.ready",
-        commandId: services.createCommandId(),
-        expectedVersion: version,
-        ready
-      }, "ready")}
+      onLocaleChange={onLocaleChange}
+      onReadyChange={(ready) => dispatch("ready", (commandId) => ({
+        type: "room.ready", commandId, expectedVersion: version, ready
+      }))}
       onReconnect={room.reconnect}
-      onStart={() => dispatch({
-        type: "room.start",
-        commandId: services.createCommandId(),
-        expectedVersion: version
-      }, "start")}
+      onStart={() => dispatch("start", (commandId) => ({
+        type: "room.start", commandId, expectedVersion: version
+      }))}
+      pendingCommand={pendingCommand}
       roomCode={session.roomCode}
       seatId={session.seatId}
       state={room.state}
@@ -462,38 +547,56 @@ function ConnectedOnlineRoom({
 
 export function OnlineLobby({
   onExit,
-  services: injectedServices
+  services: injectedServices,
+  locale,
+  onLocaleChange
 }: {
   onExit: () => void;
   services?: OnlineLobbyServices;
+  locale: Locale;
+  onLocaleChange: (locale: Locale) => void;
 }) {
   const servicesRef = useRef<OnlineLobbyServices>();
   servicesRef.current ??= injectedServices ?? browserServices();
   const services = servicesRef.current;
-  const { locale } = useI18n();
   const [session, setSession] = useState<OnlineSeatSession>();
   const [nickname, setNickname] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [joinNickname, setJoinNickname] = useState("");
   const [busy, setBusy] = useState(false);
+  const bootstrapPendingRef = useRef(false);
   const [error, setError] = useState<EntryError | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (error) errorRef.current?.focus();
   }, [error]);
-  const bootstrap = async (request: Promise<OnlineSeatSession>) => {
+  useEffect(() => () => {
+    bootstrapPendingRef.current = false;
+  }, []);
+  const bootstrap = async (request: () => Promise<OnlineSeatSession>) => {
+    if (bootstrapPendingRef.current) return;
+    bootstrapPendingRef.current = true;
     setBusy(true);
     setError(null);
     try {
-      setSession(await request);
+      setSession(await request());
     } catch (caught) {
       setError(requestError(caught));
     } finally {
+      bootstrapPendingRef.current = false;
       setBusy(false);
     }
   };
   if (session) {
-    return <ConnectedOnlineRoom locale={locale} onExit={onExit} services={services} session={session} />;
+    return (
+      <ConnectedOnlineRoom
+        locale={locale}
+        onExit={onExit}
+        onLocaleChange={onLocaleChange}
+        services={services}
+        session={session}
+      />
+    );
   }
   return (
     <OnlineLobbyEntryView
@@ -504,9 +607,10 @@ export function OnlineLobby({
       locale={locale}
       nickname={nickname}
       onBack={onExit}
-      onCreate={(value) => { void bootstrap(services.createRoom(value)); }}
-      onJoin={(code, value) => { void bootstrap(services.joinRoom(code, value)); }}
+      onCreate={(value) => { void bootstrap(() => services.createRoom(value)); }}
+      onJoin={(code, value) => { void bootstrap(() => services.joinRoom(code, value)); }}
       onJoinNicknameChange={setJoinNickname}
+      onLocaleChange={onLocaleChange}
       onNicknameChange={setNickname}
       onRoomCodeChange={setRoomCode}
       onValidationError={setError}

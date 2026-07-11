@@ -76,7 +76,8 @@ function roomProps(
     seatId: "seat-host",
     state,
     copyState: "idle",
-    busyAction: null,
+    pendingCommand: null,
+    leavePending: false,
     onCopy: vi.fn(),
     onReadyChange: vi.fn(),
     onStart: vi.fn(),
@@ -168,6 +169,25 @@ describe("online room entry", () => {
     (elementByLabel(view, "Join room").props as { onClick(): void }).onClick();
     expect(create).toHaveBeenCalledWith("Host");
     expect(join).toHaveBeenCalledWith("234567", "Kay");
+    const codeInput = elementByLabel(view, "Join room code");
+    expect((codeInput.props as { maxLength?: number }).maxLength ?? Number.POSITIVE_INFINITY).toBeGreaterThan(6);
+  });
+
+  it("keeps the locale switch operable throughout Online entry", () => {
+    const onLocaleChange = vi.fn();
+    const view = OnlineLobbyEntryView({
+      busy: false, error: null, joinNickname: "", nickname: "", roomCode: "",
+      onBack: vi.fn(), onCreate: vi.fn(), onJoin: vi.fn(), onJoinNicknameChange: vi.fn(),
+      onNicknameChange: vi.fn(), onRoomCodeChange: vi.fn(), locale: "en",
+      onLocaleChange
+    });
+    const language = elementByLabel(view, "Language");
+    const chinese = elements(language).find((element) =>
+      (element.props as { children?: ReactNode }).children === "简体中文"
+    );
+    expect(chinese).toBeDefined();
+    (chinese!.props as { onClick(): void }).onClick();
+    expect(onLocaleChange).toHaveBeenCalledWith("zh-CN");
   });
 });
 
@@ -237,6 +257,42 @@ describe("online lobby room", () => {
     }
     const expired = OnlineRoomView(roomProps({ status: "expired", retryAttempt: 0 }));
     expect((elementByLabel(expired, "Leave room").props as { disabled?: boolean }).disabled).toBe(true);
+    expect((elementByLabel(expired, "Copy room code").props as { disabled?: boolean }).disabled).toBe(true);
+  });
+
+  it("renders sanitized transport notices and keeps one pending room command disabled until matching completion", () => {
+    const state = {
+      status: "connected",
+      retryAttempt: 0,
+      snapshot: lobbySnapshot(),
+      notice: { code: "RULE_VIOLATION", params: {}, retryable: false },
+      noticeCommandId: "11111111-1111-4111-8111-111111111111"
+    } as const;
+    const html = render(OnlineRoomView({
+      ...roomProps(state),
+      pendingCommand: { action: "ready", commandId: "11111111-1111-4111-8111-111111111111" }
+    }));
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("That action is not allowed in the current room state.");
+    const view = OnlineRoomView({
+      ...roomProps(state),
+      pendingCommand: { action: "start", commandId: "11111111-1111-4111-8111-111111111111" }
+    });
+    expect((elementByLabel(view, "Set not ready").props as { disabled?: boolean }).disabled).toBe(true);
+    expect((elementByLabel(view, "Start online game").props as { disabled?: boolean }).disabled).toBe(true);
+  });
+
+  it("keeps the locale switch operable inside a connected room", () => {
+    const onLocaleChange = vi.fn();
+    const state: OnlineClientState = { status: "connected", retryAttempt: 0, snapshot: lobbySnapshot() };
+    const view = OnlineRoomView({ ...roomProps(state), onLocaleChange });
+    const language = elementByLabel(view, "Language");
+    const chinese = elements(language).find((element) =>
+      (element.props as { children?: ReactNode }).children === "简体中文"
+    );
+    expect(chinese).toBeDefined();
+    (chinese!.props as { onClick(): void }).onClick();
+    expect(onLocaleChange).toHaveBeenCalledWith("zh-CN");
   });
 
   it("keeps a failed room action visible and recoverable", () => {

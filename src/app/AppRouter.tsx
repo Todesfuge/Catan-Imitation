@@ -8,7 +8,7 @@ export type AppRoute = "entry" | "local" | "online";
 export interface AppRouterViewProps {
   route: AppRoute;
   onRouteChange: (route: AppRoute) => void;
-  onlineMount?: () => ReactNode;
+  onlineMount?: (locale: Locale, onLocaleChange: (locale: Locale) => void) => ReactNode;
   locale?: Locale;
   onLocaleChange?: (locale: Locale) => void;
 }
@@ -45,7 +45,13 @@ export function AppRouterView({
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   if (route === "local") return <LocalGame />;
   if (route === "online") {
-    return <>{onlineMount?.() ?? <OnlineLobby onExit={() => onRouteChange("entry")} />}</>;
+    return <>{onlineMount?.(locale, onLocaleChange) ?? (
+      <OnlineLobby
+        locale={locale}
+        onExit={() => onRouteChange("entry")}
+        onLocaleChange={onLocaleChange}
+      />
+    )}</>;
   }
   return (
     <main className="mode-entry">

@@ -17,6 +17,7 @@ export interface OnlineClientState {
   status: ConnectionStatus;
   snapshot?: RoomSnapshotMessage;
   notice?: ProtocolError;
+  noticeCommandId?: string;
   retryAttempt: number;
 }
 
@@ -54,9 +55,9 @@ export function onlineReducer(
 
   switch (action.type) {
     case "connect.started":
-      return { ...state, status: "connecting", retryAttempt: 0, notice: undefined };
+      return { ...state, status: "connecting", retryAttempt: 0, notice: undefined, noticeCommandId: undefined };
     case "socket.opened":
-      return { ...state, status: "connected", retryAttempt: 0, notice: undefined };
+      return { ...state, status: "connected", retryAttempt: 0, notice: undefined, noticeCommandId: undefined };
     case "socket.closed":
       return isTerminal(state) ? state : { ...state, status: "offline" };
     case "retry.scheduled":
@@ -66,21 +67,21 @@ export function onlineReducer(
     case "transport.failed":
       return isTerminal(state)
         ? state
-        : { ...state, status: "offline", ...(action.error ? { notice: action.error } : {}) };
+        : { ...state, status: "offline", noticeCommandId: undefined, ...(action.error ? { notice: action.error } : {}) };
     case "protocol.failed":
-      return { ...state, status: "incompatible", notice: action.error };
+      return { ...state, status: "incompatible", notice: action.error, noticeCommandId: undefined };
     case "server.message": {
       const message = action.message;
       if (message.type === "room.expired") {
-        return { ...state, status: "expired", notice: message.error };
+        return { ...state, status: "expired", notice: message.error, noticeCommandId: undefined };
       }
       if (message.type === "protocol.incompatible") {
-        return { ...state, status: "incompatible", notice: message.error };
+        return { ...state, status: "incompatible", notice: message.error, noticeCommandId: undefined };
       }
       if (isTerminal(state)) return state;
       if (message.type === "room.snapshot") {
         if (state.snapshot && message.roomVersion <= state.snapshot.roomVersion) return state;
-        return { ...state, status: "connected", retryAttempt: 0, snapshot: message, notice: undefined };
+        return { ...state, status: "connected", retryAttempt: 0, snapshot: message, notice: undefined, noticeCommandId: undefined };
       }
       if (message.type === "presence.changed") {
         if (!state.snapshot) return state;
@@ -94,7 +95,8 @@ export function onlineReducer(
         ...(conflictSnapshot && (!state.snapshot || conflictSnapshot.roomVersion > state.snapshot.roomVersion)
           ? { snapshot: conflictSnapshot }
           : {}),
-        notice: message.error
+        notice: message.error,
+        noticeCommandId: message.commandId
       };
     }
   }

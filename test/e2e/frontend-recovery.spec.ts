@@ -5,6 +5,138 @@ async function openLocal(page: Page) {
   await page.getByRole("button", { name: "Play Local Game" }).click();
 }
 
+async function installOnlineLobbyMock(page: Page, seatCount: 3 | 4) {
+  await page.addInitScript(({ seatCount: count }) => {
+    const roomCode = "234567";
+    const hostSeatId = "seat-host";
+    const seats = Array.from({ length: count }, (_, index) => ({
+      seatId: index === 0 ? hostSeatId : `seat-${index + 1}`,
+      nickname: index === 0 ? "Host" : `Player ${index + 1}`,
+      ready: true
+    }));
+    let roomVersion = 1;
+    let socket: MockWebSocket | undefined;
+    const state = {
+      createRequests: 0,
+      joinRequests: 0,
+      leaveRequests: 0,
+      socketCount: 0,
+      copied: [] as string[],
+      sent: [] as Array<Record<string, unknown>>,
+      joinPath: "",
+      ack(commandId: string) {
+        roomVersion += 1;
+        socket?.emit("message", { data: JSON.stringify(snapshot(commandId)) });
+      },
+      reject(commandId: string) {
+        socket?.emit("message", {
+          data: JSON.stringify({
+            type: "command.rejected",
+            commandId,
+            error: { code: "COMMAND_NOT_ALLOWED", params: {}, retryable: false }
+          })
+        });
+      }
+    };
+    const snapshot = (acknowledgedCommandId?: string) => ({
+      type: "room.snapshot",
+      schemaVersion: 1,
+      roomVersion,
+      lifecycle: "lobby",
+      publicState: {
+        roomCode,
+        lifecycle: "lobby",
+        roomVersion,
+        hostSeatId,
+        seats,
+        submittedBidSeatIds: []
+      },
+      privateState: { seatId: hostSeatId, seatTokenPresent: true },
+      allowedActions: {},
+      presence: seats.map((seat) => ({ seatId: seat.seatId, connectionCount: 1, online: true })),
+      ...(acknowledgedCommandId ? { acknowledgedCommandId } : {})
+    });
+    const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), {
+      status,
+      headers: { "content-type": "application/json; charset=utf-8" }
+    });
+    window.fetch = async (input, init) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof Request ? input.url : input.toString());
+      const method = init?.method ?? "GET";
+      if (method === "POST" && url.pathname === "/api/rooms") {
+        state.createRequests += 1;
+        return json({ roomCode, seatId: hostSeatId, seatToken: "s".repeat(43) }, 201);
+      }
+      if (method === "POST" && url.pathname.endsWith("/join")) {
+        state.joinRequests += 1;
+        state.joinPath = url.pathname;
+        return json({ roomCode, seatId: hostSeatId, seatToken: "s".repeat(43) }, 201);
+      }
+      if (method === "POST" && url.pathname.endsWith("/connection-ticket")) {
+        return json({ ticket: "t".repeat(43), expiresInMs: 30_000 }, 201);
+      }
+      if (method === "DELETE" && url.pathname.includes("/seats/")) {
+        state.leaveRequests += 1;
+        return new Response(null, { status: 204 });
+      }
+      return json({ error: { code: "ROOM_NOT_FOUND", params: {}, retryable: false } }, 404);
+    };
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (value: string) => { state.copied.push(value); } }
+    });
+    class MockWebSocket {
+      readyState = 0;
+      private listeners = new Map<string, Set<(event: unknown) => void>>();
+
+      constructor(_url: string) {
+        socket = this;
+        state.socketCount += 1;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.emit("open", {});
+          this.emit("message", { data: JSON.stringify(snapshot()) });
+        });
+      }
+
+      addEventListener(type: string, listener: (event: unknown) => void) {
+        const current = this.listeners.get(type) ?? new Set();
+        current.add(listener);
+        this.listeners.set(type, current);
+      }
+
+      removeEventListener(type: string, listener: (event: unknown) => void) {
+        this.listeners.get(type)?.delete(listener);
+      }
+
+      send(value: string) {
+        state.sent.push(JSON.parse(value) as Record<string, unknown>);
+      }
+
+      close() {
+        this.readyState = 3;
+      }
+
+      emit(type: string, event: unknown) {
+        for (const listener of this.listeners.get(type) ?? []) listener(event);
+      }
+    }
+    window.WebSocket = MockWebSocket as unknown as typeof WebSocket;
+    (window as unknown as { __onlineMock: typeof state }).__onlineMock = state;
+  }, { seatCount });
+}
+
+async function enterMockCreatedRoom(page: Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Play Online Game" }).click();
+  await page.getByLabel("Create nickname").fill("Host");
+  await page.getByRole("button", { name: "Create room" }).evaluate((button: HTMLButtonElement) => {
+    button.click();
+    button.click();
+  });
+  await expect(page.getByRole("heading", { name: "Private online room" })).toBeVisible();
+}
+
 test("mode entry keeps Local offline and focuses recoverable Online validation", async ({ page }) => {
   let apiRequests = 0;
   page.on("request", (request) => {
@@ -47,6 +179,113 @@ for (const viewport of [
     }));
     expect(measurements.documentWidth).toBeLessThanOrEqual(measurements.viewportWidth);
     expect(measurements.shortTargetCount).toBe(0);
+  });
+}
+
+test("online lobby keeps locale and command single-flight state across slow acknowledgements", async ({ page }) => {
+  await installOnlineLobbyMock(page, 3);
+  await enterMockCreatedRoom(page);
+  await expect(page.locator(".seat-card")).toHaveCount(3);
+  expect(await page.evaluate(() => (window as unknown as { __onlineMock: { createRequests: number } }).__onlineMock.createRequests)).toBe(1);
+  expect(await page.evaluate(() => (window as unknown as { __onlineMock: { socketCount: number } }).__onlineMock.socketCount)).toBe(1);
+
+  await page.getByRole("button", { name: "简体中文" }).click();
+  await expect(page.getByRole("heading", { name: "私人联机房间" })).toBeVisible();
+  await page.getByRole("button", { name: "English" }).click();
+  await expect(page.getByRole("heading", { name: "Private online room" })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __onlineMock: { socketCount: number } }).__onlineMock.socketCount)).toBe(1);
+
+  const start = page.getByRole("button", { name: "Start online game" });
+  await start.evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __onlineMock: { sent: unknown[] } }).__onlineMock.sent.length)).toBe(1);
+  await expect(start).toBeDisabled();
+  await page.evaluate(() => {
+    (window as unknown as { __onlineMock: { reject(commandId: string): void } }).__onlineMock
+      .reject("22222222-2222-4222-8222-222222222222");
+  });
+  await expect(start).toBeDisabled();
+  const firstCommandId = await page.evaluate(() =>
+    (window as unknown as { __onlineMock: { sent: Array<{ commandId: string }> } }).__onlineMock.sent[0].commandId
+  );
+  await page.evaluate((commandId) => {
+    (window as unknown as { __onlineMock: { reject(commandId: string): void } }).__onlineMock.reject(commandId);
+  }, firstCommandId);
+  await expect(page.getByRole("alert")).toContainText("That action is not allowed in the current room state.");
+  await expect(start).toBeEnabled();
+
+  await start.evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __onlineMock: { sent: unknown[] } }).__onlineMock.sent.length)).toBe(2);
+  const secondCommandId = await page.evaluate(() =>
+    (window as unknown as { __onlineMock: { sent: Array<{ commandId: string }> } }).__onlineMock.sent[1].commandId
+  );
+  await page.evaluate((commandId) => {
+    (window as unknown as { __onlineMock: { ack(commandId: string): void } }).__onlineMock.ack(commandId);
+  }, secondCommandId);
+  await expect(start).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+
+  const ready = page.getByRole("button", { name: "Set not ready" });
+  await ready.evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __onlineMock: { sent: unknown[] } }).__onlineMock.sent.length)).toBe(3);
+  await expect(ready).toBeDisabled();
+  const readyCommandId = await page.evaluate(() =>
+    (window as unknown as { __onlineMock: { sent: Array<{ commandId: string }> } }).__onlineMock.sent[2].commandId
+  );
+  await page.evaluate((commandId) => {
+    (window as unknown as { __onlineMock: { ack(commandId: string): void } }).__onlineMock.ack(commandId);
+  }, readyCommandId);
+  await expect(ready).toBeEnabled();
+
+  await page.getByRole("button", { name: "Leave room" }).evaluate((button: HTMLButtonElement) => {
+    button.click();
+    button.click();
+  });
+  await expect(page.getByRole("heading", { name: "Catan Imitation" })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __onlineMock: { leaveRequests: number } }).__onlineMock.leaveRequests)).toBe(1);
+});
+
+test("join accepts a pasted trimmed room code and remains single-flight", async ({ page }) => {
+  await installOnlineLobbyMock(page, 4);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Play Online Game" }).click();
+  await page.getByLabel("Join room code").fill(" 234567 ");
+  await page.getByLabel("Join nickname").fill("Guest");
+  await page.getByRole("button", { name: "Join room" }).evaluate((button: HTMLButtonElement) => {
+    button.click();
+    button.click();
+  });
+  await expect(page.getByRole("heading", { name: "Private online room" })).toBeVisible();
+  const result = await page.evaluate(() => {
+    const mock = (window as unknown as { __onlineMock: { joinRequests: number; joinPath: string } }).__onlineMock;
+    return { requests: mock.joinRequests, path: mock.joinPath };
+  });
+  expect(result).toEqual({ requests: 1, path: "/api/rooms/234567/join" });
+  await expect(page.locator(".seat-card")).toHaveCount(4);
+});
+
+for (const viewport of [
+  { name: "desktop", width: 1280, height: 720, seats: 3 as const },
+  { name: "tablet", width: 768, height: 1024, seats: 4 as const },
+  { name: "mobile", width: 390, height: 844, seats: 3 as const }
+]) {
+  test(`${viewport.name} real lobby seats remain contained and touch accessible`, async ({ page }) => {
+    await installOnlineLobbyMock(page, viewport.seats);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await enterMockCreatedRoom(page);
+    await expect(page.locator(".seat-card")).toHaveCount(viewport.seats);
+    await expect(page.locator(".seat-card").first()).toContainText("Host");
+    await expect(page.getByRole("button", { name: "Start online game" })).toBeEnabled();
+    const measurements = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      shortTargetCount: [...document.querySelectorAll("button")]
+        .filter((button) => button.getBoundingClientRect().height < 44).length,
+      wideSeatCount: [...document.querySelectorAll(".seat-card")]
+        .filter((seat) => seat.getBoundingClientRect().right > window.innerWidth).length
+    }));
+    expect(measurements.documentWidth).toBeLessThanOrEqual(measurements.viewportWidth);
+    expect(measurements.shortTargetCount).toBe(0);
+    expect(measurements.wideSeatCount).toBe(0);
   });
 }
 
