@@ -215,11 +215,11 @@ Files:
 
 Steps:
 
-- [ ] Write failing Workers-runtime tests for 32-byte seat tokens, SHA-256 hashes, single-use 30-second tickets, bearer parsing, 16 KiB bodies, same-origin/loopback policy, safe JSON errors, and secret-free logs/responses.
-- [ ] Run `pnpm test:worker -- test/worker/security.test.ts`; expect missing-helper failures.
-- [ ] Implement cryptographic helpers with Workers `crypto`, constant-time hash comparison where practical, and bounded HTTP/origin helpers.
-- [ ] Run the focused Worker suite; expect all pass.
-- [ ] Commit with `feat: secure anonymous room credentials`.
+- [x] Write failing Workers-runtime tests for 32-byte seat tokens, SHA-256 hashes, single-use 30-second tickets, bearer parsing, 16 KiB bodies, same-origin/loopback policy, safe JSON errors, and secret-free logs/responses.
+- [x] Run `pnpm test:worker -- test/worker/security.test.ts`; expect missing-helper failures.
+- [x] Implement cryptographic helpers with Workers `crypto`, constant-time hash comparison where practical, and bounded HTTP/origin helpers.
+- [x] Run the focused Worker suite; expect all pass.
+- [x] Commit with `feat: secure anonymous room credentials`.
 
 ### Task 10 (T010) — Implement the persisted room model and lobby lifecycle
 
