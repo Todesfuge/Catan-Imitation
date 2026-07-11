@@ -347,12 +347,12 @@ Files:
 
 Steps:
 
-- [ ] Write failing component/source-contract tests proving the table consumes an explicit view plus dispatch interface and does not require raw online `PersistedRoom` or Worker imports.
-- [ ] Run the focused test; expect the shared table boundary to be absent.
-- [ ] Extract the current rendered table without changing local behavior; provide a local adapter that supplies full local view and shared match/UI dispatch.
-- [ ] Keep strategic legality outside presentational components and preserve all accessibility labels/interactions.
-- [ ] Run `pnpm test` and `pnpm test:e2e`; expect existing Local Game behavior pass.
-- [ ] Commit with `refactor: share the game table presentation`.
+- [x] Write failing component/source-contract tests proving the table consumes an explicit view plus dispatch interface and does not require raw online `PersistedRoom` or Worker imports.
+- [x] Run the focused test; expect the shared table boundary to be absent.
+- [x] Extract the current rendered table without changing local behavior; provide a local adapter that supplies full local view and shared match/UI dispatch.
+- [x] Keep strategic legality outside presentational components and preserve all accessibility labels/interactions.
+- [x] Run `pnpm test` and `pnpm test:e2e`; expect existing Local Game behavior pass.
+- [x] Commit with `refactor: share the game table presentation`.
 
 ### Task 16 (T016) — Add online session persistence and reconnect transport
 
