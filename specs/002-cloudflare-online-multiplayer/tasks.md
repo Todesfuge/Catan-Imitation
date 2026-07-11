@@ -273,11 +273,11 @@ Files:
 
 Steps:
 
-- [ ] Write failing tests using the Workers eviction helper to prove lobby/match/tickets/pending bids survive instance eviction, connected rooms defer expiry, disconnected rooms delete at 24 hours, and expired rooms return `ROOM_EXPIRED`.
-- [ ] Run the focused Worker suite; expect recovery/alarm failures.
-- [ ] Implement constructor-safe loading, alarm scheduling/deletion, open-socket deferral, and terminal expiry broadcasts without timer-based in-memory state.
-- [ ] Run the focused suite; expect all pass.
-- [ ] Commit with `feat: recover and expire durable game rooms`.
+- [x] Write failing tests using the Workers eviction helper to prove lobby/match/tickets/pending bids survive instance eviction, connected rooms defer expiry, disconnected rooms delete at 24 hours, and expired rooms return `ROOM_EXPIRED`.
+- [x] Run the focused Worker suite; expect recovery/alarm failures.
+- [x] Implement constructor-safe loading, alarm scheduling/deletion, open-socket deferral, and terminal expiry broadcasts without timer-based in-memory state.
+- [x] Run the focused suite; expect all pass.
+- [x] Commit with `feat: recover and expire durable game rooms`.
 
 ### Task 13 (T013) — Implement the authoritative command pipeline
 
