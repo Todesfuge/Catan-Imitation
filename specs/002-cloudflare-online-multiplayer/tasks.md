@@ -293,12 +293,12 @@ Files:
 
 Steps:
 
-- [ ] Write failing socket tests for protocol validation, actor derivation, server dice/random ownership, accepted version increments, persist-before-broadcast, per-seat projections, duplicate command IDs, 64-ID eviction, stale-version snapshot, rule-error isolation, 10-per-2-second throttle, and no partial write on internal failure.
-- [ ] Run `pnpm test:worker -- test/worker/roomWebSocket.test.ts`; expect missing-pipeline failures.
-- [ ] Implement the ordered authenticate/parse/deduplicate/version/execute/persist/project/broadcast pipeline and Workers cryptographic `RandomSource`.
-- [ ] Map online actorless commands to trusted shared commands using the seat's `playerId`.
-- [ ] Run the focused Worker suite plus `pnpm test`; expect all pass.
-- [ ] Commit with `feat: execute authoritative room commands`.
+- [x] Write failing socket tests for protocol validation, actor derivation, server dice/random ownership, accepted version increments, persist-before-broadcast, per-seat projections, duplicate command IDs, 64-ID eviction, stale-version snapshot, rule-error isolation, 10-per-2-second throttle, and no partial write on internal failure.
+- [x] Run `pnpm test:worker -- test/worker/roomWebSocket.test.ts`; expect missing-pipeline failures.
+- [x] Implement the ordered authenticate/parse/deduplicate/version/execute/persist/project/broadcast pipeline and Workers cryptographic `RandomSource`.
+- [x] Map online actorless commands to trusted shared commands using the seat's `playerId`.
+- [x] Run the focused Worker suite plus `pnpm test`; expect all pass.
+- [x] Commit with `feat: execute authoritative room commands`.
 
 ### Task 14 (T014) — Implement persisted sealed bidding
 
