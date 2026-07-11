@@ -36,8 +36,12 @@ export function generateRoomCode(
 }
 
 export function normalizeRoomCode(value: string): string {
-  const code = value.trim().toUpperCase();
-  if (code.length !== 6 || [...code].some((character) => !ROOM_CODE_ALPHABET.includes(character))) {
+  const trimmed = value.trim();
+  if (!/^[A-Za-z2-9]{6}$/.test(trimmed)) {
+    throw new RoomLifecycleError("INVALID_ROOM_CODE");
+  }
+  const code = trimmed.toUpperCase();
+  if ([...code].some((character) => !ROOM_CODE_ALPHABET.includes(character))) {
     throw new RoomLifecycleError("INVALID_ROOM_CODE");
   }
   return code;
@@ -165,7 +169,11 @@ export function leaveLobby(
     const candidates = [...seats].sort((left, right) => left.joinOrder - right.joinOrder);
     hostSeatId = (candidates.find((seat) => connected.has(seat.seatId)) ?? candidates[0]).seatId;
   }
-  return { kind: "updated", room: acceptedActivity({ ...room, seats, hostSeatId }, now) };
+  const connectionTickets = room.connectionTickets.filter((ticket) => ticket.seatId !== seatId);
+  return {
+    kind: "updated",
+    room: acceptedActivity({ ...room, seats, hostSeatId, connectionTickets }, now)
+  };
 }
 
 export function startLobby(

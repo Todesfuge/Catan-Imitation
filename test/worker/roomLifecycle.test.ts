@@ -63,6 +63,41 @@ function roomWithSeats(count = 1, now = 1_000): PersistedRoom {
   return room;
 }
 
+function startedRoom(count = 3): PersistedRoom {
+  let room = roomWithSeats(count);
+  for (const seat of room.seats) {
+    room = setLobbyReady(room, seat.seatId, true, 4_000 + seat.joinOrder);
+  }
+  return startLobby(room, room.hostSeatId, context(), 9_000);
+}
+
+function auctionRoom(): PersistedRoom {
+  const room = startedRoom();
+  if (room.matchState === undefined) throw new Error("expected match state");
+  return {
+    ...room,
+    matchState: {
+      ...room.matchState,
+      game: {
+        ...room.matchState.game,
+        players: room.matchState.game.players.map((player, index) => ({
+          ...player,
+          guildTokens: index === 0 ? 2 : 1
+        }))
+      },
+      guild: {
+        ...room.matchState.guild,
+        gathering: {
+          ...room.matchState.guild.gathering,
+          phase: "auction",
+          auctionRound: 2
+        }
+      }
+    },
+    pendingAuction: { round: 2, bidsBySeatId: { "seat-1": 2 } }
+  };
+}
+
 class MemoryStorage implements RoomStorage {
   readonly values = new Map<string, unknown>();
   readonly alarms: number[] = [];
@@ -101,6 +136,7 @@ describe("room codes and nicknames", () => {
   it("normalizes invitation codes with trim and uppercase", () => {
     expect(normalizeRoomCode("  abC234 \n")).toBe("ABC234");
     expect(() => normalizeRoomCode("ABC01I")).toThrow(RoomLifecycleError);
+    expect(() => normalizeRoomCode("ß2345")).toThrow(RoomLifecycleError);
   });
 
   it("normalizes display nicknames with trim, NFKC, and case folding", () => {
@@ -191,7 +227,14 @@ describe("pure lobby lifecycle", () => {
   });
 
   it("leaves voluntarily and transfers host to earliest connected remaining seat", () => {
-    const room = roomWithSeats(4);
+    const baseRoom = roomWithSeats(4);
+    const room = {
+      ...baseRoom,
+      connectionTickets: [
+        { ticketHash: "T".repeat(43), seatId: "seat-1", expiresAt: 20_000 },
+        { ticketHash: "U".repeat(43), seatId: "seat-3", expiresAt: 20_000 }
+      ]
+    };
     const result = leaveLobby(room, "seat-1", ["seat-4", "seat-3"], 8_000);
 
     expect(result.kind).toBe("updated");
@@ -202,6 +245,7 @@ describe("pure lobby lifecycle", () => {
       "seat-4"
     ]);
     expect(result.room.hostSeatId).toBe("seat-3");
+    expect(result.room.connectionTickets).toEqual([room.connectionTickets[1]]);
     expect(result.room.roomVersion).toBe(room.roomVersion + 1);
   });
 
@@ -358,6 +402,100 @@ describe("RoomStore", () => {
         RoomSchemaError
       );
     }
+  });
+
+  it("rejects malformed nested match state", async () => {
+    const room = startedRoom();
+    const malformed = {
+      ...room,
+      matchState: { game: {}, guild: {}, lastDice: null }
+    };
+
+    await expect(
+      new RoomStore(new MemoryStorage()).save(malformed as PersistedRoom)
+    ).rejects.toBeInstanceOf(RoomSchemaError);
+  });
+
+  it("rejects locked seats that do not match game player order", async () => {
+    const room = startedRoom();
+    if (room.matchState === undefined) throw new Error("expected match state");
+    const mismatched = {
+      ...room,
+      matchState: {
+        ...room.matchState,
+        game: {
+          ...room.matchState.game,
+          players: [...room.matchState.game.players].reverse()
+        }
+      }
+    };
+
+    await expect(new RoomStore(new MemoryStorage()).save(mismatched)).rejects.toBeInstanceOf(
+      RoomSchemaError
+    );
+  });
+
+  it("rejects room lifecycle that disagrees with game lifecycle", async () => {
+    const playing = startedRoom();
+    if (playing.matchState === undefined) throw new Error("expected match state");
+    const finishedDuringSetup = { ...playing, lifecycle: "finished" as const };
+    const playingAfterGameOver = {
+      ...playing,
+      matchState: {
+        ...playing.matchState,
+        game: { ...playing.matchState.game, phase: "gameOver" as const }
+      }
+    };
+
+    const store = new RoomStore(new MemoryStorage());
+    await expect(store.save(finishedDuringSetup)).rejects.toBeInstanceOf(RoomSchemaError);
+    await expect(store.save(playingAfterGameOver)).rejects.toBeInstanceOf(RoomSchemaError);
+  });
+
+  it("accepts a pending auction only during the matching auction round", async () => {
+    const room = auctionRoom();
+    const store = new RoomStore(new MemoryStorage());
+
+    await expect(store.save(room)).resolves.toBeUndefined();
+    await expect(store.load(9_000)).resolves.toEqual(room);
+  });
+
+  it("rejects pending bids outside the actual auction phase", async () => {
+    const room = auctionRoom();
+    if (room.matchState === undefined) throw new Error("expected match state");
+    const stale = {
+      ...room,
+      matchState: {
+        ...room.matchState,
+        guild: {
+          ...room.matchState.guild,
+          gathering: { ...room.matchState.guild.gathering, phase: "idle" as const }
+        }
+      }
+    };
+
+    await expect(new RoomStore(new MemoryStorage()).save(stale)).rejects.toBeInstanceOf(
+      RoomSchemaError
+    );
+  });
+
+  it("rejects a pending auction with a stale round", async () => {
+    const room = { ...auctionRoom(), pendingAuction: { round: 1, bidsBySeatId: {} } };
+
+    await expect(new RoomStore(new MemoryStorage()).save(room)).rejects.toBeInstanceOf(
+      RoomSchemaError
+    );
+  });
+
+  it("rejects a pending bid above the locked player's available tokens", async () => {
+    const room = {
+      ...auctionRoom(),
+      pendingAuction: { round: 2, bidsBySeatId: { "seat-2": 2 } }
+    };
+
+    await expect(new RoomStore(new MemoryStorage()).save(room)).rejects.toBeInstanceOf(
+      RoomSchemaError
+    );
   });
 
   it("removes expired tickets during load without changing version/activity", async () => {
