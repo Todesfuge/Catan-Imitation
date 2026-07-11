@@ -104,6 +104,7 @@ function auctionRoom(): PersistedRoom {
 class MemoryStorage implements RoomStorage {
   readonly values = new Map<string, unknown>();
   readonly alarms: number[] = [];
+  alarm: number | null = null;
   private transactionTail: Promise<void> = Promise.resolve();
 
   async get(key: string): Promise<unknown> {
@@ -119,9 +120,13 @@ class MemoryStorage implements RoomStorage {
   }
 
   async setAlarm(scheduledTime: number | Date): Promise<void> {
-    this.alarms.push(
-      scheduledTime instanceof Date ? scheduledTime.getTime() : scheduledTime
-    );
+    const alarm = scheduledTime instanceof Date ? scheduledTime.getTime() : scheduledTime;
+    this.alarm = alarm;
+    this.alarms.push(alarm);
+  }
+
+  async deleteAlarm(): Promise<void> {
+    this.alarm = null;
   }
 
   async transaction<T>(closure: (transaction: RoomStorage) => Promise<T>): Promise<T> {
@@ -546,6 +551,25 @@ describe("RoomStore", () => {
     expect(storage.values.has(ROOM_RECORD_KEY)).toBe(false);
   });
 
+  it("serializes creation against an expiry tombstone and concurrent creators", async () => {
+    const storage = new MemoryStorage();
+    const store = new RoomStore(storage);
+    const [left, right] = await Promise.all([
+      store.createIfEmpty(roomWithSeats()),
+      store.createIfEmpty(roomWithSeats())
+    ]);
+    expect([left, right].sort()).toEqual(["collision", "created"]);
+
+    await store.expire(10_000);
+    await expect(store.createIfEmpty(roomWithSeats())).resolves.toBe("collision");
+  });
+
+  it("rejects a malformed expiry tombstone instead of treating it as expired", async () => {
+    const storage = new MemoryStorage();
+    storage.values.set("expired", { schemaVersion: 2, expiredAt: "unsafe" });
+    await expect(new RoomStore(storage).lookup(10_000)).rejects.toBeInstanceOf(RoomSchemaError);
+  });
+
 });
 
 const ORIGIN = "https://example.com";
@@ -612,6 +636,27 @@ class TestRoomNamespace {
   async seed(name: string, room: PersistedRoom): Promise<void> {
     this.getByName(name);
     await this.state(name).storage.put(ROOM_RECORD_KEY, room);
+  }
+
+  evict(name: string): void {
+    const entry = this.rooms.get(name);
+    if (entry === undefined) throw new Error(`missing room ${name}`);
+    entry.object = new RoomDurableObject(entry.state, {} as Env);
+  }
+
+  async alarm(name: string): Promise<void> {
+    const object = this.rooms.get(name)?.object;
+    if (object === undefined) throw new Error(`missing room ${name}`);
+    await object.alarm();
+  }
+
+  async closeServerSockets(name: string): Promise<void> {
+    const entry = this.rooms.get(name);
+    if (entry === undefined) throw new Error(`missing room ${name}`);
+    for (const socket of entry.state.getWebSockets()) {
+      socket.close(1000, "done");
+      await entry.object.webSocketClose(socket);
+    }
   }
 }
 
@@ -1006,5 +1051,197 @@ describe("room HTTP routes and authenticated sockets", () => {
       });
       closeSocket(hostSocket);
     }
+  });
+});
+
+describe("room eviction recovery and expiry alarms", () => {
+  it("returns an explicit incompatible result for an unsafe stored schema after reconstruction", async () => {
+    const rooms = new TestRoomNamespace();
+    await rooms.seed("incompatible-recovery", roomWithSeats());
+    await rooms.state("incompatible-recovery").storage.put(ROOM_RECORD_KEY, {
+      ...roomWithSeats(),
+      schemaVersion: 2
+    });
+    rooms.evict("incompatible-recovery");
+
+    const response = await rooms.getByName("incompatible-recovery").fetch(new Request(
+      "https://example.com/api/rooms/ABC234/join",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ nickname: "Unsafe Upgrade" })
+      }
+    ));
+
+    expect(response.status).toBe(426);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "PROTOCOL_INCOMPATIBLE",
+        params: { expected: 1 },
+        retryable: false
+      }
+    });
+  });
+
+  it("deletes an inactive room through the production alarm API and retains only a secret-free expiry tombstone", async () => {
+    const rooms = new TestRoomNamespace();
+    const expiredRoom = roomWithSeats(1, Date.now() - DAY_MS - 1_000);
+    await rooms.seed("task-12-expired-room", expiredRoom);
+    const storage = rooms.state("task-12-expired-room").storage as unknown as MemoryStorage;
+    await storage.setAlarm(expiredRoom.expiresAt);
+    await rooms.alarm("task-12-expired-room");
+    expect(await storage.get(ROOM_RECORD_KEY)).toBeUndefined();
+    const tombstone = await storage.get("expired");
+    expect(tombstone).toEqual({ schemaVersion: 1, expiredAt: expect.any(Number) });
+    expect(JSON.stringify(tombstone)).not.toContain(HASH);
+    expect(storage.alarm).toBeNull();
+
+    const stub = rooms.getByName("task-12-expired-room");
+
+    const response = await stub.fetch(new Request("https://example.com/api/rooms/ABC234/join", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ nickname: "Late Guest" })
+    }));
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "ROOM_EXPIRED", params: {}, retryable: false }
+    });
+
+    const expiredRequests = [
+      new Request("https://example.com/api/rooms/ABC234/connection-ticket", {
+        method: "POST",
+        headers: { authorization: `Bearer ${HASH}` }
+      }),
+      new Request(`https://example.com/api/rooms/ABC234/connect?ticket=${HASH}`, {
+        headers: { upgrade: "websocket" }
+      }),
+      new Request("https://example.com/api/rooms/ABC234/seats/seat-1", {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${HASH}` }
+      })
+    ];
+    for (const request of expiredRequests) {
+      const expiredResponse = await stub.fetch(request);
+      expect(expiredResponse.status).toBe(410);
+      await expect(expiredResponse.json()).resolves.toMatchObject({
+        error: { code: "ROOM_EXPIRED", retryable: false }
+      });
+    }
+  });
+
+  it("recovers lobby, match, tickets, and pending sealed bids in a fresh instance", async () => {
+    const rooms = new TestRoomNamespace();
+    const now = Date.now();
+
+    const lobby = refreshRoomActivity(roomWithSeats(2), now);
+    await rooms.seed("recovery-lobby", lobby);
+    rooms.evict("recovery-lobby");
+    const joined = await rooms.getByName("recovery-lobby").fetch(new Request(
+      "https://example.com/api/rooms/ABC234/join",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ nickname: "Recovered Guest" })
+      }
+    ));
+    expect(joined.status).toBe(201);
+    expect((await new RoomStore(rooms.state("recovery-lobby").storage).load(now))?.seats)
+      .toHaveLength(3);
+
+    const ticket = "R".repeat(43);
+    const playing = {
+      ...refreshRoomActivity(auctionRoom(), now),
+      connectionTickets: [{
+        ticketHash: await hashSecret(ticket),
+        seatId: "seat-1",
+        expiresAt: now + 30_000
+      }]
+    };
+    await rooms.seed("recovery-playing", playing);
+    rooms.evict("recovery-playing");
+    const connected = await rooms.getByName("recovery-playing").fetch(new Request(
+      `https://example.com/api/rooms/ABC234/connect?ticket=${ticket}`,
+      { headers: { upgrade: "websocket" } }
+    ));
+    expect(connected.status).toBe(101);
+    const socket = connected.webSocket;
+    if (socket === null) throw new Error("expected recovered socket");
+    socket.accept();
+    await expect(nextMessage(socket)).resolves.toMatchObject({
+      type: "room.snapshot",
+      lifecycle: "playing"
+    });
+    const recovered = await new RoomStore(rooms.state("recovery-playing").storage).load(now);
+    expect(recovered?.matchState).toEqual(playing.matchState);
+    expect(recovered?.pendingAuction).toEqual(playing.pendingAuction);
+    expect(recovered?.connectionTickets).toEqual([]);
+    closeSocket(socket);
+  });
+
+  it("defers an expired room while an open socket remains without persisting presence", async () => {
+    const rooms = new TestRoomNamespace();
+    const now = Date.now();
+    const token = "Q".repeat(43);
+    const activeRoom = {
+      ...refreshRoomActivity(roomWithSeats(), now),
+      connectionTickets: [{
+        ticketHash: await hashSecret(token),
+        seatId: "seat-1",
+        expiresAt: now + 30_000
+      }]
+    };
+    await rooms.seed("connected-expiry", activeRoom);
+    const response = await rooms.getByName("connected-expiry").fetch(new Request(
+      `https://example.com/api/rooms/ABC234/connect?ticket=${token}`,
+      { headers: { upgrade: "websocket" } }
+    ));
+    const client = response.webSocket;
+    if (client === null) throw new Error("expected socket");
+    client.accept();
+    await nextMessage(client);
+
+    const storage = rooms.state("connected-expiry").storage;
+    const expired = refreshRoomActivity(
+      (await new RoomStore(storage).load(now))!,
+      now - DAY_MS - 1_000
+    );
+    await storage.put(ROOM_RECORD_KEY, expired);
+    await rooms.alarm("connected-expiry");
+
+    const persisted = await new RoomStore(storage).load(now);
+    expect(persisted).toEqual(expired);
+    expect(persisted).not.toHaveProperty("presence");
+    const memoryStorage = storage as unknown as MemoryStorage;
+    expect(memoryStorage.alarm).toBeGreaterThanOrEqual(now + DAY_MS);
+    await rooms.closeServerSockets("connected-expiry");
+    expect(memoryStorage.alarm).toBeLessThanOrEqual(Date.now());
+    closeSocket(client);
+  });
+
+  it("broadcasts the terminal expiry error and closes a socket that races with cleanup", async () => {
+    const storage = new MemoryStorage();
+    await new RoomStore(storage).save(roomWithSeats(1, Date.now() - DAY_MS - 1_000));
+    const sent: string[] = [];
+    const closed: Array<{ code?: number; reason?: string }> = [];
+    const racingSocket = {
+      readyState: WebSocket.OPEN,
+      send: (message: string) => sent.push(message),
+      close: (code?: number, reason?: string) => closed.push({ code, reason })
+    } as unknown as WebSocket;
+    let socketReads = 0;
+    const state = {
+      storage,
+      getWebSockets: () => socketReads++ === 0 ? [] : [racingSocket]
+    } as unknown as DurableObjectState;
+    const room = new RoomDurableObject(state, {} as Env);
+
+    await room.alarm();
+
+    expect(sent.map((message) => JSON.parse(message))).toEqual([{
+      type: "room.expired",
+      error: { code: "ROOM_EXPIRED", params: {}, retryable: false }
+    }]);
+    expect(closed).toEqual([{ code: 4002, reason: "ROOM_EXPIRED" }]);
   });
 });

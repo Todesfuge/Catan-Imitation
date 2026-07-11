@@ -14,8 +14,10 @@ import {
   createLobby,
   normalizeNickname
 } from "./roomLifecycle";
-import { RoomStore } from "./roomStore";
+import { RoomSchemaError, RoomStore } from "./roomStore";
 import type { PersistedRoom } from "./roomTypes";
+
+const ROOM_RETENTION_MS = 24 * 60 * 60 * 1_000;
 
 interface ConnectionAttachment {
   seatId: string;
@@ -74,7 +76,12 @@ export class RoomDurableObject {
     try {
       return await this.route(request);
     } catch (error) {
-      return safeErrorResponse(error instanceof HttpProtocolError ? error : lifecycleError(error));
+      const safe = error instanceof HttpProtocolError
+        ? error
+        : error instanceof RoomSchemaError
+          ? new HttpProtocolError("PROTOCOL_INCOMPATIBLE", { expected: PROTOCOL_SCHEMA_VERSION })
+          : lifecycleError(error);
+      return safeErrorResponse(safe);
     }
   }
 
@@ -121,7 +128,8 @@ export class RoomDurableObject {
       { seatId, nickname, tokenHash: credentials.seatTokenHash },
       Date.now()
     );
-    if (updated === null) throw new HttpProtocolError("ROOM_NOT_FOUND");
+    if (updated === "missing") throw new HttpProtocolError("ROOM_NOT_FOUND");
+    if (updated === "expired") throw new HttpProtocolError("ROOM_EXPIRED");
     return jsonResponse({ roomCode: updated.roomCode, seatId, seatToken: credentials.seatToken }, { status: 201 });
   }
 
@@ -141,6 +149,7 @@ export class RoomDurableObject {
       throw error;
     }
     if (result === "missing") throw new HttpProtocolError("ROOM_NOT_FOUND");
+    if (result === "expired") throw new HttpProtocolError("ROOM_EXPIRED");
     if (result === "invalid-token") throw new HttpProtocolError("SEAT_TOKEN_INVALID");
     for (const socket of this.ctx.getWebSockets()) {
       if (attachment(socket)?.seatId === seatId && socket.readyState === WebSocket.OPEN) {
@@ -161,6 +170,7 @@ export class RoomDurableObject {
       now
     );
     if (result === "missing") throw new HttpProtocolError("ROOM_NOT_FOUND");
+    if (result === "expired") throw new HttpProtocolError("ROOM_EXPIRED");
     if (result === "invalid-token") throw new HttpProtocolError("SEAT_TOKEN_INVALID");
     return jsonResponse({ ticket: issued.ticket, expiresInMs: 30_000 }, { status: 201 });
   }
@@ -175,6 +185,7 @@ export class RoomDurableObject {
     const now = Date.now();
     const consumed = await this.store.consumeConnectionTicket(ticketHash, now);
     if (consumed === "missing") throw new HttpProtocolError("ROOM_NOT_FOUND");
+    if (consumed === "expired") throw new HttpProtocolError("ROOM_EXPIRED");
     if (consumed === "invalid-ticket") throw new HttpProtocolError("CONNECTION_TICKET_EXPIRED");
     const { room: updated, seatId } = consumed;
 
@@ -193,14 +204,56 @@ export class RoomDurableObject {
   }
 
   async webSocketClose(_socket: WebSocket): Promise<void> {
-    const room = await this.store.load(Date.now());
-    if (room !== null) this.broadcastPresence(room);
+    const now = Date.now();
+    const result = await this.store.lookup(now);
+    if (result.kind !== "active") return;
+    this.broadcastPresence(result.room);
+    const hasOpenSocket = this.ctx.getWebSockets().some(
+      (socket) => socket.readyState === WebSocket.OPEN
+    );
+    if (!hasOpenSocket) {
+      await this.store.deferExpiry(Math.max(now, result.room.expiresAt));
+    }
+  }
+
+  async alarm(): Promise<void> {
+    const now = Date.now();
+    const result = await this.store.lookup(now);
+    if (result.kind !== "active") {
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
+    if (result.room.expiresAt > now) {
+      await this.store.deferExpiry(result.room.expiresAt);
+      return;
+    }
+
+    const openSockets = this.ctx.getWebSockets().filter(
+      (socket) => socket.readyState === WebSocket.OPEN
+    );
+    if (openSockets.length > 0) {
+      await this.store.deferExpiry(now + ROOM_RETENTION_MS);
+      return;
+    }
+
+    await this.store.expire(now);
+    const message = JSON.stringify({
+      type: "room.expired",
+      error: { code: "ROOM_EXPIRED", params: {}, retryable: false }
+    });
+    for (const socket of this.ctx.getWebSockets()) {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(message);
+        socket.close(4002, "ROOM_EXPIRED");
+      }
+    }
   }
 
   private async requireRoom(now = Date.now()): Promise<PersistedRoom> {
-    const room = await this.store.load(now);
-    if (room === null) throw new HttpProtocolError("ROOM_NOT_FOUND");
-    return room;
+    const result = await this.store.lookup(now);
+    if (result.kind === "missing") throw new HttpProtocolError("ROOM_NOT_FOUND");
+    if (result.kind === "expired") throw new HttpProtocolError("ROOM_EXPIRED");
+    return result.room;
   }
 
   private presence(room: PersistedRoom): PresenceEntry[] {

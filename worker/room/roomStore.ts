@@ -11,14 +11,21 @@ import {
 } from "./roomLifecycle";
 
 export const ROOM_RECORD_KEY = "room";
+export const ROOM_EXPIRED_KEY = "expired";
 
 export interface RoomStorage {
   get(key: string): Promise<unknown>;
   put(key: string, value: unknown): Promise<void>;
   delete(key: string): Promise<boolean | void>;
   setAlarm(scheduledTime: number | Date): Promise<void>;
+  deleteAlarm(): Promise<void>;
   transaction?<T>(closure: (transaction: RoomStorage) => Promise<T>): Promise<T>;
 }
+
+export type RoomLookup =
+  | { kind: "active"; room: PersistedRoom }
+  | { kind: "expired"; expiredAt: number }
+  | { kind: "missing" };
 
 export class RoomSchemaError extends Error {
   constructor() {
@@ -175,26 +182,60 @@ export function assertPersistedRoom(value: unknown): asserts value is PersistedR
   }
 }
 
+function expiredAt(value: unknown): number | undefined {
+  if (!record(value) || !exactKeys(value, ["schemaVersion", "expiredAt"]) ||
+    value.schemaVersion !== 1 || !integer(value.expiredAt)) {
+    return undefined;
+  }
+  return value.expiredAt;
+}
+
+async function readStoredRoom(
+  storage: RoomStorage,
+  now: number
+): Promise<RoomLookup> {
+  const value = await storage.get(ROOM_RECORD_KEY);
+  const tombstone = await storage.get(ROOM_EXPIRED_KEY);
+  if (value !== undefined && tombstone !== undefined) throw new RoomSchemaError();
+  if (value === undefined) {
+    if (tombstone === undefined) return { kind: "missing" };
+    const timestamp = expiredAt(tombstone);
+    if (timestamp === undefined) throw new RoomSchemaError();
+    return { kind: "expired", expiredAt: timestamp };
+  }
+
+  assertPersistedRoom(value);
+  const connectionTickets = value.connectionTickets.filter((item) => item.expiresAt > now);
+  if (connectionTickets.length === value.connectionTickets.length) {
+    return { kind: "active", room: value };
+  }
+  const cleaned = { ...value, connectionTickets };
+  await storage.put(ROOM_RECORD_KEY, cleaned);
+  return { kind: "active", room: cleaned };
+}
+
 export class RoomStore {
   constructor(private readonly storage: RoomStorage) {}
 
+  lookup(now: number): Promise<RoomLookup> {
+    return readStoredRoom(this.storage, now);
+  }
+
   async load(now: number): Promise<PersistedRoom | null> {
-    const value = await this.storage.get(ROOM_RECORD_KEY);
-    if (value === undefined) return null;
-    assertPersistedRoom(value);
-    const connectionTickets = value.connectionTickets.filter((item) => item.expiresAt > now);
-    if (connectionTickets.length === value.connectionTickets.length) return value;
-    const cleaned = { ...value, connectionTickets };
-    await this.storage.put(ROOM_RECORD_KEY, cleaned);
-    return cleaned;
+    const result = await this.lookup(now);
+    return result.kind === "active" ? result.room : null;
   }
 
   async createIfEmpty(room: PersistedRoom): Promise<"created" | "collision"> {
     assertPersistedRoom(room);
-    if (await this.storage.get(ROOM_RECORD_KEY) !== undefined) return "collision";
-    await this.storage.put(ROOM_RECORD_KEY, room);
-    await this.storage.setAlarm(room.expiresAt);
-    return "created";
+    return this.transaction(async (storage) => {
+      if ((await readStoredRoom(storage, room.createdAt)).kind !== "missing") {
+        return "collision";
+      }
+      await storage.put(ROOM_RECORD_KEY, room);
+      await storage.setAlarm(room.expiresAt);
+      return "created";
+    });
   }
 
   async save(room: PersistedRoom): Promise<void> {
@@ -205,6 +246,20 @@ export class RoomStore {
 
   async delete(): Promise<void> {
     await this.storage.delete(ROOM_RECORD_KEY);
+    await this.storage.delete(ROOM_EXPIRED_KEY);
+    await this.storage.deleteAlarm();
+  }
+
+  async expire(expiredAt: number): Promise<void> {
+    await this.transaction(async (storage) => {
+      await storage.delete(ROOM_RECORD_KEY);
+      await storage.put(ROOM_EXPIRED_KEY, { schemaVersion: 1, expiredAt });
+      await storage.deleteAlarm();
+    });
+  }
+
+  async deferExpiry(until: number): Promise<void> {
+    await this.storage.setAlarm(until);
   }
 
   private transaction<T>(closure: (storage: RoomStorage) => Promise<T>): Promise<T> {
@@ -214,12 +269,11 @@ export class RoomStore {
   async joinLatest(
     input: NewSeatInput,
     now: number
-  ): Promise<PersistedRoom | null> {
+  ): Promise<PersistedRoom | "missing" | "expired"> {
     return this.transaction(async (storage) => {
-      const value = await storage.get(ROOM_RECORD_KEY);
-      if (value === undefined) return null;
-      assertPersistedRoom(value);
-      const room = joinLobby(value, input, now);
+      const current = await readStoredRoom(storage, now);
+      if (current.kind !== "active") return current.kind;
+      const room = joinLobby(current.room, input, now);
       await storage.put(ROOM_RECORD_KEY, room);
       await storage.setAlarm(room.expiresAt);
       return room;
@@ -231,18 +285,18 @@ export class RoomStore {
     tokenHash: string,
     connectedSeatIds: readonly string[],
     now: number
-  ): Promise<"missing" | "invalid-token" | "deleted" | { room: PersistedRoom }> {
+  ): Promise<"missing" | "expired" | "invalid-token" | "deleted" | { room: PersistedRoom }> {
     return this.transaction(async (storage) => {
-      const value = await storage.get(ROOM_RECORD_KEY);
-      if (value === undefined) return "missing";
-      assertPersistedRoom(value);
-      const seat = value.seats.find((candidate) =>
+      const current = await readStoredRoom(storage, now);
+      if (current.kind !== "active") return current.kind;
+      const seat = current.room.seats.find((candidate) =>
         candidate.seatId === seatId && hashesMatch(candidate.tokenHash, tokenHash)
       );
       if (seat === undefined) return "invalid-token";
-      const result = leaveLobby(value, seatId, connectedSeatIds, now);
+      const result = leaveLobby(current.room, seatId, connectedSeatIds, now);
       if (result.kind === "deleted") {
         await storage.delete(ROOM_RECORD_KEY);
+        await storage.deleteAlarm();
         return "deleted";
       }
       await storage.put(ROOM_RECORD_KEY, result.room);
@@ -255,11 +309,11 @@ export class RoomStore {
     tokenHash: string,
     ticket: Omit<ConnectionTicket, "seatId">,
     now: number
-  ): Promise<"missing" | "invalid-token" | { room: PersistedRoom; seatId: string }> {
+  ): Promise<"missing" | "expired" | "invalid-token" | { room: PersistedRoom; seatId: string }> {
     return this.transaction(async (storage) => {
-      const value = await storage.get(ROOM_RECORD_KEY);
-      if (value === undefined) return "missing";
-      assertPersistedRoom(value);
+      const current = await readStoredRoom(storage, now);
+      if (current.kind !== "active") return current.kind;
+      const value = current.room;
       const seat = value.seats.find((candidate) => hashesMatch(candidate.tokenHash, tokenHash));
       if (seat === undefined) return "invalid-token";
       const validTickets = value.connectionTickets.filter((candidate) => candidate.expiresAt > now);
@@ -277,11 +331,11 @@ export class RoomStore {
   async consumeConnectionTicket(
     ticketHash: string,
     now: number
-  ): Promise<"missing" | "invalid-ticket" | { room: PersistedRoom; seatId: string }> {
+  ): Promise<"missing" | "expired" | "invalid-ticket" | { room: PersistedRoom; seatId: string }> {
     const consume = async (storage: RoomStorage) => {
-      const value = await storage.get(ROOM_RECORD_KEY);
-      if (value === undefined) return "missing" as const;
-      assertPersistedRoom(value);
+      const current = await readStoredRoom(storage, now);
+      if (current.kind !== "active") return current.kind;
+      const value = current.room;
       const validTickets = value.connectionTickets.filter((ticket) => ticket.expiresAt > now);
       const ticket = validTickets.find((candidate) => hashesMatch(candidate.ticketHash, ticketHash));
       if (ticket === undefined) {
