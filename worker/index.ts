@@ -1,4 +1,6 @@
 import type { Env } from "./env";
+import { PROTOCOL_SCHEMA_VERSION } from "../src/online/protocol";
+import { HttpProtocolError, jsonResponse, safeErrorResponse } from "./http";
 
 export { RoomDurableObject } from "./room/RoomDurableObject";
 
@@ -7,19 +9,11 @@ export default {
     const { pathname } = new URL(request.url);
 
     if (pathname === "/api/health") {
-      return Response.json({ status: "ok" });
+      return jsonResponse({ ok: true, schemaVersion: PROTOCOL_SCHEMA_VERSION });
     }
 
     if (pathname.startsWith("/api/")) {
-      return Response.json(
-        {
-          error: {
-            code: "NOT_FOUND",
-            message: "API route not found."
-          }
-        },
-        { status: 404 }
-      );
+      return safeErrorResponse(new HttpProtocolError("ROOM_NOT_FOUND"));
     }
 
     return env.ASSETS.fetch(request);

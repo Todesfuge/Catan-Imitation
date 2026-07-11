@@ -11,7 +11,21 @@ describe("combined Worker", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/json");
-    await expect(response.json()).resolves.toEqual({ status: "ok" });
+    await expect(response.json()).resolves.toEqual({ ok: true, schemaVersion: 1 });
+  });
+
+  it("returns a stable safe error for an unknown API route", async () => {
+    const response = await SELF.fetch("https://example.com/api/unknown");
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "ROOM_NOT_FOUND",
+        params: {},
+        retryable: false
+      }
+    });
   });
 
   it("serves the SPA shell for a client-side route", async () => {
