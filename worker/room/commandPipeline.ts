@@ -153,6 +153,63 @@ function acceptedMatchRoom(
   };
 }
 
+function acceptedAuctionRoom(
+  room: PersistedRoom,
+  seat: PersistedSeat,
+  message: Extract<ClientWebSocketMessage, { type: "auction.submitBid" }>,
+  context: MatchExecutionContext,
+  execute: NonNullable<PipelineDependencies["executeMatchCommand"]>,
+  now: number
+): PersistedRoom {
+  const match = room.matchState;
+  if (
+    room.lifecycle !== "playing" ||
+    match === undefined ||
+    seat.playerId === undefined ||
+    match.guild.gathering.phase !== "auction"
+  ) {
+    throw new RoomLifecycleError("ROOM_ALREADY_STARTED");
+  }
+  const player = match.game.players.find((candidate) => candidate.id === seat.playerId);
+  if (player === undefined) throw new RoomLifecycleError("ROOM_ALREADY_STARTED");
+  if (message.amount > player.guildTokens) {
+    throw new RuleViolationError("Auction bid exceeds available guild tokens.");
+  }
+
+  const round = match.guild.gathering.auctionRound;
+  const currentBids = room.pendingAuction?.round === round
+    ? room.pendingAuction.bidsBySeatId
+    : {};
+  const bidsBySeatId = { ...currentBids, [seat.seatId]: message.amount };
+  const allSubmitted = room.seats.every((lockedSeat) =>
+    Object.hasOwn(bidsBySeatId, lockedSeat.seatId)
+  );
+  if (!allSubmitted) {
+    return {
+      ...room,
+      pendingAuction: { round, bidsBySeatId },
+      roomVersion: room.roomVersion + 1,
+      lastActivityAt: now,
+      expiresAt: now + ROOM_RETENTION_MS
+    };
+  }
+
+  const bids = Object.fromEntries(room.seats.map((lockedSeat) => {
+    if (lockedSeat.playerId === undefined) throw new RoomLifecycleError("ROOM_ALREADY_STARTED");
+    return [lockedSeat.playerId, bidsBySeatId[lockedSeat.seatId]];
+  }));
+  const { pendingAuction: _clearedSecret, ...clearedRoom } = room;
+  const resolved = execute(match, { type: "RESOLVE_AUCTION", bids }, context);
+  return {
+    ...clearedRoom,
+    lifecycle: resolved.game.phase === "gameOver" ? "finished" : "playing",
+    matchState: resolved,
+    roomVersion: room.roomVersion + 1,
+    lastActivityAt: now,
+    expiresAt: now + ROOM_RETENTION_MS
+  };
+}
+
 function executeMessage(
   room: PersistedRoom,
   seat: PersistedSeat,
@@ -169,8 +226,7 @@ function executeMessage(
     case "match.command":
       return acceptedMatchRoom(room, seat, message, context, execute, now);
     case "auction.submitBid":
-      // T014 owns sealed-bid accumulation and resolution.
-      throw new RoomLifecycleError("ROOM_ALREADY_STARTED");
+      return acceptedAuctionRoom(room, seat, message, context, execute, now);
   }
 }
 

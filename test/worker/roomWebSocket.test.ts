@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { RuleViolationError } from "../../src/domain/errors";
+import { applyMatchCommand } from "../../src/domain/match/applyMatchCommand";
 import type { MatchCommand, MatchExecutionContext, MatchState } from "../../src/domain/match/types";
 import { MAX_WIRE_BYTES, type PresenceEntry, type ServerWebSocketMessage } from "../../src/online/protocol";
 import {
@@ -13,7 +14,7 @@ import { createLobby, joinLobby, setLobbyReady, startLobby } from "../../worker/
 import type { PersistedRoom } from "../../worker/room/roomTypes";
 import { RoomDurableObject } from "../../worker/room/RoomDurableObject";
 import type { Env } from "../../worker/env";
-import type { LatestRoomMutationResult, RoomStorage } from "../../worker/room/roomStore";
+import { RoomStore, type LatestRoomMutationResult, type RoomStorage } from "../../worker/room/roomStore";
 
 const ids = Array.from({ length: 80 }, (_, index) =>
   `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`
@@ -36,6 +37,36 @@ function playingRoom(): PersistedRoom {
   room = joinLobby(room, { seatId: "seat-3", nickname: "Three", tokenHash: "C".repeat(43) }, 3);
   for (const seat of room.seats) room = setLobbyReady(room, seat.seatId, true, 10 + seat.joinOrder);
   return startLobby(room, "seat-1", context, 20);
+}
+
+function auctionRoom(tokens = [3, 2, 1]): PersistedRoom {
+  const room = playingRoom();
+  return {
+    ...room,
+    matchState: {
+      ...room.matchState!,
+      game: {
+        ...room.matchState!.game,
+        phase: "playing",
+        players: room.matchState!.game.players.map((player, index) => ({
+          ...player,
+          guildTokens: tokens[index] ?? 0
+        }))
+      },
+      guild: {
+        ...room.matchState!.guild,
+        gathering: {
+          ...room.matchState!.guild.gathering,
+          phase: "auction",
+          auctionRound: 1
+        }
+      }
+    }
+  };
+}
+
+function bid(commandId: string, expectedVersion: number, amount: number): string {
+  return JSON.stringify({ type: "auction.submitBid", commandId, expectedVersion, amount });
 }
 
 class MemoryCommandStore implements CommandMutationStore {
@@ -475,6 +506,209 @@ describe("authoritative room command pipeline", () => {
     expect(store.retriedUpdates).toBe(1);
     expect(store.commits).toBe(1);
     expect([...peers.messages.values()].flat()).toHaveLength(3);
+  });
+
+  it("persists zero and positive sealed bids, exposes only submission status and the caller's own bid, and permits replacement", async () => {
+    const store = new MemoryCommandStore(auctionRoom());
+    const peers = recipients("seat-1", "seat-2", "seat-3");
+    let pipeline = createCommandPipeline({ store, createExecutionContext: () => context });
+
+    await pipeline.handle({
+      seatId: "seat-1", rawMessage: bid(ids[0], store.room!.roomVersion, 0), now: 100,
+      presence: noPresence, recipients: peers.recipients
+    });
+    pipeline = createCommandPipeline({ store, createExecutionContext: () => context });
+    await pipeline.handle({
+      seatId: "seat-2", rawMessage: bid(ids[1], store.room!.roomVersion, 1), now: 101,
+      presence: noPresence, recipients: peers.recipients
+    });
+    await pipeline.handle({
+      seatId: "seat-2", rawMessage: bid(ids[2], store.room!.roomVersion, 2), now: 102,
+      presence: noPresence, recipients: peers.recipients
+    });
+
+    expect(store.room!.pendingAuction).toEqual({
+      round: 1, bidsBySeatId: { "seat-1": 0, "seat-2": 2 }
+    });
+    expect(store.room!.roomVersion).toBe(playingRoom().roomVersion + 3);
+    const latestBySeat = new Map([...peers.messages].map(([seatId, messages]) => [seatId, messages.at(-1)!]));
+    for (const [seatId, message] of latestBySeat) {
+      expect(message).toMatchObject({
+        type: "room.snapshot",
+        publicState: { submittedBidSeatIds: ["seat-1", "seat-2"] },
+        privateState: seatId === "seat-1"
+          ? { ownPendingBid: 0 }
+          : seatId === "seat-2" ? { ownPendingBid: 2 } : {}
+      });
+      const serialized = JSON.stringify(message);
+      if (seatId !== "seat-2") expect(serialized).not.toContain('"ownPendingBid":2');
+    }
+  });
+
+  it("rejects unaffordable bids without changing auction state or leaking the amount", async () => {
+    const initial = auctionRoom();
+    const store = new MemoryCommandStore(initial);
+    const peers = recipients("seat-3");
+
+    await createCommandPipeline({ store, createExecutionContext: () => context }).handle({
+      seatId: "seat-3", rawMessage: bid(ids[0], initial.roomVersion, 2), now: 100,
+      presence: noPresence, recipients: peers.recipients
+    });
+
+    expect(store.room!.pendingAuction).toBeUndefined();
+    expect(store.room!.roomVersion).toBe(initial.roomVersion);
+    expect(store.room!.lastActivityAt).toBe(initial.lastActivityAt);
+    expect(peers.messages.get("seat-3")?.[0]).toMatchObject({
+      type: "command.rejected", error: { code: "RULE_VIOLATION", params: {} }
+    });
+    expect(JSON.stringify(peers.messages)).not.toContain("exceeds");
+  });
+
+  it("resolves an all-zero round once, clears sealed bids before projection, and advances without randomness", async () => {
+    const store = new MemoryCommandStore(auctionRoom());
+    const peers = recipients("seat-1", "seat-2", "seat-3");
+    const execute = vi.fn(applyMatchCommand);
+    const random = vi.fn(() => { throw new Error("all-zero bids must not use randomness"); });
+    const pipeline = createCommandPipeline({
+      store,
+      executeMatchCommand: execute,
+      createExecutionContext: () => ({ ...context, random: { nextInt: random } })
+    });
+
+    for (let index = 0; index < 3; index += 1) {
+      await pipeline.handle({
+        seatId: `seat-${index + 1}`,
+        rawMessage: bid(ids[index], store.room!.roomVersion, 0), now: 100 + index,
+        presence: noPresence, recipients: peers.recipients
+      });
+    }
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0][1]).toEqual({ type: "RESOLVE_AUCTION", bids: { p1: 0, p2: 0, p3: 0 } });
+    expect(random).not.toHaveBeenCalled();
+    expect(store.room!.pendingAuction).toBeUndefined();
+    expect(store.room!.matchState!.guild.gathering.auctionRound).toBe(2);
+    expect(store.room!.matchState!.guild.gathering.phase).toBe("auction");
+    for (const messages of peers.messages.values()) {
+      const final = messages.at(-1)!;
+      expect(final).toMatchObject({
+        type: "room.snapshot", publicState: { submittedBidSeatIds: [] }
+      });
+      expect((final as { privateState: Record<string, unknown> }).privateState).not.toHaveProperty("ownPendingBid");
+    }
+  });
+
+  it("atomically combines concurrent final bids against latest persisted state and resolves a positive winner once", async () => {
+    const initial = auctionRoom();
+    initial.pendingAuction = { round: 1, bidsBySeatId: { "seat-1": 1 } };
+    const store = new MemoryCommandStore(initial);
+    const peers = recipients("seat-1", "seat-2", "seat-3");
+    const execute = vi.fn(applyMatchCommand);
+    const pipeline = createCommandPipeline({
+      store, executeMatchCommand: execute,
+      createExecutionContext: () => ({ ...context, random: { nextInt: () => 80 } })
+    });
+
+    await Promise.all([
+      pipeline.handle({
+        seatId: "seat-2", rawMessage: bid(ids[1], initial.roomVersion, 2), now: 101,
+        presence: noPresence, recipients: peers.recipients
+      }),
+      pipeline.handle({
+        seatId: "seat-3", rawMessage: bid(ids[2], initial.roomVersion + 1, 1), now: 102,
+        presence: noPresence, recipients: peers.recipients
+      })
+    ]);
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0][1]).toEqual({ type: "RESOLVE_AUCTION", bids: { p1: 1, p2: 2, p3: 1 } });
+    expect(store.room!.pendingAuction).toBeUndefined();
+    expect(store.room!.matchState!.game.players.find(({ id }) => id === "p2")!.guildTokens).toBe(0);
+    expect(store.room!.matchState!.guild.gathering.lastAuctionResult).toMatchObject({
+      winnerId: "p2", winningBid: 2
+    });
+  });
+
+  it("restores an unresolved caller bid from persisted storage after room-runtime recreation", async () => {
+    const initial = auctionRoom();
+    const data = new Map<string, unknown>([["room", structuredClone(initial)]]);
+    const storage: RoomStorage = {
+      async get(key: string) { return data.get(key); },
+      async put(key: string, value: unknown) { data.set(key, structuredClone(value)); },
+      async delete(key: string) { return data.delete(key); },
+      async setAlarm() {},
+      async deleteAlarm() {},
+      async transaction<T>(closure: (transaction: RoomStorage) => Promise<T>) {
+        return closure(storage);
+      }
+    };
+    const firstPeers = recipients("seat-1", "seat-2", "seat-3");
+    await createCommandPipeline({ store: new RoomStore(storage), createExecutionContext: () => context }).handle({
+      seatId: "seat-1", rawMessage: bid(ids[0], initial.roomVersion, 3), now: 100,
+      presence: noPresence, recipients: firstPeers.recipients
+    });
+
+    const rehydratedStore = new RoomStore(storage);
+    const reconnected = recipients("seat-1");
+    await createCommandPipeline({ store: rehydratedStore, createExecutionContext: () => context }).handle({
+      seatId: "seat-1", rawMessage: bid(ids[0], initial.roomVersion, 3), now: 101,
+      presence: noPresence, recipients: reconnected.recipients
+    });
+
+    expect((data.get("room") as PersistedRoom).pendingAuction).toEqual({
+      round: 1, bidsBySeatId: { "seat-1": 3 }
+    });
+    expect(reconnected.messages.get("seat-1")?.[0]).toMatchObject({
+      type: "room.snapshot",
+      publicState: { submittedBidSeatIds: ["seat-1"] },
+      privateState: { ownPendingBid: 3 },
+      acknowledgedCommandId: ids[0]
+    });
+  });
+
+  it("publishes only the winning amount and redacts a development-card outcome from every losing seat", async () => {
+    const initial = auctionRoom([765_432, 876_543, 1]);
+    const store = new MemoryCommandStore(initial);
+    const peers = recipients("seat-1", "seat-2", "seat-3");
+    const pipeline = createCommandPipeline({
+      store,
+      createExecutionContext: () => ({
+        ...context,
+        random: { nextInt: (maximum) => maximum - 1 }
+      })
+    });
+
+    for (const [index, amount] of [765_431, 876_543, 0].entries()) {
+      await pipeline.handle({
+        seatId: `seat-${index + 1}`,
+        rawMessage: bid(ids[index], store.room!.roomVersion, amount), now: 100 + index,
+        presence: noPresence, recipients: peers.recipients
+      });
+    }
+
+    const result = store.room!.matchState!.guild.gathering.lastAuctionResult;
+    expect(result).toMatchObject({
+      winnerId: "p2", winningBid: 876_543, outcome: { kind: "developmentCard" }
+    });
+    const awardedCard = store.room!.matchState!.game.players.find(({ id }) => id === "p2")!
+      .developmentCards.at(-1)!;
+    for (const seatId of ["seat-1", "seat-2", "seat-3"]) {
+      const final = peers.messages.get(seatId)!.at(-1)! as Extract<ServerWebSocketMessage, { type: "room.snapshot" }>;
+      const serialized = JSON.stringify(final);
+      expect(serialized).not.toContain("765431");
+      expect(final.publicState).toMatchObject({
+        submittedBidSeatIds: [],
+        guild: { gathering: { lastAuctionResult: {
+          winnerId: "p2", winningBid: 876_543, outcome: { kind: "developmentCard" }
+        } } }
+      });
+      if (seatId === "seat-2") {
+        expect(final.privateState).toMatchObject({ developmentCards: expect.arrayContaining([awardedCard]) });
+      } else {
+        expect(serialized).not.toContain(awardedCard.id);
+        expect(serialized).not.toContain(`\"kind\":\"${awardedCard.kind}\"`);
+      }
+    }
   });
 
   it("executes through the Durable Object WebSocket adapter against persisted storage", async () => {

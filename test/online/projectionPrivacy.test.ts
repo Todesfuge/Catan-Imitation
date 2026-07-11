@@ -485,6 +485,29 @@ describe("caller-specific room projection privacy", () => {
     }
   });
 
+  it("serializes sealed-bid progress without opponent values and drops every pending secret after resolution", () => {
+    const room = createRoom();
+    for (const seat of room.seats) {
+      const view = projectRoomView(room, seat.seatId);
+      expect(view.publicState.submittedBidSeatIds).toEqual(["seat-1", "seat-2"]);
+      expect(view.privateState.ownPendingBid).toBe(
+        room.pendingAuction!.bidsBySeatId[seat.seatId]
+      );
+      const serialized = JSON.stringify(view);
+      for (const [bidSeatId, amount] of Object.entries(room.pendingAuction!.bidsBySeatId)) {
+        if (bidSeatId !== seat.seatId) expect(serialized).not.toContain(String(amount));
+      }
+    }
+
+    delete room.pendingAuction;
+    for (const seat of room.seats) {
+      const serialized = JSON.stringify(projectRoomView(room, seat.seatId));
+      expect(serialized).not.toContain("ownPendingBid");
+      expect(serialized).not.toContain("765432");
+      expect(serialized).not.toContain("876543");
+    }
+  });
+
   it("excludes opponents' hidden victory points while playing, then shows final score", () => {
     const playingRoom = createRoom("playing");
     const playingView = projectRoomView(playingRoom, "seat-1");
