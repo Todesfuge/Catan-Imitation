@@ -1,0 +1,358 @@
+import { RuleViolationError } from "../../src/domain/errors";
+import { applyMatchCommand } from "../../src/domain/match/applyMatchCommand";
+import type { MatchCommand, MatchExecutionContext, MatchState } from "../../src/domain/match/types";
+import {
+  ERROR_DEFINITIONS,
+  PROTOCOL_SCHEMA_VERSION,
+  ProtocolValidationError,
+  parseClientWebSocketMessage,
+  type ClientWebSocketMessage,
+  type OnlineMatchCommand,
+  type PresenceEntry,
+  type ProtocolErrorCode,
+  type RoomSnapshotMessage,
+  type ServerWebSocketMessage
+} from "../../src/online/protocol";
+import { projectRoomView } from "../../src/online/projectRoomView";
+import type { OnlineAvailabilityContext } from "../../src/online/allowedActions";
+import { prepareBufferedCryptoRandomSource } from "../crypto";
+import { RoomLifecycleError, setLobbyReady, startLobby } from "./roomLifecycle";
+import type { LatestRoomMutation, LatestRoomMutationResult } from "./roomStore";
+import type { PersistedRoom, PersistedSeat } from "./roomTypes";
+
+const ROOM_RETENTION_MS = 86_400_000;
+const ACCEPTED_COMMAND_LIMIT = 64;
+
+export type { LatestRoomMutation } from "./roomStore";
+
+export interface CommandMutationStore {
+  mutateLatest<T>(
+    now: number,
+    mutation: (room: PersistedRoom) => LatestRoomMutation<T>
+  ): Promise<LatestRoomMutationResult<T>>;
+}
+
+export interface CommandRecipient {
+  seatId: string;
+  send(message: ServerWebSocketMessage): void;
+  close?(code: number, reason: string): void;
+}
+
+export interface CommandPipelineInput {
+  seatId: string;
+  rawMessage: string;
+  now: number;
+  presence: PresenceEntry[];
+  recipients: readonly CommandRecipient[];
+}
+
+interface PipelineDependencies {
+  store: CommandMutationStore;
+  createExecutionContext?: (now: number) => MatchExecutionContext;
+  prepareExecutionContext?: (now: number) => () => MatchExecutionContext;
+  executeMatchCommand?: (
+    state: MatchState,
+    command: MatchCommand,
+    context: MatchExecutionContext
+  ) => MatchState;
+  projectRoom?: (
+    room: PersistedRoom,
+    seatId: string,
+    context: OnlineAvailabilityContext
+  ) => ReturnType<typeof projectRoomView>;
+  rateLimit?: { maximum: number; windowMs: number };
+}
+
+type MutationOutcome =
+  | { kind: "accepted"; commandId: string }
+  | { kind: "duplicate"; commandId: string }
+  | { kind: "rejected"; commandId: string; code: ProtocolErrorCode; includeSnapshot?: boolean }
+  | { kind: "protocol" }
+  | { kind: "heartbeat" };
+
+function error(code: ProtocolErrorCode) {
+  return { code, params: {}, retryable: ERROR_DEFINITIONS[code].retryable };
+}
+
+function snapshot(
+  room: PersistedRoom,
+  seatId: string,
+  presence: PresenceEntry[],
+  acknowledgedCommandId: string | undefined,
+  project: NonNullable<PipelineDependencies["projectRoom"]>
+): RoomSnapshotMessage {
+  const observedCounts = new Map(presence.map((entry) => [entry.seatId, entry.connectionCount]));
+  const roomPresence = [...room.seats]
+    .sort((left, right) => left.joinOrder - right.joinOrder)
+    .map((seat) => {
+      const connectionCount = observedCounts.get(seat.seatId) ?? 0;
+      return { seatId: seat.seatId, connectionCount, online: connectionCount > 0 };
+    });
+  const projected = project(room, seatId, {
+    connectedSeatIds: roomPresence.filter((entry) => entry.online).map((entry) => entry.seatId)
+  });
+  return {
+    type: "room.snapshot",
+    schemaVersion: PROTOCOL_SCHEMA_VERSION,
+    roomVersion: room.roomVersion,
+    lifecycle: room.lifecycle,
+    publicState: projected.publicState as unknown as Record<string, unknown>,
+    privateState: projected.privateState as unknown as Record<string, unknown>,
+    allowedActions: (projected.allowedActions ?? {}) as unknown as Record<string, unknown>,
+    presence: roomPresence,
+    ...(acknowledgedCommandId === undefined ? {} : { acknowledgedCommandId })
+  };
+}
+
+function trustedCommand(command: OnlineMatchCommand, playerId: string): MatchCommand {
+  switch (command.type) {
+    case "START_GATHERING":
+    case "OPEN_AUCTION":
+      return command;
+    case "TRANSFER_TOKENS":
+      return { ...command, fromPlayerId: playerId };
+    default:
+      return { ...command, playerId } as MatchCommand;
+  }
+}
+
+function recordAccepted(room: PersistedRoom, seatId: string, commandId: string): PersistedRoom {
+  return {
+    ...room,
+    seats: room.seats.map((seat) => seat.seatId === seatId
+      ? {
+          ...seat,
+          acceptedCommandIds: [
+            ...seat.acceptedCommandIds,
+            { commandId, resultingVersion: room.roomVersion }
+          ].slice(-ACCEPTED_COMMAND_LIMIT)
+        }
+      : seat)
+  };
+}
+
+function acceptedMatchRoom(
+  room: PersistedRoom,
+  seat: PersistedSeat,
+  message: Extract<ClientWebSocketMessage, { type: "match.command" }>,
+  context: MatchExecutionContext,
+  execute: NonNullable<PipelineDependencies["executeMatchCommand"]>,
+  now: number
+): PersistedRoom {
+  if (room.lifecycle !== "playing" || room.matchState === undefined || seat.playerId === undefined) {
+    throw new RoomLifecycleError("ROOM_ALREADY_STARTED");
+  }
+  const matchState = execute(room.matchState, trustedCommand(message.command, seat.playerId), context);
+  return {
+    ...room,
+    lifecycle: matchState.game.phase === "gameOver" ? "finished" : "playing",
+    matchState,
+    roomVersion: room.roomVersion + 1,
+    lastActivityAt: now,
+    expiresAt: now + ROOM_RETENTION_MS
+  };
+}
+
+function executeMessage(
+  room: PersistedRoom,
+  seat: PersistedSeat,
+  message: Exclude<ClientWebSocketMessage, { type: "connection.heartbeat" }>,
+  context: MatchExecutionContext,
+  execute: NonNullable<PipelineDependencies["executeMatchCommand"]>,
+  now: number
+): PersistedRoom {
+  switch (message.type) {
+    case "room.ready":
+      return setLobbyReady(room, seat.seatId, message.ready, now);
+    case "room.start":
+      return startLobby(room, seat.seatId, context, now);
+    case "match.command":
+      return acceptedMatchRoom(room, seat, message, context, execute, now);
+    case "auction.submitBid":
+      // T014 owns sealed-bid accumulation and resolution.
+      throw new RoomLifecycleError("ROOM_ALREADY_STARTED");
+  }
+}
+
+function safeSend(recipient: CommandRecipient, message: ServerWebSocketMessage): void {
+  try {
+    recipient.send(message);
+  } catch {
+    // One disconnected tab must not prevent delivery to other authenticated seats.
+  }
+}
+
+export function createCommandPipeline(dependencies: PipelineDependencies) {
+  const execute = dependencies.executeMatchCommand ?? applyMatchCommand;
+  const project = dependencies.projectRoom ?? projectRoomView;
+  const rateLimit = dependencies.rateLimit ?? { maximum: 10, windowMs: 2_000 };
+  const attemptsBySeat = new Map<string, number[]>();
+
+  return {
+    async handle(input: CommandPipelineInput): Promise<void> {
+      const authenticated = await dependencies.store.mutateLatest(input.now, (room) => ({
+        kind: "unchanged",
+        value: room.seats.some((seat) => seat.seatId === input.seatId)
+      }));
+      const authenticationError: ProtocolErrorCode | undefined =
+        authenticated.kind === "expired" ? "ROOM_EXPIRED"
+          : authenticated.kind === "missing" ? "ROOM_NOT_FOUND"
+            : !authenticated.value ? "COMMAND_NOT_ALLOWED" : undefined;
+
+      let parsed: ClientWebSocketMessage;
+      try {
+        parsed = parseClientWebSocketMessage(input.rawMessage);
+      } catch (caught) {
+        if (!(caught instanceof ProtocolValidationError)) throw caught;
+        for (const recipient of input.recipients) {
+          if (recipient.seatId === input.seatId) {
+            safeSend(recipient, {
+              type: "protocol.incompatible",
+              error: { ...error("PROTOCOL_INCOMPATIBLE"), params: { expected: PROTOCOL_SCHEMA_VERSION } }
+            });
+            recipient.close?.(4004, "PROTOCOL_INCOMPATIBLE");
+          }
+        }
+        return;
+      }
+
+      if (authenticationError !== undefined) {
+        for (const recipient of input.recipients) {
+          if (recipient.seatId !== input.seatId) continue;
+          if (parsed.type === "connection.heartbeat") {
+            safeSend(recipient, {
+              type: "protocol.incompatible",
+              error: { ...error("PROTOCOL_INCOMPATIBLE"), params: { expected: PROTOCOL_SCHEMA_VERSION } }
+            });
+            recipient.close?.(4004, "PROTOCOL_INCOMPATIBLE");
+          } else {
+            safeSend(recipient, {
+              type: "command.rejected", commandId: parsed.commandId, error: error(authenticationError)
+            });
+          }
+        }
+        return;
+      }
+      if (parsed.type === "connection.heartbeat") return;
+      const prepareRandom = prepareBufferedCryptoRandomSource();
+      const logIds = Array.from({ length: 128 }, () => crypto.randomUUID());
+      const preparedContext = dependencies.prepareExecutionContext?.(input.now) ?? (() => {
+        if (dependencies.createExecutionContext !== undefined) {
+          return dependencies.createExecutionContext(input.now);
+        }
+        let logIndex = 0;
+        return {
+          random: prepareRandom(),
+          nextLogId: () => {
+            const id = logIds[logIndex++];
+            if (id === undefined) throw new RangeError("The buffered log ID source is exhausted.");
+            return id;
+          },
+          now: () => input.now
+        };
+      });
+
+      const recent = (attemptsBySeat.get(input.seatId) ?? [])
+        .filter((timestamp) => timestamp > input.now - rateLimit.windowMs);
+      const limited = recent.length >= rateLimit.maximum;
+
+      let mutation: LatestRoomMutationResult<MutationOutcome>;
+      try {
+        mutation = await dependencies.store.mutateLatest<MutationOutcome>(input.now, (room) => {
+          const seat = room.seats.find((candidate) => candidate.seatId === input.seatId);
+          if (seat === undefined) {
+            return {
+              kind: "unchanged",
+              value: { kind: "rejected", commandId: parsed.commandId, code: "COMMAND_NOT_ALLOWED" }
+            };
+          }
+          if (seat.acceptedCommandIds.some((entry) => entry.commandId === parsed.commandId)) {
+            return { kind: "unchanged", value: { kind: "duplicate", commandId: parsed.commandId } };
+          }
+          if (limited) {
+            return {
+              kind: "unchanged",
+              value: { kind: "rejected", commandId: parsed.commandId, code: "RATE_LIMITED" }
+            };
+          }
+          if (parsed.expectedVersion !== room.roomVersion) {
+            return {
+              kind: "unchanged",
+              value: {
+                kind: "rejected", commandId: parsed.commandId,
+                code: "VERSION_CONFLICT", includeSnapshot: true
+              }
+            };
+          }
+
+          const next = recordAccepted(
+            executeMessage(room, seat, parsed, preparedContext(), execute, input.now),
+            seat.seatId,
+            parsed.commandId
+          );
+          // Projection is pure. Preflight every live seat before the transaction
+          // commits so a projection regression cannot persist an unbroadcastable transition.
+          for (const recipientSeatId of new Set(input.recipients.map((recipient) => recipient.seatId))) {
+            if (!next.seats.some((candidate) => candidate.seatId === recipientSeatId)) continue;
+            snapshot(next, recipientSeatId, input.presence, parsed.commandId, project);
+          }
+          return { kind: "updated", room: next, value: { kind: "accepted", commandId: parsed.commandId } };
+        });
+      } catch (caught) {
+        attemptsBySeat.set(input.seatId, [...recent, input.now]);
+        const code = caught instanceof RuleViolationError ? "RULE_VIOLATION"
+          : caught instanceof RoomLifecycleError ? "COMMAND_NOT_ALLOWED"
+            : "INTERNAL_ERROR";
+        for (const recipient of input.recipients) {
+          if (recipient.seatId === input.seatId) {
+            safeSend(recipient, {
+              type: "command.rejected", commandId: parsed.commandId, error: error(code)
+            });
+          }
+        }
+        return;
+      }
+
+      if (mutation.kind === "missing" || mutation.kind === "expired") {
+        const code = mutation.kind === "missing" ? "ROOM_NOT_FOUND" : "ROOM_EXPIRED";
+        for (const recipient of input.recipients) {
+          if (recipient.seatId === input.seatId) {
+            safeSend(recipient, { type: "command.rejected", commandId: parsed.commandId, error: error(code) });
+          }
+        }
+        return;
+      }
+
+      attemptsBySeat.set(input.seatId, [...recent, input.now]);
+      const outcome = mutation.value;
+      if (outcome.kind === "accepted") {
+        for (const recipient of input.recipients) {
+          if (!mutation.room.seats.some((seat) => seat.seatId === recipient.seatId)) continue;
+          safeSend(recipient, snapshot(mutation.room, recipient.seatId, input.presence, outcome.commandId, project));
+        }
+        return;
+      }
+      if (outcome.kind === "duplicate") {
+        for (const recipient of input.recipients) {
+          if (recipient.seatId === input.seatId) {
+            safeSend(recipient, snapshot(mutation.room, recipient.seatId, input.presence, outcome.commandId, project));
+          }
+        }
+        return;
+      }
+      if (outcome.kind === "rejected") {
+        for (const recipient of input.recipients) {
+          if (recipient.seatId !== input.seatId) continue;
+          safeSend(recipient, {
+            type: "command.rejected",
+            commandId: outcome.commandId,
+            error: error(outcome.code),
+            ...(outcome.includeSnapshot
+              ? { snapshot: snapshot(mutation.room, recipient.seatId, input.presence, undefined, project) as unknown as Record<string, unknown> }
+              : {})
+          });
+        }
+      }
+    }
+  };
+}

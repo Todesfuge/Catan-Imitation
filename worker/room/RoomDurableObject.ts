@@ -16,6 +16,7 @@ import {
 } from "./roomLifecycle";
 import { RoomSchemaError, RoomStore } from "./roomStore";
 import type { PersistedRoom } from "./roomTypes";
+import { createCommandPipeline, type CommandRecipient } from "./commandPipeline";
 
 const ROOM_RETENTION_MS = 24 * 60 * 60 * 1_000;
 
@@ -67,9 +68,12 @@ function attachment(socket: WebSocket): ConnectionAttachment | undefined {
 
 export class RoomDurableObject {
   private readonly store: RoomStore;
+  private readonly commands;
+  private commandTail: Promise<void> = Promise.resolve();
 
   constructor(private readonly ctx: DurableObjectState, _env: Env) {
     this.store = new RoomStore(ctx.storage);
+    this.commands = createCommandPipeline({ store: this.store });
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -211,6 +215,37 @@ export class RoomDurableObject {
     await this.socketEnded();
   }
 
+  async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    const run = this.commandTail.then(() => this.handleWebSocketMessage(socket, message));
+    this.commandTail = run.catch(() => undefined);
+    return run;
+  }
+
+  private async handleWebSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    const value = attachment(socket);
+    if (value === undefined) {
+      socket.close(4003, "INVALID_ATTACHMENT");
+      return;
+    }
+    const recipients: CommandRecipient[] = this.ctx.getWebSockets().flatMap((peer) => {
+      const peerAttachment = attachment(peer);
+      if (peer.readyState !== WebSocket.OPEN || peerAttachment === undefined) return [];
+      return [{
+        seatId: peerAttachment.seatId,
+        send: (serverMessage) => peer.send(JSON.stringify(serverMessage)),
+        close: (code, reason) => peer.close(code, reason)
+      }];
+    });
+    const presence = this.connectedPresence();
+    await this.commands.handle({
+      seatId: value.seatId,
+      rawMessage: typeof message === "string" ? message : "",
+      now: Date.now(),
+      presence,
+      recipients
+    });
+  }
+
   private async socketEnded(): Promise<void> {
     const now = Date.now();
     const result = await this.store.lookup(now);
@@ -264,13 +299,7 @@ export class RoomDurableObject {
   }
 
   private presence(room: PersistedRoom): PresenceEntry[] {
-    const counts = new Map<string, number>();
-    for (const socket of this.ctx.getWebSockets()) {
-      const value = attachment(socket);
-      if (value && socket.readyState === WebSocket.OPEN) {
-        counts.set(value.seatId, (counts.get(value.seatId) ?? 0) + 1);
-      }
-    }
+    const counts = new Map(this.connectedPresence().map((entry) => [entry.seatId, entry.connectionCount]));
     return [...room.seats]
       .sort((left, right) => left.joinOrder - right.joinOrder)
       .map((seat) => ({
@@ -278,6 +307,21 @@ export class RoomDurableObject {
         connectionCount: counts.get(seat.seatId) ?? 0,
         online: (counts.get(seat.seatId) ?? 0) > 0
       }));
+  }
+
+  private connectedPresence(): PresenceEntry[] {
+    const counts = new Map<string, number>();
+    for (const socket of this.ctx.getWebSockets()) {
+      const value = attachment(socket);
+      if (value && socket.readyState === WebSocket.OPEN) {
+        counts.set(value.seatId, (counts.get(value.seatId) ?? 0) + 1);
+      }
+    }
+    return [...counts].map(([seatId, connectionCount]) => ({
+      seatId,
+      connectionCount,
+      online: true
+    }));
   }
 
   private snapshot(room: PersistedRoom, seatId: string): RoomSnapshotMessage {

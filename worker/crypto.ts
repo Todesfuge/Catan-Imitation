@@ -1,10 +1,53 @@
 const SECRET_BYTE_LENGTH = 32;
 const SHA256_BASE64URL_LENGTH = 43;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
+const UINT32_RANGE = 0x1_0000_0000;
 
 export const CONNECTION_TICKET_TTL_MS = 30_000;
 
 export type RandomBytesSource = (target: Uint8Array) => void;
+
+/**
+ * A finite cryptographic random source whose entropy is collected before a
+ * storage transaction begins. Retried transaction closures therefore consume
+ * only local buffered values and never repeat an external random side effect.
+ */
+export class BufferedCryptoRandomSource {
+  private index = 0;
+
+  constructor(private readonly values: Uint32Array) {}
+
+  nextInt(maxExclusive: number): number {
+    if (!Number.isSafeInteger(maxExclusive) || maxExclusive <= 0 || maxExclusive > UINT32_RANGE) {
+      throw new RangeError("maxExclusive must be an integer between 1 and 2^32.");
+    }
+    const limit = Math.floor(UINT32_RANGE / maxExclusive) * maxExclusive;
+    while (this.index < this.values.length) {
+      const value = this.values[this.index++];
+      if (value < limit) return value % maxExclusive;
+    }
+    throw new RangeError("The buffered cryptographic random source is exhausted.");
+  }
+}
+
+export function createBufferedCryptoRandomSource(drawCount = 512): BufferedCryptoRandomSource {
+  if (!Number.isSafeInteger(drawCount) || drawCount <= 0) {
+    throw new RangeError("drawCount must be a positive safe integer.");
+  }
+  const values = new Uint32Array(drawCount);
+  crypto.getRandomValues(values);
+  return new BufferedCryptoRandomSource(values);
+}
+
+/** Captures entropy once and returns replayable readers for transaction retries. */
+export function prepareBufferedCryptoRandomSource(drawCount = 512): () => BufferedCryptoRandomSource {
+  if (!Number.isSafeInteger(drawCount) || drawCount <= 0) {
+    throw new RangeError("drawCount must be a positive safe integer.");
+  }
+  const values = new Uint32Array(drawCount);
+  crypto.getRandomValues(values);
+  return () => new BufferedCryptoRandomSource(values);
+}
 
 export interface IssuedSeatToken {
   readonly seatToken: string;

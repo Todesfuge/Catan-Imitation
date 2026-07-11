@@ -34,6 +34,15 @@ export type ExpiryAlarmResult =
   | { kind: "missing" }
   | { kind: "alreadyExpired" };
 
+export type LatestRoomMutation<T> =
+  | { kind: "unchanged"; value: T }
+  | { kind: "updated"; room: PersistedRoom; value: T };
+
+export type LatestRoomMutationResult<T> =
+  | { kind: "active"; room: PersistedRoom; value: T }
+  | { kind: "expired"; expiredAt: number }
+  | { kind: "missing" };
+
 export class RoomSchemaError extends Error {
   constructor() {
     super("Persisted room schema is incompatible.");
@@ -249,6 +258,25 @@ export class RoomStore {
     assertPersistedRoom(room);
     await this.storage.put(ROOM_RECORD_KEY, room);
     await this.storage.setAlarm(room.expiresAt);
+  }
+
+  /** Atomically reads the current snapshot and persists at most one validated replacement. */
+  mutateLatest<T>(
+    now: number,
+    mutation: (room: PersistedRoom) => LatestRoomMutation<T>
+  ): Promise<LatestRoomMutationResult<T>> {
+    return this.transaction(async (storage) => {
+      const current = await readStoredRoom(storage, now);
+      if (current.kind !== "active") return current;
+      const result = mutation(current.room);
+      if (result.kind === "unchanged") {
+        return { kind: "active", room: current.room, value: result.value };
+      }
+      assertPersistedRoom(result.room);
+      await storage.put(ROOM_RECORD_KEY, result.room);
+      await storage.setAlarm(result.room.expiresAt);
+      return { kind: "active", room: result.room, value: result.value };
+    });
   }
 
   async delete(): Promise<void> {
