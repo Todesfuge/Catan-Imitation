@@ -194,13 +194,13 @@ Files:
 
 Steps:
 
-- [ ] Add a failing Workers-runtime smoke test expecting `/api/health` JSON and SPA asset fallback from one Worker.
-- [ ] Add pinned `wrangler@4.110.0` and `@cloudflare/vitest-pool-workers@0.8.70`, then add `test:worker`, `build:worker`, `dev:worker`, and `smoke:worker` scripts.
-- [ ] Configure the `ROOMS` Durable Object binding, `v1` `new_sqlite_classes` migration, `dist` assets, SPA fallback, and `/api/*` worker-first routing.
-- [ ] Generate binding/runtime types with `pnpm exec wrangler types worker-configuration.d.ts`, exclude `test/worker` from `tsconfig.app.json`, and include Worker code/tests in their own TypeScript project.
-- [ ] Implement only health/static routing needed by the smoke test; leave room behavior to later tasks.
-- [ ] Run `pnpm test:worker`, `pnpm build:worker`, and `pnpm exec wrangler deploy --dry-run`; expect all pass.
-- [ ] Commit with `build: add Cloudflare Worker runtime`.
+- [x] Add a failing Workers-runtime smoke test expecting `/api/health` JSON and SPA asset fallback from one Worker.
+- [x] Add pinned `wrangler@4.110.0` and `@cloudflare/vitest-pool-workers@0.8.70`, then add `test:worker`, `build:worker`, `dev:worker`, and `smoke:worker` scripts.
+- [x] Configure the `ROOMS` Durable Object binding, `v1` `new_sqlite_classes` migration, `dist` assets, SPA fallback, and `/api/*` worker-first routing.
+- [x] Generate binding/runtime types with `pnpm exec wrangler types worker-configuration.d.ts`, exclude `test/worker` from `tsconfig.app.json`, and include Worker code/tests in their own TypeScript project.
+- [x] Implement only health/static routing needed by the smoke test; leave room behavior to later tasks.
+- [x] Run `pnpm test:worker`, `pnpm build:worker`, and `pnpm exec wrangler deploy --dry-run`; expect all pass.
+- [x] Commit with `build: add Cloudflare Worker runtime`.
 
 ### Task 9 (T009) — Implement credentials, tickets, bounded HTTP, and origin checks
 
