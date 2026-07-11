@@ -4,7 +4,12 @@ import { createCommerceGuild } from "../../src/domain/expansion/commerceGuild";
 import { createDemoGame } from "../../src/domain/match/createMatch";
 import type { MatchState } from "../../src/domain/match/types";
 import { calculatePlayerScore } from "../../src/domain/rules/scoring";
-import { emptyResources, type DevelopmentCard, type GameState } from "../../src/domain/types";
+import {
+  emptyResources,
+  resources,
+  type DevelopmentCard,
+  type GameState
+} from "../../src/domain/types";
 import {
   projectRoomView,
   type ProjectableRoomState
@@ -205,7 +210,7 @@ describe("caller-specific room projection privacy", () => {
     expect(serialized).not.toContain("plaintext-ticket-secret");
     expect(serialized).not.toContain("opponent-private-error-secret");
     expect(serialized).not.toContain("private-summary-monopoly");
-    expect(serialized).not.toContain("monopoly");
+    expect(serialized).not.toContain('"kind":"monopoly"');
     expect(serialized).not.toContain("auction-winner-secret");
     expect(serialized).not.toContain("222222221");
     expect(serialized).not.toContain("222222222");
@@ -220,7 +225,7 @@ describe("caller-specific room projection privacy", () => {
   it("includes only the caller's private hand, decision, and unresolved bid amount", () => {
     const view = projectRoomView(createRoom(), "seat-1");
 
-    expect(view.privateState).toEqual({
+    expect(view.privateState).toMatchObject({
       seatId: "seat-1",
       playerId: "p1",
       seatTokenPresent: true,
@@ -229,6 +234,7 @@ describe("caller-specific room projection privacy", () => {
       ownPendingBid: 765_432,
       requiredDecision: { kind: "discardResources", count: 4 }
     });
+    expect(view.allowedActions).toBeDefined();
     expect(JSON.stringify(view.privateState)).not.toContain("876543");
   });
 
@@ -520,5 +526,227 @@ describe("caller-specific room projection privacy", () => {
     expect(first.privateState.developmentCards?.[0]).not.toBe(
       room.matchState!.game.players[0].developmentCards[0]
     );
+  });
+
+  it("projects caller-specific setup targets without exposing another seat's choices", () => {
+    const room = createRoom();
+    room.matchState!.game = {
+      ...room.matchState!.game,
+      phase: "setup",
+      activePlayerId: "p1",
+      buildings: [],
+      roads: [],
+      setup: {
+        order: ["p1", "p2", "p3", "p4", "p4", "p3", "p2", "p1"],
+        placementIndex: 0,
+        stage: "settlement"
+      }
+    };
+
+    const active = projectRoomView(room, "seat-1").allowedActions!;
+    const inactive = projectRoomView(room, "seat-2").allowedActions!;
+
+    expect(active.setup.settlement.enabled).toBe(true);
+    expect(active.setup.settlement.targets.length).toBeGreaterThan(0);
+    expect(active.setup.road).toMatchObject({
+      enabled: false,
+      disabledReason: { code: "SETUP_SETTLEMENT_REQUIRED" }
+    });
+    expect(inactive.setup.settlement).toEqual({
+      enabled: false,
+      disabledReason: { code: "NOT_YOUR_TURN" },
+      targets: []
+    });
+  });
+
+  it("enables only the caller's seven discard and reports offline required players structurally", () => {
+    const room = createRoom();
+    const caller = projectRoomView(room, "seat-1", {
+      connectedSeatIds: ["seat-1", "seat-3", "seat-4"]
+    }).allowedActions!;
+    const waiting = projectRoomView(room, "seat-3", {
+      connectedSeatIds: ["seat-1", "seat-3", "seat-4"]
+    }).allowedActions!;
+
+    expect(caller.decisions.discard).toMatchObject({
+      enabled: true,
+      exactCount: 4,
+      maxByResource: { wood: 1, brick: 2, wool: 3, grain: 4, ore: 5 }
+    });
+    expect(waiting.decisions.discard).toEqual({
+      enabled: false,
+      disabledReason: {
+        code: "REQUIRED_PLAYER_OFFLINE",
+        params: { playerIds: ["p2"] }
+      },
+      exactCount: 0,
+      maxByResource: emptyResources(),
+      targets: []
+    });
+    expect(waiting.turn.endTurn.disabledReason).toEqual({
+      code: "REQUIRED_PLAYER_OFFLINE",
+      params: { playerIds: ["p2"] }
+    });
+  });
+
+  it("projects robber and pending development targets only for the required caller", () => {
+    const room = createRoom();
+    room.matchState!.game = {
+      ...room.matchState!.game,
+      turnState: {
+        phase: "awaitingRobberPlacement",
+        pendingDiscards: {},
+        pendingRobber: {
+          source: "seven",
+          resumePhase: "action",
+          eligibleVictimIds: []
+        }
+      }
+    };
+    const robber = projectRoomView(room, "seat-1").allowedActions!;
+    expect(robber.decisions.robberHex.enabled).toBe(true);
+    expect(robber.decisions.robberHex.targets).not.toContain(room.matchState!.game.robberHexId);
+
+    room.matchState!.game.turnState = {
+      phase: "awaitingRobberVictim",
+      pendingDiscards: {},
+      pendingRobber: {
+        source: "seven",
+        resumePhase: "action",
+        targetHexId: room.matchState!.game.board[0].id,
+        eligibleVictimIds: ["p2", "p4"]
+      }
+    };
+    expect(
+      projectRoomView(room, "seat-1").allowedActions!.decisions.robberVictim
+    ).toMatchObject({ enabled: true, targets: ["p2", "p4"] });
+
+    room.matchState!.game.turnState = {
+      phase: "awaitingDevelopmentEffect",
+      pendingDiscards: {},
+      pendingDevelopmentEffect: {
+        kind: "yearOfPlenty",
+        playerId: "p1",
+        remainingPicks: 2,
+        resumePhase: "action"
+      }
+    };
+    const development = projectRoomView(room, "seat-1").allowedActions!.decisions;
+    expect(development.yearOfPlenty).toMatchObject({
+      enabled: true,
+      remainingPicks: 2,
+      targets: resources
+    });
+    expect(
+      projectRoomView(room, "seat-2").allowedActions!.decisions.yearOfPlenty
+        .disabledReason
+    ).toEqual({ code: "WAITING_FOR_ACTIVE_PLAYER", params: { playerId: "p1" } });
+
+    room.matchState!.game.turnState = {
+      phase: "awaitingDevelopmentEffect",
+      pendingDiscards: {},
+      pendingDevelopmentEffect: {
+        kind: "roadBuilding",
+        playerId: "p1",
+        remainingRoads: 2,
+        resumePhase: "action"
+      }
+    };
+    const freeRoad = projectRoomView(room, "seat-1").allowedActions!.decisions.freeRoad;
+    expect(freeRoad.remainingRoads).toBe(2);
+    expect(freeRoad.targets.length).toBeGreaterThan(0);
+
+    room.matchState!.game.turnState = {
+      phase: "awaitingDevelopmentEffect",
+      pendingDiscards: {},
+      pendingDevelopmentEffect: {
+        kind: "monopoly",
+        playerId: "p1",
+        resumePhase: "action"
+      }
+    };
+    expect(
+      projectRoomView(room, "seat-1").allowedActions!.decisions.monopoly
+    ).toMatchObject({ enabled: true, targets: resources });
+  });
+
+  it("projects caller-only normal, trade, Commerce Guild, and sealed-bid capabilities", () => {
+    const room = createRoom();
+    room.matchState!.game.turnState = { phase: "awaitingRoll", pendingDiscards: {} };
+    expect(projectRoomView(room, "seat-1").allowedActions!.turn.roll.enabled).toBe(
+      true
+    );
+    expect(
+      projectRoomView(room, "seat-2").allowedActions!.turn.roll.disabledReason
+    ).toEqual({ code: "NOT_YOUR_TURN" });
+
+    room.matchState!.game = {
+      ...room.matchState!.game,
+      turnState: { phase: "action", pendingDiscards: {} },
+      players: room.matchState!.game.players.map((player) =>
+        player.id === "p1"
+          ? { ...player, vouchers: 3 }
+          : player.id === "p3"
+            ? { ...player, guildTokens: 3 }
+            : player
+      )
+    };
+    room.matchState!.guild = {
+      ...room.matchState!.guild,
+      gathering: {
+        ...room.matchState!.guild.gathering,
+        phase: "auction",
+        auctionRound: 2
+      }
+    };
+
+    const active = projectRoomView(room, "seat-1").allowedActions!;
+    const bidder = projectRoomView(room, "seat-3").allowedActions!;
+
+    expect(active.setup.settlement.disabledReason).toEqual({ code: "SETUP_NOT_ACTIVE" });
+    expect(active.turn.endTurn.enabled).toBe(true);
+    expect(active.turn.road.cost).toEqual({ wood: 1, brick: 1, wool: 0, grain: 0, ore: 0 });
+    expect(active.maritime.ratios.wood).toBeGreaterThanOrEqual(2);
+    expect(active.publicTrade.cancel.enabled).toBe(true);
+    expect(active.publicTrade.accept.disabledReason).toEqual({ code: "CANNOT_ACCEPT_OWN_TRADE" });
+    expect(active.commerce.transfer).toMatchObject({
+      enabled: true,
+      maxAmount: 900_001,
+      recipientIds: ["p2", "p3", "p4"]
+    });
+    expect(active.commerce.redeemPrize.enabled).toBe(true);
+    expect(active.sealedBid).toMatchObject({
+      enabled: false,
+      disabledReason: { code: "BID_ALREADY_SUBMITTED" },
+      round: 2,
+      maxAmount: 900_001,
+      submitted: true
+    });
+    expect(bidder.sealedBid).toEqual({
+      enabled: true,
+      round: 2,
+      maxAmount: 3,
+      submitted: false
+    });
+    expect(JSON.stringify(bidder)).not.toContain("765432");
+    expect(JSON.stringify(bidder)).not.toContain("876543");
+
+    room.matchState!.guild = {
+      ...room.matchState!.guild,
+      gathering: {
+        ...room.matchState!.guild.gathering,
+        phase: "redemption",
+        redemptions: { p1: 1 }
+      }
+    };
+    const redemption = projectRoomView(room, "seat-1").allowedActions!.commerce;
+    expect(redemption.tradeSlots.find(({ id }) => id === "ore-contract")?.enabled).toBe(true);
+    expect(redemption.openAuction.enabled).toBe(true);
+    expect(redemption.redeemGathering).toMatchObject({
+      enabled: true,
+      maxAmount: 3,
+      targets: resources,
+      bankStock: { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 }
+    });
   });
 });

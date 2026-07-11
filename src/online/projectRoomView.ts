@@ -25,6 +25,10 @@ import type {
   RequiredDecision,
   RoomLifecycle
 } from "./view";
+import {
+  projectAllowedActions,
+  type OnlineAvailabilityContext
+} from "./allowedActions";
 
 export interface ProjectableSeatSource {
   seatId: string;
@@ -481,7 +485,8 @@ function projectPrivateState(
 
 export function projectRoomView(
   room: ProjectableRoomState,
-  viewerSeatId: string
+  viewerSeatId: string,
+  availabilityContext: OnlineAvailabilityContext = {}
 ): ProjectedRoomView {
   const viewerSeat = room.seats.find((seat) => seat.seatId === viewerSeatId);
   if (!viewerSeat) throw new Error(`Unknown viewer seat: ${viewerSeatId}`);
@@ -506,6 +511,15 @@ export function projectRoomView(
         room.lifecycle === "finished" || room.matchState.game.phase === "gameOver"
       )
     : undefined;
+  const allowedActions = room.matchState
+    ? projectAllowedActions(
+        room.matchState,
+        viewerSeat,
+        room.seats,
+        room.pendingAuction,
+        availabilityContext
+      )
+    : undefined;
   const publicState: PublicRoomState = {
     roomCode: room.roomCode,
     lifecycle: room.lifecycle,
@@ -522,6 +536,7 @@ export function projectRoomView(
 
   return {
     publicState,
-    privateState: projectPrivateState(room, viewerSeat)
+    privateState: projectPrivateState(room, viewerSeat),
+    ...(allowedActions ? { allowedActions } : {})
   };
 }

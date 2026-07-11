@@ -12,6 +12,7 @@ import type {
   Road,
   TurnPhase
 } from "../domain/types";
+import type { OnlineAllowedActions } from "./allowedActions";
 
 export type RoomLifecycle = "lobby" | "playing" | "finished" | "expired";
 
@@ -147,4 +148,5 @@ export interface PrivateSeatState {
 export interface ProjectedRoomView {
   publicState: PublicRoomState;
   privateState: PrivateSeatState;
+  allowedActions?: OnlineAllowedActions;
 }
