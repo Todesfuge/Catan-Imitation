@@ -1,7 +1,18 @@
-import type { BlindBoxOutcome, CommerceGuildState } from "../domain/expansion/commerceGuild";
+import type {
+  AuctionSummaryData,
+  BlindBoxOutcome,
+  CommerceGuildState
+} from "../domain/expansion/commerceGuild";
 import type { MatchState } from "../domain/match/types";
 import { calculatePlayerScore } from "../domain/rules/scoring";
-import { resources, type GameLogEntry, type GameMessageKey, type GameState, type Player } from "../domain/types";
+import {
+  resources,
+  type DevelopmentCardKind,
+  type GameLogEntry,
+  type GameMessageKey,
+  type GameState,
+  type Player
+} from "../domain/types";
 import type {
   PrivateSeatState,
   ProjectedRoomView,
@@ -35,28 +46,63 @@ export interface ProjectableRoomState {
   };
 }
 
-const safeLogParams: Partial<Record<GameMessageKey, readonly string[]>> = {
-  "dice.rolled": ["playerName", "total", "eventCount"],
-  "robber.discardCompleted": ["playerName"],
-  "robber.moved": ["hexId"],
-  "robber.stolen": ["playerName", "victimName"],
-  "development.played": ["playerName", "cardKind"],
-  "development.bought": ["playerName"],
-  "development.knightPlayed": ["playerName"],
-  "development.freeRoadPlaced": ["playerName"],
-  "development.yearOfPlentyLog": ["resource"],
-  "development.monopolyLog": ["resource"],
-  "trade.maritime": ["playerName", "give", "receive"],
-  "trade.player.published": ["proposerName"],
-  "trade.player.cancelled": ["proposerName"],
-  "trade.player.accepted": ["acceptingPlayerName", "proposerName"],
-  "guild.tokensTransferred": ["fromName", "amount", "toName"],
-  "guild.auctionNoEligibleBidders": ["round"],
-  "guild.redeemedResources": ["playerName"],
-  "guild.auctionRoundNoBids": ["round"],
-  "guild.auctionResolved": ["winnerName", "bid", "round", "outcomeKind"],
-  "guild.prizeRedeemed": ["playerName"]
+type LogParamKind = "playerName" | "resource" | "cardKind" | "hexId" | "integer";
+
+const developmentCardKinds: readonly DevelopmentCardKind[] = [
+  "knight",
+  "roadBuilding",
+  "yearOfPlenty",
+  "monopoly"
+];
+
+const noParamLogKeys = new Set<GameMessageKey>([
+  "game.welcome",
+  "setup.started",
+  "setup.newGameStarted",
+  "robber.sevenRolled",
+  "guild.gatheringAutoStarted",
+  "guild.slotCompleted",
+  "guild.gatheringStarted",
+  "guild.auctionOpened",
+  "guild.auctionNoEligibleBidders"
+]);
+
+const safeLogParamSchemas: Partial<
+  Record<GameMessageKey, Readonly<Record<string, LogParamKind>>>
+> = {
+  "dice.rolled": { playerName: "playerName", total: "integer", eventCount: "integer" },
+  "robber.discardCompleted": { playerName: "playerName" },
+  "robber.moved": { hexId: "hexId" },
+  "robber.stolen": { playerName: "playerName", victimName: "playerName" },
+  "development.played": { playerName: "playerName", cardKind: "cardKind" },
+  "development.bought": { playerName: "playerName" },
+  "development.knightPlayed": { playerName: "playerName" },
+  "development.freeRoadPlaced": { playerName: "playerName" },
+  "development.yearOfPlentyLog": { resource: "resource" },
+  "development.monopolyLog": { resource: "resource" },
+  "trade.maritime": { playerName: "playerName", give: "resource", receive: "resource" },
+  "trade.player.published": { proposerName: "playerName" },
+  "trade.player.cancelled": { proposerName: "playerName" },
+  "trade.player.accepted": {
+    acceptingPlayerName: "playerName",
+    proposerName: "playerName"
+  },
+  "guild.tokensTransferred": {
+    fromName: "playerName",
+    amount: "integer",
+    toName: "playerName"
+  },
+  "guild.redeemedResources": { playerName: "playerName" },
+  "guild.auctionRoundNoBids": { round: "integer" },
+  "guild.prizeRedeemed": { playerName: "playerName" }
 };
+
+interface LogProjectionContext {
+  playerNames: ReadonlySet<string>;
+  playerNameById: ReadonlyMap<string, string>;
+  hexIds: ReadonlySet<string>;
+  lastAuctionResult?: AuctionSummaryData;
+}
 
 function copyResourceMap(map: Record<(typeof resources)[number], number>) {
   return {
@@ -102,34 +148,134 @@ function projectPlayer(
   };
 }
 
-function projectLogEntry(entry: GameLogEntry): PublicLogEntry {
-  const projected: PublicLogEntry = { id: entry.id };
-  if (!entry.messageKey) return projected;
-  projected.messageKey = entry.messageKey;
-  const allowedKeys = safeLogParams[entry.messageKey] ?? [];
-  if (entry.params && allowedKeys.length > 0) {
-    const params: Record<string, string | number> = {};
-    for (const key of allowedKeys) {
-      const value = entry.params[key];
-      if (typeof value === "string" || typeof value === "number") params[key] = value;
-    }
-    if (Object.keys(params).length > 0) projected.params = params;
-  }
-  return projected;
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
-function projectOutcome(outcome: BlindBoxOutcome): PublicBlindBoxOutcomeView {
+function isSafeLogParam(
+  value: unknown,
+  kind: LogParamKind,
+  context: LogProjectionContext
+): value is string | number {
+  if (kind === "integer") return isNonNegativeSafeInteger(value);
+  if (typeof value !== "string") return false;
+  if (kind === "playerName") return context.playerNames.has(value);
+  if (kind === "resource") return resources.includes(value as (typeof resources)[number]);
+  if (kind === "cardKind") return developmentCardKinds.includes(value as DevelopmentCardKind);
+  return context.hexIds.has(value);
+}
+
+function matchingAuctionResult(
+  entry: GameLogEntry,
+  context: LogProjectionContext
+): { result: AuctionSummaryData; winnerName: string } | undefined {
+  const result = context.lastAuctionResult;
+  const params = entry.params;
+  const winnerName = result && context.playerNameById.get(result.winnerId);
+  if (
+    !result ||
+    !params ||
+    !winnerName ||
+    !isNonNegativeSafeInteger(result.round) ||
+    !isNonNegativeSafeInteger(result.winningBid) ||
+    params.winnerName !== winnerName ||
+    params.round !== result.round ||
+    params.bid !== result.winningBid ||
+    params.outcomeKind !== result.outcome.kind
+  ) {
+    return undefined;
+  }
+  return { result, winnerName };
+}
+
+function projectAuctionLog(
+  entry: GameLogEntry,
+  context: LogProjectionContext
+): PublicLogEntry | undefined {
+  const matched = matchingAuctionResult(entry, context);
+  if (!matched || matched.result.outcome.kind === "developmentCard") return undefined;
+
+  const params: Record<string, string | number> = {
+    winnerName: matched.winnerName,
+    bid: matched.result.winningBid,
+    round: matched.result.round,
+    outcomeKind: matched.result.outcome.kind
+  };
+  if (matched.result.outcome.kind === "resources") {
+    for (const resource of resources) {
+      const amount = matched.result.outcome.resources[resource];
+      if (!isNonNegativeSafeInteger(amount) || entry.params?.[resource] !== amount) {
+        return undefined;
+      }
+      params[resource] = amount;
+    }
+  }
+  return { id: entry.id, messageKey: entry.messageKey, params };
+}
+
+function projectLogEntry(
+  entry: GameLogEntry,
+  context: LogProjectionContext
+): PublicLogEntry | undefined {
+  if (!entry.messageKey) return undefined;
+  if (entry.messageKey === "guild.auctionResolved") {
+    return projectAuctionLog(entry, context);
+  }
+  if (noParamLogKeys.has(entry.messageKey)) {
+    return { id: entry.id, messageKey: entry.messageKey };
+  }
+  const schema = safeLogParamSchemas[entry.messageKey];
+  if (!schema || !entry.params) return undefined;
+  const params: Record<string, string | number> = {};
+  for (const [key, kind] of Object.entries(schema)) {
+    const value = entry.params[key];
+    if (!isSafeLogParam(value, kind, context)) return undefined;
+    params[key] = value;
+  }
+  return { id: entry.id, messageKey: entry.messageKey, params };
+}
+
+function projectOutcome(outcome: BlindBoxOutcome): PublicBlindBoxOutcomeView | undefined {
   if (outcome.kind === "resources") {
+    let resourceCardCount = 0;
+    for (const resource of resources) {
+      const amount = outcome.resources[resource];
+      if (!isNonNegativeSafeInteger(amount)) return undefined;
+      resourceCardCount += amount;
+    }
+    if (!Number.isSafeInteger(resourceCardCount)) return undefined;
     return {
       kind: "resources",
-      resourceCardCount: resources.reduce((total, resource) => total + outcome.resources[resource], 0)
+      resourceCardCount
     };
   }
-  return { kind: outcome.kind };
+  if (outcome.kind === "voucher" || outcome.kind === "developmentCard") {
+    return { kind: outcome.kind };
+  }
+  return undefined;
 }
 
-function projectGuild(guild: CommerceGuildState): PublicGuildView {
+function projectGuild(
+  guild: CommerceGuildState,
+  playerNameById: ReadonlyMap<string, string>
+): PublicGuildView {
   const last = guild.gathering.lastAuctionResult;
+  const lastOutcome = last ? projectOutcome(last.outcome) : undefined;
+  const winnerName = last ? playerNameById.get(last.winnerId) : undefined;
+  const safeLast =
+    last &&
+    lastOutcome &&
+    winnerName &&
+    isNonNegativeSafeInteger(last.round) &&
+    isNonNegativeSafeInteger(last.winningBid)
+      ? {
+          winnerId: last.winnerId,
+          winnerName,
+          round: last.round,
+          winningBid: last.winningBid,
+          outcome: lastOutcome
+        }
+      : undefined;
   return {
     tradeSlots: guild.tradeSlots.map((slot) => ({
       id: slot.id,
@@ -140,18 +286,10 @@ function projectGuild(guild: CommerceGuildState): PublicGuildView {
     gathering: {
       phase: guild.gathering.phase,
       auctionRound: guild.gathering.auctionRound,
-      auctionResults: guild.gathering.auctionResults.map(projectOutcome),
-      ...(last
-        ? {
-            lastAuctionResult: {
-              winnerId: last.winnerId,
-              winnerName: last.winnerName,
-              round: last.round,
-              winningBid: last.winningBid,
-              outcome: projectOutcome(last.outcome)
-            }
-          }
-        : {})
+      auctionResults: guild.gathering.auctionResults
+        .map(projectOutcome)
+        .filter((outcome): outcome is PublicBlindBoxOutcomeView => outcome !== undefined),
+      ...(safeLast ? { lastAuctionResult: safeLast } : {})
     }
   };
 }
@@ -164,13 +302,31 @@ function awaitedPlayerIds(game: GameState): string[] {
   return [game.activePlayerId];
 }
 
+function publicPlayerNames(
+  match: MatchState,
+  seatNicknames: ReadonlyMap<string, string>
+): Map<string, string> {
+  return new Map(
+    match.game.players.map((player) => [
+      player.id,
+      seatNicknames.get(player.id) ?? player.name
+    ])
+  );
+}
+
 function projectGame(
   match: MatchState,
   viewerPlayerId: string | undefined,
-  nicknames: ReadonlyMap<string, string>,
+  playerNameById: ReadonlyMap<string, string>,
   revealFinalScores: boolean
 ): PublicGameView {
   const game = match.game;
+  const logContext: LogProjectionContext = {
+    playerNames: new Set(playerNameById.values()),
+    playerNameById,
+    hexIds: new Set(game.board.map((hex) => hex.id)),
+    lastAuctionResult: match.guild.gathering.lastAuctionResult
+  };
   return {
     phase: game.phase,
     players: game.players.map((player) =>
@@ -178,7 +334,7 @@ function projectGame(
         game,
         player,
         viewerPlayerId,
-        nicknames.get(player.id) ?? player.name,
+        playerNameById.get(player.id) ?? player.name,
         revealFinalScores
       )
     ),
@@ -198,7 +354,10 @@ function projectGame(
     roads: game.roads.map((road) => ({ ...road })),
     robberHexId: game.robberHexId,
     bank: { resources: copyResourceMap(game.bank.resources) },
-    log: game.log.map(projectLogEntry),
+    log: game.log.flatMap((entry) => {
+      const projected = projectLogEntry(entry, logContext);
+      return projected ? [projected] : [];
+    }),
     developmentDeckCount: game.developmentDeck.length,
     lastDice: match.lastDice ? { ...match.lastDice } : null,
     ...(match.pendingPlayerTrade
@@ -293,11 +452,14 @@ export function projectRoomView(
   const nicknames = new Map(
     room.seats.flatMap((seat) => (seat.playerId ? [[seat.playerId, seat.nickname] as const] : []))
   );
+  const playerNameById = room.matchState
+    ? publicPlayerNames(room.matchState, nicknames)
+    : new Map<string, string>();
   const game = room.matchState
     ? projectGame(
         room.matchState,
         viewerSeat.playerId,
-        nicknames,
+        playerNameById,
         room.lifecycle === "finished" || room.matchState.game.phase === "gameOver"
       )
     : undefined;
@@ -307,7 +469,7 @@ export function projectRoomView(
     roomVersion: room.roomVersion,
     ...(room.lifecycle === "lobby" && room.hostSeatId ? { hostSeatId: room.hostSeatId } : {}),
     seats,
-    ...(game ? { game, guild: projectGuild(room.matchState!.guild) } : {}),
+    ...(game ? { game, guild: projectGuild(room.matchState!.guild, playerNameById) } : {}),
     submittedBidSeatIds: room.pendingAuction
       ? room.seats
           .filter((seat) => Object.hasOwn(room.pendingAuction!.bidsBySeatId, seat.seatId))

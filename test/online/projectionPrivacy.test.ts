@@ -32,6 +32,27 @@ const opponentCards: DevelopmentCard[] = [
   }
 ];
 
+const cardsByPlayerId: Record<string, DevelopmentCard[]> = {
+  p1: [ownCard],
+  p2: opponentCards,
+  p3: [
+    {
+      id: "seat-3-private-card-id",
+      kind: "roadBuilding",
+      purchasedTurn: 1,
+      revealed: false
+    }
+  ],
+  p4: [
+    {
+      id: "seat-4-private-card-id",
+      kind: "yearOfPlenty",
+      purchasedTurn: 1,
+      revealed: false
+    }
+  ]
+};
+
 function createMatchState(phase: GameState["phase"] = "playing"): MatchState {
   const base = createDemoGame();
   const game: GameState = {
@@ -55,7 +76,11 @@ function createMatchState(phase: GameState["phase"] = "playing"): MatchState {
           developmentCards: opponentCards
         };
       }
-      return { ...player, resources: emptyResources(), developmentCards: [] };
+      return {
+        ...player,
+        resources: emptyResources(),
+        developmentCards: cardsByPlayerId[player.id].map((card) => ({ ...card }))
+      };
     }),
     turnState: {
       ...base.turnState,
@@ -72,12 +97,34 @@ function createMatchState(phase: GameState["phase"] = "playing"): MatchState {
         messageKey: "guild.auctionResolved",
         params: {
           summary: "private-summary-monopoly",
-          winnerName: "Loss",
-          bid: 4,
-          round: 1,
-          outcomeKind: "developmentCard",
+          winnerName: "auction-winner-secret",
+          bid: 222_222_221,
+          round: 222_222_222,
+          outcomeKind: "auction-outcome-secret-monopoly",
           cardKind: "monopoly"
         }
+      },
+      {
+        id: "malicious-dice-log",
+        message: "private raw dice message",
+        messageKey: "dice.rolled",
+        params: {
+          playerName: "standard-log-player-secret",
+          total: 222_222_223,
+          eventCount: -1
+        }
+      },
+      {
+        id: "malicious-resource-log",
+        message: "private raw resource message",
+        messageKey: "development.yearOfPlentyLog",
+        params: { resource: "resource-enum-secret" }
+      },
+      {
+        id: "malicious-hidden-vp-log",
+        message: "private raw hidden victory point message",
+        messageKey: "development.played",
+        params: { playerName: "Loss", cardKind: "victoryPoint" }
       },
       {
         id: "safe-log",
@@ -159,6 +206,14 @@ describe("caller-specific room projection privacy", () => {
     expect(serialized).not.toContain("opponent-private-error-secret");
     expect(serialized).not.toContain("private-summary-monopoly");
     expect(serialized).not.toContain("monopoly");
+    expect(serialized).not.toContain("auction-winner-secret");
+    expect(serialized).not.toContain("222222221");
+    expect(serialized).not.toContain("222222222");
+    expect(serialized).not.toContain("auction-outcome-secret-monopoly");
+    expect(serialized).not.toContain("standard-log-player-secret");
+    expect(serialized).not.toContain("222222223");
+    expect(serialized).not.toContain("resource-enum-secret");
+    expect(serialized).not.toContain('"cardKind":"victoryPoint"');
     expect(view.publicState.submittedBidSeatIds).toEqual(["seat-1", "seat-2"]);
   });
 
@@ -209,21 +264,83 @@ describe("caller-specific room projection privacy", () => {
     });
     expect(view.publicState.game?.log).toEqual([
       {
-        id: "blind-box-log",
-        messageKey: "guild.auctionResolved",
-        params: {
-          winnerName: "Loss",
-          bid: 4,
-          round: 1,
-          outcomeKind: "developmentCard"
-        }
-      },
-      {
         id: "safe-log",
         messageKey: "dice.rolled",
         params: { playerName: "Voyage1969", total: 8, eventCount: 2 }
       }
     ]);
+  });
+
+  it("rebuilds a matching resource-auction log from the trusted guild result", () => {
+    const room = createRoom();
+    const resourcesWon = { wood: 2, brick: 0, wool: 1, grain: 0, ore: 0 };
+    room.matchState!.guild.gathering.lastAuctionResult = {
+      winnerId: "p2",
+      winnerName: "untrusted-stored-winner-name",
+      round: 1,
+      winningBid: 4,
+      outcome: { kind: "resources", resources: resourcesWon }
+    };
+    room.matchState!.game.log[0] = {
+      id: "trusted-resource-auction-log",
+      message: "raw-summary-secret",
+      messageKey: "guild.auctionResolved",
+      params: {
+        summary: "raw-summary-secret",
+        winnerName: "Loss",
+        bid: 4,
+        round: 1,
+        outcomeKind: "resources",
+        ...resourcesWon
+      }
+    };
+
+    const serialized = JSON.stringify(projectRoomView(room, "seat-1"));
+    expect(serialized).not.toContain("raw-summary-secret");
+    expect(serialized).not.toContain("untrusted-stored-winner-name");
+    expect(projectRoomView(room, "seat-1").publicState.game?.log[0]).toEqual({
+      id: "trusted-resource-auction-log",
+      messageKey: "guild.auctionResolved",
+      params: {
+        winnerName: "Loss",
+        bid: 4,
+        round: 1,
+        outcomeKind: "resources",
+        wood: 2,
+        brick: 0,
+        wool: 1,
+        grain: 0,
+        ore: 0
+      }
+    });
+  });
+
+  it("isolates every caller and reveals a blind-box card kind only in the winner's private hand", () => {
+    const room = createRoom();
+
+    for (const seat of room.seats) {
+      const view = projectRoomView(room, seat.seatId);
+      const ownCards = cardsByPlayerId[seat.playerId!];
+      expect(view.privateState.developmentCards).toEqual(ownCards);
+      for (const [playerId, cards] of Object.entries(cardsByPlayerId)) {
+        if (playerId === seat.playerId) continue;
+        for (const card of cards) {
+          expect(JSON.stringify(view)).not.toContain(card.id);
+        }
+      }
+      for (const player of view.publicState.game!.players) {
+        expect(player).not.toHaveProperty("resources");
+        expect(player).not.toHaveProperty("developmentCards");
+      }
+    }
+
+    const winnerView = projectRoomView(room, "seat-2");
+    expect(winnerView.privateState.developmentCards).toContainEqual(opponentCards[0]);
+    for (const seatId of ["seat-1", "seat-3", "seat-4"]) {
+      const otherView = projectRoomView(room, seatId);
+      expect(otherView.privateState.developmentCards).not.toContainEqual(opponentCards[0]);
+      expect(JSON.stringify(otherView)).not.toContain('"kind":"monopoly"');
+    }
   });
 
   it("excludes opponents' hidden victory points while playing, then shows final score", () => {
