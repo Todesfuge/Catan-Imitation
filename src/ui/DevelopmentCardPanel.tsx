@@ -64,7 +64,7 @@ export function DevelopmentCardPanel({
     return null;
   }
   const availability = state.legality.actions;
-  const privateControl = state.controls.find((control) => control.isActive);
+  const privateControl = state.controlledPlayers.find((control) => control.isActive);
   const victoryPointCount = (privateControl?.developmentCards ?? []).filter(
     (card) => card.kind === "victoryPoint"
   ).length;

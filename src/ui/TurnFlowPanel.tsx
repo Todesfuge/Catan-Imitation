@@ -9,7 +9,7 @@ export function TurnFlowPanel({
   dispatch
 }: {
   game: GameTableGameView;
-  gameControls: GameTableView["controls"];
+  gameControls: GameTableView["controlledPlayers"];
   dispatch: GameTableDispatch;
 }) {
   const { locale, t } = useI18n();

@@ -187,8 +187,7 @@ export function createLocalGameTableView(state: AppState): GameTableView {
         guildTokens: player.guildTokens,
         vouchers: player.vouchers,
         prizeCards: player.prizeCards,
-        knightsPlayed: player.knightsPlayed,
-        privateResources: cloneResources(player.resources)
+        knightsPlayed: player.knightsPlayed
       })),
       activePlayerId,
       turn: state.game.turn,
@@ -249,8 +248,9 @@ export function createLocalGameTableView(state: AppState): GameTableView {
           : {})
       }
     },
-    controls: players.map((player, index) => ({
+    controlledPlayers: players.map((player, index) => ({
       controlId: controlIdForIndex(index),
+      displaySlot: index,
       displayName: player.name,
       isActive: player.id === activePlayerId,
       resources: cloneResources(player.resources),
@@ -354,7 +354,11 @@ export function createLocalGameTableController(
       switch (intent.type) {
         case "ui.selectDiceTotal": dispatchCommand({ type: "SELECT_DICE_TOTAL", diceTotal: intent.diceTotal }); return;
         case "ui.selectPlayer": dispatchCommand({ type: "SELECT_PLAYER", playerId: intent.playerId }); return;
-        case "game.new": dispatchCommand({ type: "START_NEW_GAME" }); return;
+        case "game.new":
+          auctionKey = "";
+          auctionBids = {};
+          dispatchCommand({ type: "START_NEW_GAME" });
+          return;
         case "turn.roll": dispatchCommand({ type: "ROLL_DICE", playerId: active() }); return;
         case "turn.end": dispatchCommand({ type: "END_TURN", playerId: active() }); return;
         case "build.road": dispatchCommand({ type: "BUILD_ROAD", playerId: active(), edgeId: intent.edgeId }); return;

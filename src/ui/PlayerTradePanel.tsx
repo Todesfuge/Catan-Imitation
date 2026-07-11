@@ -114,7 +114,7 @@ export function PlayerTradePanel({
           })}
         </p>
         <div className="player-trade-responses">
-          {state.controls
+          {state.controlledPlayers
             .filter((control) => control.tradeResponse?.kind === "accept")
             .map((control) => {
               const reason = control.tradeResponse?.reason;
@@ -135,11 +135,11 @@ export function PlayerTradePanel({
               );
             })}
         </div>
-        {state.controls.some((control) => control.tradeResponse?.kind === "cancel") ? (
+        {state.controlledPlayers.some((control) => control.tradeResponse?.kind === "cancel") ? (
           <button
             className="secondary"
             onClick={() =>
-              state.controls
+              state.controlledPlayers
                 .filter((control) => control.tradeResponse?.kind === "cancel")
                 .forEach((control) => dispatch({ type: "trade.respond", controlId: control.controlId, response: "cancel" }))
             }

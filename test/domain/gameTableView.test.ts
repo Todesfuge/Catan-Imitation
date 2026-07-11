@@ -31,8 +31,9 @@ function callerOnlyFixture(): GameTableView {
       developmentDeckCount: 20
     },
     guild: { tradeSlots: [], gathering: { phase: "idle", auctionRound: 1 } },
-    controls: [{
+    controlledPlayers: [{
       controlId: "caller-control",
+      displaySlot: 0,
       displayName: "Caller",
       isActive: true,
       resources: { ...noResources, wood: 1 },
@@ -75,8 +76,9 @@ describe("shared game-table presentation boundary", () => {
     expect(view.game).not.toHaveProperty("developmentDeck");
     expect(view.guild).not.toHaveProperty("gathering.auctionResults");
     expect(view.game.players.every((player) => !("resources" in player))).toBe(true);
-    expect(view.controls).toHaveLength(state.game.players.length);
-    expect(view.controls[0]?.resources).not.toBe(state.game.players[0]?.resources);
+    expect(view.controlledPlayers).toHaveLength(state.game.players.length);
+    expect(view.controlledPlayers[0]?.resources).not.toBe(state.game.players[0]?.resources);
+    expect(view.game.players.every((player) => !("privateResources" in player))).toBe(true);
     expect(html).toContain('class="game-shell"');
     expect(html).toContain('aria-label="Catan board"');
     expect(html).toContain('data-action="roll-dice"');
@@ -91,7 +93,7 @@ describe("shared game-table presentation boundary", () => {
     controller.dispatch({ type: "turn.roll" });
     controller.dispatch({
       type: "decision.discard",
-      controlId: view.controls[1]!.controlId,
+      controlId: view.controlledPlayers[1]!.controlId,
       resources: { wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 }
     });
 
@@ -113,8 +115,8 @@ describe("shared game-table presentation boundary", () => {
 
     expect(html).toContain("Caller");
     expect(html).toContain("Opponent");
-    expect(html).not.toContain('data-control-id="opponent-control"');
-    expect(html).not.toContain("Wd 4");
+    expect(html).toContain("Wd 1");
+    expect(html).not.toContain("opponent-secret-ore-4");
   });
 
   it("accumulates replaceable local sealed bids by round and resolves only after all controls submit", () => {
@@ -132,7 +134,7 @@ describe("shared game-table presentation boundary", () => {
     };
     const commands: unknown[] = [];
     const controller = createLocalGameTableController(() => state, (command) => commands.push(command));
-    const controls = createLocalGameTableView(state).controls;
+    const controls = createLocalGameTableView(state).controlledPlayers;
 
     controller.dispatch({ type: "auction.submitBid", controlId: controls[0]!.controlId, bid: 1 });
     controller.dispatch({ type: "auction.submitBid", controlId: controls[0]!.controlId, bid: 2 });
@@ -148,6 +150,22 @@ describe("shared game-table presentation boundary", () => {
       controller.dispatch({ type: "auction.submitBid", controlId: control.controlId, bid: 0 });
     }
     expect(commands).toEqual([{ type: "RESOLVE_AUCTION", bids: { p1: 0, p2: 0, p3: 0, p4: 0 } }]);
+  });
+
+  it("clears partial sealed bids when a new game starts even if the round key repeats", () => {
+    const state = createInitialAppState();
+    const commands: unknown[] = [];
+    const controller = createLocalGameTableController(() => state, (command) => commands.push(command));
+    const controls = createLocalGameTableView(state).controlledPlayers;
+
+    controller.dispatch({ type: "auction.submitBid", controlId: controls[0]!.controlId, bid: 1 });
+    controller.dispatch({ type: "game.new" });
+    commands.length = 0;
+    for (const control of controls.slice(1)) {
+      controller.dispatch({ type: "auction.submitBid", controlId: control.controlId, bid: 0 });
+    }
+
+    expect(commands).toHaveLength(0);
   });
 
   it("keeps raw authoritative and Worker owners outside the presentation modules", () => {

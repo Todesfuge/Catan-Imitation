@@ -27,7 +27,7 @@ export function CommercePanel({
   const [recipientId, setRecipientId] = useState(validRecipients[0]?.id ?? "");
   const [tokenAmount, setTokenAmount] = useState(1);
   const [gatheringControlId, setGatheringControlId] = useState(
-    state.controls.find((control) => control.isActive)?.controlId ?? state.controls[0]?.controlId ?? ""
+    state.controlledPlayers.find((control) => control.isActive)?.controlId ?? state.controlledPlayers[0]?.controlId ?? ""
   );
   const [bids, setBids] = useState<Record<string, number>>({});
   const localizedResourceLabels = useMemo(
@@ -42,12 +42,12 @@ export function CommercePanel({
   }, [recipientId, validRecipients]);
 
   useEffect(() => {
-    if (!state.controls.some((control) => control.controlId === gatheringControlId)) {
-      setGatheringControlId(state.controls.find((control) => control.isActive)?.controlId ?? state.controls[0]?.controlId ?? "");
+    if (!state.controlledPlayers.some((control) => control.controlId === gatheringControlId)) {
+      setGatheringControlId(state.controlledPlayers.find((control) => control.isActive)?.controlId ?? state.controlledPlayers[0]?.controlId ?? "");
     }
-  }, [gatheringControlId, state.controls]);
+  }, [gatheringControlId, state.controlledPlayers]);
 
-  const gatheringControl = state.controls.find((control) => control.controlId === gatheringControlId);
+  const gatheringControl = state.controlledPlayers.find((control) => control.controlId === gatheringControlId);
   const recipientIsValid = validRecipients.some((player) => player.id === recipientId);
   const canSendTokens =
     availability.commerce.transfer.enabled &&
@@ -146,7 +146,7 @@ export function CommercePanel({
               onChange={(event) => setGatheringControlId(event.currentTarget.value)}
               value={gatheringControlId}
             >
-              {state.controls.map((control) => (
+              {state.controlledPlayers.map((control) => (
                 <option key={control.controlId} value={control.controlId}>
                   {control.displayName} ({t("commerce.tokens", { count: control.guildTokens })})
                 </option>
@@ -194,7 +194,7 @@ export function CommercePanel({
         {state.guild.gathering.phase === "auction" ? (
           <div className="auction-grid">
             <strong>{t("commerce.auctionRound", { round: state.guild.gathering.auctionRound })}</strong>
-            {state.controls.map((control) => {
+            {state.controlledPlayers.map((control) => {
               return <label data-control-id={control.controlId} key={control.controlId}>
                 {control.displayName}
                 <input
@@ -207,7 +207,7 @@ export function CommercePanel({
                 />
               </label>;
             })}
-            <button onClick={() => state.controls.forEach((control) => dispatch({
+            <button onClick={() => state.controlledPlayers.forEach((control) => dispatch({
               type: "auction.submitBid",
               controlId: control.controlId,
               bid: bids[control.controlId] ?? 0

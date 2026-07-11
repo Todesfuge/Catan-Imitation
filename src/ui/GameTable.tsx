@@ -38,6 +38,7 @@ export type GameTableResourceMap = Readonly<Record<GameTableResource, number>>;
 
 export interface GameTablePrivateControl {
   readonly controlId: string;
+  readonly displaySlot: number;
   readonly displayName: string;
   readonly isActive: boolean;
   readonly resources: GameTableResourceMap;
@@ -68,7 +69,6 @@ export interface GameTablePlayerView {
   readonly vouchers: number;
   readonly prizeCards: number;
   readonly knightsPlayed: number;
-  readonly privateResources?: GameTableResourceMap;
 }
 
 export interface GameTableGameView {
@@ -168,7 +168,7 @@ export interface GameTableView {
       readonly lastAuctionResult?: { readonly winnerName: string; readonly round: number; readonly winningBid: number; readonly outcome: { readonly kind: "resources" | "voucher" | "developmentCard"; readonly resourceCardCount?: number } };
     };
   };
-  readonly controls: readonly GameTablePrivateControl[];
+  readonly controlledPlayers: readonly GameTablePrivateControl[];
   readonly lastDice: { readonly first: number; readonly second: number; readonly total: number } | null;
   readonly pendingPlayerTrade?: { readonly proposerId: string; readonly offered: GameTableResourceMap; readonly requested: GameTableResourceMap };
   readonly selectedDiceTotal: number;
@@ -475,9 +475,11 @@ function PlayerPanel({ state }: { state: GameTableView }) {
   const { locale, t } = useI18n();
   return (
     <section className="players-panel" aria-label={t("board.players")}>
-      {state.game.players.map((player) => {
+      {state.game.players.map((player, displaySlot) => {
         const active = player.id === state.game.activePlayerId;
-        const privateResources = player.privateResources;
+        const privatePresentation = state.controlledPlayers.find(
+          (control) => control.displaySlot === displaySlot
+        );
         return (
           <article className={`player-card ${active ? "active" : ""}`} key={player.id}>
             <div className="player-main">
@@ -504,9 +506,9 @@ function PlayerPanel({ state }: { state: GameTableView }) {
               </span>
             </div>
             <div className="resource-strip compact">
-              {privateResources ? resources.map((resource) => (
+              {privatePresentation ? resources.map((resource) => (
                 <span className={`resource-token ${resource}`} key={resource}>
-                  {`${locale === "en" ? resourceShortLabels[resource] : t(`resource.${resource}`)} ${privateResources[resource]}`}
+                  {`${locale === "en" ? resourceShortLabels[resource] : t(`resource.${resource}`)} ${privatePresentation.resources[resource]}`}
                 </span>
               )) : null}
             </div>
@@ -765,7 +767,7 @@ export function GameTable({
         <StatsPanel state={state} dispatch={dispatch} />
         <TradeHubPanel state={state} dispatch={dispatch} />
       </div>
-      <TurnFlowPanel game={state.game} gameControls={state.controls} dispatch={dispatch} />
+      <TurnFlowPanel game={state.game} gameControls={state.controlledPlayers} dispatch={dispatch} />
       <ActionDock
         state={state}
         dispatch={dispatch}

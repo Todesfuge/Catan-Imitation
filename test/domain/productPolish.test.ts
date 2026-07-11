@@ -43,7 +43,7 @@ describe("product polish UI", () => {
       }
     };
     const html = renderToString(
-      createElement(TurnFlowPanel, { game: tableViewForGame(game).game, gameControls: tableViewForGame(game).controls, dispatch: () => undefined })
+      createElement(TurnFlowPanel, { game: tableViewForGame(game).game, gameControls: tableViewForGame(game).controlledPlayers, dispatch: () => undefined })
     );
     const visibleHtml = html.replaceAll("<!-- -->", "");
 
@@ -68,7 +68,7 @@ describe("product polish UI", () => {
       }
     };
     const placementHtml = renderToString(
-      createElement(TurnFlowPanel, { game: tableViewForGame(placementGame).game, gameControls: tableViewForGame(placementGame).controls, dispatch: () => undefined })
+      createElement(TurnFlowPanel, { game: tableViewForGame(placementGame).game, gameControls: tableViewForGame(placementGame).controlledPlayers, dispatch: () => undefined })
     );
     expect(placementHtml).toContain('data-turn-flow="robber-placement"');
     expect(placementHtml).toContain("Move the robber to a different hex");
@@ -90,7 +90,7 @@ describe("product polish UI", () => {
       }
     };
     const victimHtml = renderToString(
-      createElement(TurnFlowPanel, { game: tableViewForGame(victimGame).game, gameControls: tableViewForGame(victimGame).controls, dispatch: () => undefined })
+      createElement(TurnFlowPanel, { game: tableViewForGame(victimGame).game, gameControls: tableViewForGame(victimGame).controlledPlayers, dispatch: () => undefined })
     );
     expect(victimHtml).toContain('data-turn-flow="robber-victim"');
     expect(victimHtml).toContain("Choose a player to steal from");
