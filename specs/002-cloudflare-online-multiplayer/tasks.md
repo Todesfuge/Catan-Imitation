@@ -160,17 +160,17 @@ Files:
 
 Steps:
 
-- [ ] Write failing tests for active/non-active seats, offline required decisions, setup targets, robber/seven choices, development effects, public trade, Commerce Guild redemption, and sealed-bid availability using only the authenticated seat's view.
-- [ ] Run `pnpm vitest run test/online/projectionPrivacy.test.ts`; expect missing allowed-action failures.
-- [ ] Extract reusable pure availability facts from `actionAvailability.ts` where they do not require React `AppState`; build an online allowed-action projection without copying rule legality.
-- [ ] Ensure disabled reasons use stable codes/parameters rather than English-only rule strings.
-- [ ] Run `pnpm vitest run test/online/projectionPrivacy.test.ts test/domain/actionAvailability.test.ts`; expect all pass.
-- [ ] Commit with `feat: expose authoritative online action availability`.
+- [x] Write failing tests for active/non-active seats, offline required decisions, setup targets, robber/seven choices, development effects, public trade, Commerce Guild redemption, and sealed-bid availability using only the authenticated seat's view.
+- [x] Run `pnpm vitest run test/online/projectionPrivacy.test.ts`; expect missing allowed-action failures.
+- [x] Extract reusable pure availability facts from `actionAvailability.ts` where they do not require React `AppState`; build an online allowed-action projection without copying rule legality.
+- [x] Ensure disabled reasons use stable codes/parameters rather than English-only rule strings.
+- [x] Run `pnpm vitest run test/online/projectionPrivacy.test.ts test/domain/actionAvailability.test.ts`; expect all pass.
+- [x] Commit with `feat: expose authoritative online action availability`.
 
 Phase B exit gate:
 
-- [ ] Run `pnpm vitest run test/online test/domain/actionAvailability.test.ts` and serialize representative views for all four seats.
-- [ ] Perform a focused privacy review; no raw authoritative type may cross the projection boundary.
+- [x] Run `pnpm vitest run test/online test/domain/actionAvailability.test.ts` and serialize representative views for all four seats.
+- [x] Perform a focused privacy review; no raw authoritative type may cross the projection boundary.
 
 ## Phase C: Cloudflare Room Runtime
 
