@@ -30,12 +30,12 @@ Files:
 
 Steps:
 
-- [ ] Write failing tests proving `openGuildAuction` completes immediately when all player token counts are zero, an all-zero bid map advances exactly one eligible round without reward/random calls, and round three completes gathering.
-- [ ] Run `pnpm vitest run test/domain/auctionNoBid.test.ts`; expect failures showing the current positive-bid deadlock.
-- [ ] Introduce an explicit no-bid auction result/transition in the Commerce Guild owner and update the local command adapter/log keys without adding a UI-only escape path.
-- [ ] Replace the existing test expectation that all-zero bids throw with the new state-transition expectation.
-- [ ] Run `pnpm vitest run test/domain/auctionNoBid.test.ts test/domain/commerceGuild.test.ts test/domain/commerceGuildIntegrity.test.ts test/domain/commerceGuildPolish.test.ts`; expect all pass.
-- [ ] Commit with `fix: allow Commerce Guild auctions to end without bids`.
+- [x] Write failing tests proving `openGuildAuction` completes immediately when all player token counts are zero, an all-zero bid map advances exactly one eligible round without reward/random calls, and round three completes gathering.
+- [x] Run `pnpm vitest run test/domain/auctionNoBid.test.ts`; expect failures showing the current positive-bid deadlock.
+- [x] Introduce an explicit no-bid auction result/transition in the Commerce Guild owner and update the local command adapter/log keys without adding a UI-only escape path.
+- [x] Replace the existing test expectation that all-zero bids throw with the new state-transition expectation.
+- [x] Run `pnpm vitest run test/domain/auctionNoBid.test.ts test/domain/commerceGuild.test.ts test/domain/commerceGuildIntegrity.test.ts test/domain/commerceGuildPolish.test.ts`; expect all pass.
+- [x] Commit with `fix: allow Commerce Guild auctions to end without bids`.
 
 ### Task 2 (T002) — Define synchronized match state and execution context
 
