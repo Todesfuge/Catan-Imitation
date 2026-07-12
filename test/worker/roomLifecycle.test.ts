@@ -5,6 +5,7 @@ import { hashSecret } from "../../worker/crypto";
 import { RoomDurableObject } from "../../worker/room/RoomDurableObject";
 
 import type { MatchExecutionContext } from "../../src/domain/match/types";
+import { MAX_WIRE_BYTES } from "../../src/online/protocol";
 import {
   ROOM_CODE_ALPHABET,
   RoomLifecycleError,
@@ -763,6 +764,24 @@ function nextMessage(socket: WebSocket): Promise<Record<string, unknown>> {
   });
 }
 
+async function nextMessageOfType(
+  socket: WebSocket,
+  type: string
+): Promise<Record<string, unknown>> {
+  return Promise.race([
+    (async () => {
+      for (let index = 0; index < 6; index += 1) {
+        const message = await nextMessage(socket);
+        if (message.type === type) return message;
+      }
+      throw new Error(`did not receive ${type}`);
+    })(),
+    new Promise<never>((_resolve, reject) => {
+      setTimeout(() => reject(new Error(`timed out waiting for ${type}`)), 500);
+    })
+  ]);
+}
+
 function closeSocket(socket: WebSocket): void {
   socket.close(1000, "done");
 }
@@ -1048,17 +1067,20 @@ describe("room HTTP routes and authenticated sockets", () => {
       const host = await createRoom("Socket Leave Host");
       const guest = await joinRoom(host.roomCode, "Socket Leave Guest");
       const hostSocket = await connect(host.roomCode, (await issueTicket(host.roomCode, host.seatToken)).ticket);
-      await nextMessage(hostSocket);
-      await nextMessage(hostSocket);
-      const firstPresence = nextMessage(hostSocket);
+      await nextMessageOfType(hostSocket, "presence.changed");
+      const firstPresence = nextMessageOfType(hostSocket, "presence.changed");
       const guestSocketOne = await connect(host.roomCode, (await issueTicket(host.roomCode, guest.seatToken)).ticket);
-      await nextMessage(guestSocketOne);
-      await firstPresence;
-      const secondPresence = nextMessage(hostSocket);
+      await Promise.all([
+        firstPresence,
+        nextMessageOfType(guestSocketOne, "presence.changed")
+      ]);
+      const secondPresence = nextMessageOfType(hostSocket, "presence.changed");
       const guestSocketTwo = await connect(host.roomCode, (await issueTicket(host.roomCode, guest.seatToken)).ticket);
-      await nextMessage(guestSocketTwo);
-      await secondPresence;
-      const changedPresence = nextMessage(hostSocket);
+      await Promise.all([
+        secondPresence,
+        nextMessageOfType(guestSocketTwo, "presence.changed")
+      ]);
+      const changedSnapshot = nextMessageOfType(hostSocket, "room.snapshot");
       const deleted = await api(`/api/rooms/${host.roomCode}/seats/${guest.seatId}`, {
         method: "DELETE",
         headers: { authorization: `Bearer ${guest.seatToken}` }
@@ -1072,13 +1094,160 @@ describe("room HTTP routes and authenticated sockets", () => {
         { seatId: guest.seatId, code: 4001, reason: "SEAT_LEFT" }
       ]);
       expect(closeCalls.some((call) => call.seatId === host.seatId)).toBe(false);
-      const presence = await changedPresence;
+      await changedSnapshot;
+      const presence = await nextMessageOfType(hostSocket, "presence.changed");
       expect(presence).toEqual({
         type: "presence.changed",
         presence: [{ seatId: host.seatId, connectionCount: 1, online: true }]
       });
       closeSocket(hostSocket);
     }
+  });
+});
+
+describe("room membership snapshot convergence", () => {
+  it("broadcasts caller-specific snapshots for join, upgrade, and host leave", async () => {
+    const host = await createRoom("Convergence Host");
+    const hostSocketOne = await connect(
+      host.roomCode,
+      (await issueTicket(host.roomCode, host.seatToken)).ticket
+    );
+    await nextMessageOfType(hostSocketOne, "presence.changed");
+
+    const hostSocketTwo = await connect(
+      host.roomCode,
+      (await issueTicket(host.roomCode, host.seatToken)).ticket
+    );
+    await Promise.all([
+      nextMessageOfType(hostSocketOne, "presence.changed"),
+      nextMessageOfType(hostSocketTwo, "presence.changed")
+    ]);
+
+    const joinedSnapshotOne = nextMessageOfType(hostSocketOne, "room.snapshot");
+    const joinedSnapshotTwo = nextMessageOfType(hostSocketTwo, "room.snapshot");
+    const guest = await joinRoom(host.roomCode, "Convergence Guest");
+    const [hostViewOne, hostViewTwo] = await Promise.all([
+      joinedSnapshotOne,
+      joinedSnapshotTwo
+    ]);
+    for (const hostView of [hostViewOne, hostViewTwo]) {
+      expect(hostView).toMatchObject({
+        type: "room.snapshot",
+        privateState: { seatId: host.seatId },
+        publicState: {
+          hostSeatId: host.seatId,
+          seats: [
+            { seatId: host.seatId, nickname: "Convergence Host" },
+            { seatId: guest.seatId, nickname: "Convergence Guest" }
+          ]
+        }
+      });
+      expect(new TextEncoder().encode(JSON.stringify(hostView)).byteLength).toBeLessThanOrEqual(
+        MAX_WIRE_BYTES
+      );
+    }
+    expect(hostViewOne.roomVersion).toBe(hostViewTwo.roomVersion);
+    await Promise.all([
+      nextMessageOfType(hostSocketOne, "presence.changed"),
+      nextMessageOfType(hostSocketTwo, "presence.changed")
+    ]);
+
+    const upgradedHostOne = nextMessageOfType(hostSocketOne, "room.snapshot");
+    const upgradedHostTwo = nextMessageOfType(hostSocketTwo, "room.snapshot");
+    const guestSocket = await connect(
+      host.roomCode,
+      (await issueTicket(host.roomCode, guest.seatToken)).ticket
+    );
+    const [hostUpgradeOne, hostUpgradeTwo, guestUpgrade] = await Promise.all([
+      upgradedHostOne,
+      upgradedHostTwo,
+      nextMessageOfType(guestSocket, "room.snapshot")
+    ]);
+    expect(hostUpgradeOne.privateState).toMatchObject({ seatId: host.seatId });
+    expect(hostUpgradeTwo.privateState).toMatchObject({ seatId: host.seatId });
+    expect(guestUpgrade.privateState).toMatchObject({ seatId: guest.seatId });
+    expect(new Set([
+      hostUpgradeOne.roomVersion,
+      hostUpgradeTwo.roomVersion,
+      guestUpgrade.roomVersion
+    ])).toEqual(new Set([guestUpgrade.roomVersion]));
+    expect(guestUpgrade.roomVersion).toBe(Number(hostViewOne.roomVersion) + 1);
+    for (const message of [hostUpgradeOne, hostUpgradeTwo, guestUpgrade]) {
+      const wire = JSON.stringify(message);
+      expect(wire).not.toContain(host.seatToken);
+      expect(wire).not.toContain(guest.seatToken);
+      expect(wire).not.toContain("acceptedCommandIds");
+    }
+
+    const presence = await Promise.all([
+      nextMessageOfType(hostSocketOne, "presence.changed"),
+      nextMessageOfType(hostSocketTwo, "presence.changed"),
+      nextMessageOfType(guestSocket, "presence.changed")
+    ]);
+    expect(presence[0].presence).toEqual([
+      { seatId: host.seatId, connectionCount: 2, online: true },
+      { seatId: guest.seatId, connectionCount: 1, online: true }
+    ]);
+
+    const guestAfterLeave = nextMessageOfType(guestSocket, "room.snapshot");
+    const deleted = await api(`/api/rooms/${host.roomCode}/seats/${host.seatId}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${host.seatToken}` }
+    });
+    expect(deleted.status).toBe(204);
+    await expect(guestAfterLeave).resolves.toMatchObject({
+      type: "room.snapshot",
+      roomVersion: Number(guestUpgrade.roomVersion) + 1,
+      privateState: { seatId: guest.seatId },
+      publicState: {
+        hostSeatId: guest.seatId,
+        seats: [{ seatId: guest.seatId, nickname: "Convergence Guest" }]
+      }
+    });
+    await expect(nextMessageOfType(guestSocket, "presence.changed")).resolves.toMatchObject({
+      presence: [{ seatId: guest.seatId, connectionCount: 1, online: true }]
+    });
+    closeSocket(guestSocket);
+  });
+
+  it("isolates one failed socket send while updating every other connection", async () => {
+    const host = await createRoom("Send Failure Host");
+    const first = await connect(
+      host.roomCode,
+      (await issueTicket(host.roomCode, host.seatToken)).ticket
+    );
+    await nextMessageOfType(first, "presence.changed");
+    const second = await connect(
+      host.roomCode,
+      (await issueTicket(host.roomCode, host.seatToken)).ticket
+    );
+    await Promise.all([
+      nextMessageOfType(first, "presence.changed"),
+      nextMessageOfType(second, "presence.changed")
+    ]);
+
+    const serverSockets = testRooms.state(host.roomCode).getWebSockets();
+    Object.defineProperty(serverSockets[0], "send", {
+      value: () => {
+        throw new Error("simulated send failure");
+      }
+    });
+
+    const survivingSnapshot = nextMessageOfType(second, "room.snapshot");
+    const response = await api(`/api/rooms/${host.roomCode}/join`, {
+      method: "POST",
+      body: JSON.stringify({ nickname: "Still Updated" })
+    });
+    expect(response.status).toBe(201);
+    await expect(survivingSnapshot).resolves.toMatchObject({
+      type: "room.snapshot",
+      publicState: { seats: [{}, { nickname: "Still Updated" }] }
+    });
+    await expect(nextMessageOfType(second, "presence.changed")).resolves.toMatchObject({
+      type: "presence.changed"
+    });
+    closeSocket(first);
+    closeSocket(second);
   });
 });
 

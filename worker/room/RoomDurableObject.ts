@@ -142,6 +142,8 @@ export class RoomDurableObject {
     );
     if (updated === "missing") throw new HttpProtocolError("ROOM_NOT_FOUND");
     if (updated === "expired") throw new HttpProtocolError("ROOM_EXPIRED");
+    this.broadcastSnapshots(updated);
+    this.broadcastPresence(updated);
     return jsonResponse({ roomCode: updated.roomCode, seatId, seatToken: credentials.seatToken }, { status: 201 });
   }
 
@@ -168,7 +170,10 @@ export class RoomDurableObject {
         safeCloseSocket(socket, 4001, "SEAT_LEFT");
       }
     }
-    if (result !== "deleted") this.broadcastPresence(result.room);
+    if (result !== "deleted") {
+      this.broadcastSnapshots(result.room);
+      this.broadcastPresence(result.room);
+    }
     return new Response(null, { status: 204 });
   }
 
@@ -210,7 +215,7 @@ export class RoomDurableObject {
       connectedAt: now
     } satisfies ConnectionAttachment);
     this.ctx.acceptWebSocket(server);
-    server.send(JSON.stringify(this.snapshot(updated, seatId)));
+    this.broadcastSnapshots(updated);
     this.broadcastPresence(updated);
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -347,7 +352,31 @@ export class RoomDurableObject {
   private broadcastPresence(room: PersistedRoom): void {
     const message = JSON.stringify({ type: "presence.changed", presence: this.presence(room) });
     for (const socket of this.ctx.getWebSockets()) {
-      if (socket.readyState === WebSocket.OPEN) socket.send(message);
+      if (socket.readyState !== WebSocket.OPEN) continue;
+      try {
+        socket.send(message);
+      } catch {
+        // A failed peer must not prevent convergence for the others.
+      }
+    }
+  }
+
+  private broadcastSnapshots(room: PersistedRoom): void {
+    const seatIds = new Set(room.seats.map((seat) => seat.seatId));
+    for (const socket of this.ctx.getWebSockets()) {
+      const value = attachment(socket);
+      if (
+        socket.readyState !== WebSocket.OPEN ||
+        value === undefined ||
+        !seatIds.has(value.seatId)
+      ) {
+        continue;
+      }
+      try {
+        socket.send(JSON.stringify(this.snapshot(room, value.seatId)));
+      } catch {
+        // One stale or failed peer must not block the remaining room members.
+      }
     }
   }
 }
