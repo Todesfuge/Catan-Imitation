@@ -462,12 +462,12 @@ Files:
 
 Steps:
 
-- [ ] Write failing tests for strict CSP, same-origin connect policy, safe cache headers, safe structured logs, generic internal errors, rate-limit responses, SPA fallback, health, room creation, and WebSocket upgrade in combined preview.
-- [ ] Run focused Worker/security tests; expect missing-header/log/smoke failures.
-- [ ] Implement security headers and safe structured log records without adding third-party telemetry.
-- [ ] Implement `smoke:worker` against Wrangler local dev and make it fail on an empty React root or non-upgrading room socket.
-- [ ] Run `pnpm test:worker`, `pnpm build:worker`, `pnpm smoke:worker`, and `pnpm exec wrangler deploy --dry-run`; expect all pass.
-- [ ] Commit with `chore: harden Cloudflare multiplayer delivery`.
+- [x] Write failing tests for strict CSP, same-origin connect policy, safe cache headers, safe structured logs, generic internal errors, rate-limit responses, SPA fallback, health, room creation, and WebSocket upgrade in combined preview.
+- [x] Run focused Worker/security tests; expect missing-header/log/smoke failures.
+- [x] Implement security headers and safe structured log records without adding third-party telemetry.
+- [x] Implement `smoke:worker` against Wrangler local dev and make it fail on an empty React root or non-upgrading room socket.
+- [x] Run `pnpm test:worker`, `pnpm build:worker`, `pnpm smoke:worker`, and `pnpm exec wrangler deploy --dry-run`; expect all pass.
+- [x] Commit with `chore: harden Cloudflare multiplayer delivery`.
 
 ### Task 21 (T021) — Verify preview, document production, and retire duplicate hosting
 
