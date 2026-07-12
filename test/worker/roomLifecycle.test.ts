@@ -612,6 +612,7 @@ class TestRoomNamespace {
     if (entry === undefined) {
       const storage = new MemoryStorage();
       const sockets: WebSocket[] = [];
+      const closedSockets = new Set<WebSocket>();
       const closeCalls: Array<{ seatId?: string; code?: number; reason?: string }> = [];
       const state = {
         storage,
@@ -619,7 +620,9 @@ class TestRoomNamespace {
           socket.accept();
           const close = socket.close.bind(socket);
           Object.defineProperty(socket, "close", {
+            configurable: true,
             value: (code?: number, reason?: string) => {
+              closedSockets.add(socket);
               closeCalls.push({
                 seatId: (socket.deserializeAttachment() as { seatId?: string } | null)?.seatId,
                 code,
@@ -630,10 +633,7 @@ class TestRoomNamespace {
           });
           sockets.push(socket);
         },
-        getWebSockets: () => sockets.filter((socket) => {
-          const seatId = (socket.deserializeAttachment() as { seatId?: string } | null)?.seatId;
-          return !closeCalls.some((call) => call.seatId === seatId);
-        }),
+        getWebSockets: () => sockets.filter((socket) => !closedSockets.has(socket)),
         closeCalls
       } as unknown as DurableObjectState;
       entry = { object: new RoomDurableObject(state, {} as Env), state };
@@ -780,6 +780,41 @@ async function nextMessageOfType(
       setTimeout(() => reject(new Error(`timed out waiting for ${type}`)), 500);
     })
   ]);
+}
+
+async function connectAndDrain(
+  openSockets: readonly WebSocket[],
+  roomCode: string,
+  seatToken: string
+): Promise<WebSocket> {
+  const existingPresence = openSockets.map((socket) =>
+    nextMessageOfType(socket, "presence.changed")
+  );
+  const socket = await connect(roomCode, (await issueTicket(roomCode, seatToken)).ticket);
+  await Promise.all([
+    ...existingPresence,
+    nextMessageOfType(socket, "presence.changed")
+  ]);
+  return socket;
+}
+
+function recordMessages(socket: WebSocket): {
+  messages: Record<string, unknown>[];
+  stop: () => void;
+} {
+  const messages: Record<string, unknown>[] = [];
+  const listener = (event: MessageEvent) => {
+    messages.push(JSON.parse(String(event.data)) as Record<string, unknown>);
+  };
+  socket.addEventListener("message", listener);
+  return {
+    messages,
+    stop: () => socket.removeEventListener("message", listener)
+  };
+}
+
+function nextTask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function closeSocket(socket: WebSocket): void {
@@ -1248,6 +1283,142 @@ describe("room membership snapshot convergence", () => {
     });
     closeSocket(first);
     closeSocket(second);
+  });
+
+  it("closes malformed, unknown, and unreadable attachments without blocking healthy tabs", async () => {
+    const host = await createRoom("Recipient Host");
+    const healthyOne = await connectAndDrain([], host.roomCode, host.seatToken);
+    const healthyTwo = await connectAndDrain([healthyOne], host.roomCode, host.seatToken);
+    const malformed = await connectAndDrain(
+      [healthyOne, healthyTwo],
+      host.roomCode,
+      host.seatToken
+    );
+    const unknown = await connectAndDrain(
+      [healthyOne, healthyTwo, malformed],
+      host.roomCode,
+      host.seatToken
+    );
+    const unreadable = await connectAndDrain(
+      [healthyOne, healthyTwo, malformed, unknown],
+      host.roomCode,
+      host.seatToken
+    );
+
+    const guestPresence = [healthyOne, healthyTwo, malformed, unknown, unreadable].map(
+      (socket) => nextMessageOfType(socket, "presence.changed")
+    );
+    const guest = await joinRoom(host.roomCode, "Recipient Guest");
+    await Promise.all(guestPresence);
+    const guestSocket = await connectAndDrain(
+      [healthyOne, healthyTwo, malformed, unknown, unreadable],
+      host.roomCode,
+      guest.seatToken
+    );
+
+    const serverSockets = testRooms.state(host.roomCode).getWebSockets();
+    serverSockets[2].serializeAttachment({
+      seatId: host.seatId,
+      connectionId: crypto.randomUUID(),
+      connectedAt: Date.now(),
+      extra: "not allowed"
+    });
+    serverSockets[3].serializeAttachment({
+      seatId: "removed-seat",
+      connectionId: crypto.randomUUID(),
+      connectedAt: Date.now()
+    });
+    Object.defineProperty(serverSockets[4], "deserializeAttachment", {
+      value: () => {
+        throw new Error("unreadable attachment");
+      }
+    });
+
+    const malformedMessages = recordMessages(malformed);
+    const unknownMessages = recordMessages(unknown);
+    const unreadableMessages = recordMessages(unreadable);
+    const healthySnapshots = [healthyOne, healthyTwo, guestSocket].map((socket) =>
+      nextMessageOfType(socket, "room.snapshot")
+    );
+    const response = await api(`/api/rooms/${host.roomCode}/join`, {
+      method: "POST",
+      body: JSON.stringify({ nickname: "Recipient Third" })
+    });
+    expect(response.status).toBe(201);
+    await Promise.all(healthySnapshots);
+    const healthyPresence = await Promise.all(
+      [healthyOne, healthyTwo, guestSocket].map((socket) =>
+        nextMessageOfType(socket, "presence.changed")
+      )
+    );
+    expect(healthyPresence[0].presence).toEqual([
+      { seatId: host.seatId, connectionCount: 2, online: true },
+      { seatId: guest.seatId, connectionCount: 1, online: true },
+      { seatId: expect.any(String), connectionCount: 0, online: false }
+    ]);
+    await nextTask();
+    expect(malformedMessages.messages).toEqual([]);
+    expect(unknownMessages.messages).toEqual([]);
+    expect(unreadableMessages.messages).toEqual([]);
+    malformedMessages.stop();
+    unknownMessages.stop();
+    unreadableMessages.stop();
+
+    const closeCalls = (testRooms.state(host.roomCode) as unknown as {
+      closeCalls: Array<{ seatId?: string; code?: number; reason?: string }>;
+    }).closeCalls;
+    expect(closeCalls).toContainEqual({
+      seatId: host.seatId,
+      code: 4003,
+      reason: "INVALID_ATTACHMENT"
+    });
+    expect(closeCalls).toContainEqual({
+      seatId: "removed-seat",
+      code: 4001,
+      reason: "SEAT_LEFT"
+    });
+    closeSocket(healthyOne);
+    closeSocket(healthyTwo);
+    closeSocket(guestSocket);
+  });
+
+  it("excludes a departed peer whose close throws while converging healthy peers", async () => {
+    const host = await createRoom("Departed Host");
+    const hostSocket = await connectAndDrain([], host.roomCode, host.seatToken);
+    const hostJoinPresence = nextMessageOfType(hostSocket, "presence.changed");
+    const guest = await joinRoom(host.roomCode, "Departed Guest");
+    await hostJoinPresence;
+    const guestOne = await connectAndDrain([hostSocket], host.roomCode, guest.seatToken);
+    const guestTwo = await connectAndDrain(
+      [hostSocket, guestOne],
+      host.roomCode,
+      guest.seatToken
+    );
+
+    const serverSockets = testRooms.state(host.roomCode).getWebSockets();
+    Object.defineProperty(serverSockets[2], "close", {
+      value: () => {
+        throw new Error("simulated close failure");
+      }
+    });
+    const departedMessages = recordMessages(guestTwo);
+    const hostSnapshot = nextMessageOfType(hostSocket, "room.snapshot");
+    const response = await api(`/api/rooms/${host.roomCode}/seats/${guest.seatId}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${guest.seatToken}` }
+    });
+    expect(response.status).toBe(204);
+    await expect(hostSnapshot).resolves.toMatchObject({
+      publicState: { seats: [{ seatId: host.seatId }] }
+    });
+    await expect(nextMessageOfType(hostSocket, "presence.changed")).resolves.toMatchObject({
+      presence: [{ seatId: host.seatId, connectionCount: 1, online: true }]
+    });
+    await nextTask();
+    expect(departedMessages.messages).toEqual([]);
+    departedMessages.stop();
+    closeSocket(hostSocket);
+    closeSocket(guestTwo);
   });
 });
 

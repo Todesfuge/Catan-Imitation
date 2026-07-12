@@ -26,6 +26,11 @@ interface ConnectionAttachment {
   connectedAt: number;
 }
 
+interface ActiveRoomRecipient {
+  socket: WebSocket;
+  attachment: ConnectionAttachment;
+}
+
 function exactNicknameBody(body: Record<string, unknown>): string {
   if (Object.keys(body).length !== 1 || typeof body.nickname !== "string") {
     throw new HttpProtocolError("RULE_VIOLATION");
@@ -59,9 +64,14 @@ function attachment(socket: WebSocket): ConnectionAttachment | undefined {
   const value = socket.deserializeAttachment() as unknown;
   if (value === null || typeof value !== "object") return undefined;
   const candidate = value as Partial<ConnectionAttachment>;
-  return typeof candidate.seatId === "string" &&
+  return Object.keys(value).length === 3 &&
+    Object.hasOwn(value, "seatId") &&
+    Object.hasOwn(value, "connectionId") &&
+    Object.hasOwn(value, "connectedAt") &&
+    typeof candidate.seatId === "string" &&
     typeof candidate.connectionId === "string" &&
-    typeof candidate.connectedAt === "number"
+    typeof candidate.connectedAt === "number" &&
+    Number.isFinite(candidate.connectedAt)
     ? candidate as ConnectionAttachment
     : undefined;
 }
@@ -142,17 +152,15 @@ export class RoomDurableObject {
     );
     if (updated === "missing") throw new HttpProtocolError("ROOM_NOT_FOUND");
     if (updated === "expired") throw new HttpProtocolError("ROOM_EXPIRED");
-    this.broadcastSnapshots(updated);
-    this.broadcastPresence(updated);
+    this.broadcastRoomState(updated);
     return jsonResponse({ roomCode: updated.roomCode, seatId, seatToken: credentials.seatToken }, { status: 201 });
   }
 
   private async leave(request: Request, seatId: string): Promise<Response> {
     const tokenHash = await hashSecret(parseBearerToken(request.headers));
-    const connectedSeatIds = this.ctx.getWebSockets().flatMap((socket) => {
-      const value = attachment(socket);
-      return value && socket.readyState === WebSocket.OPEN ? [value.seatId] : [];
-    });
+    const room = await this.requireRoom();
+    const recipients = this.activeRoomRecipients(room);
+    const connectedSeatIds = recipients.map((recipient) => recipient.attachment.seatId);
     let result: Awaited<ReturnType<RoomStore["leaveLatest"]>>;
     try {
       result = await this.store.leaveLatest(seatId, tokenHash, connectedSeatIds, Date.now());
@@ -165,14 +173,13 @@ export class RoomDurableObject {
     if (result === "missing") throw new HttpProtocolError("ROOM_NOT_FOUND");
     if (result === "expired") throw new HttpProtocolError("ROOM_EXPIRED");
     if (result === "invalid-token") throw new HttpProtocolError("SEAT_TOKEN_INVALID");
-    for (const socket of this.ctx.getWebSockets()) {
-      if (attachment(socket)?.seatId === seatId && socket.readyState === WebSocket.OPEN) {
-        safeCloseSocket(socket, 4001, "SEAT_LEFT");
+    for (const recipient of recipients) {
+      if (recipient.attachment.seatId === seatId) {
+        safeCloseSocket(recipient.socket, 4001, "SEAT_LEFT");
       }
     }
     if (result !== "deleted") {
-      this.broadcastSnapshots(result.room);
-      this.broadcastPresence(result.room);
+      this.broadcastRoomState(result.room);
     }
     return new Response(null, { status: 204 });
   }
@@ -215,8 +222,7 @@ export class RoomDurableObject {
       connectedAt: now
     } satisfies ConnectionAttachment);
     this.ctx.acceptWebSocket(server);
-    this.broadcastSnapshots(updated);
-    this.broadcastPresence(updated);
+    this.broadcastRoomState(updated);
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -235,21 +241,25 @@ export class RoomDurableObject {
   }
 
   private async handleWebSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    const value = attachment(socket);
+    let value: ConnectionAttachment | undefined;
+    try {
+      value = attachment(socket);
+    } catch {
+      value = undefined;
+    }
     if (value === undefined) {
       safeCloseSocket(socket, 4003, "INVALID_ATTACHMENT");
       return;
     }
-    const recipients: CommandRecipient[] = this.ctx.getWebSockets().flatMap((peer) => {
-      const peerAttachment = attachment(peer);
-      if (peer.readyState !== WebSocket.OPEN || peerAttachment === undefined) return [];
-      return [{
-        seatId: peerAttachment.seatId,
-        send: (serverMessage) => peer.send(JSON.stringify(serverMessage)),
-        close: (code, reason) => safeCloseSocket(peer, code, reason)
-      }];
-    });
-    const presence = this.connectedPresence();
+    const room = await this.requireRoom();
+    const activeRecipients = this.activeRoomRecipients(room);
+    if (!activeRecipients.some((recipient) => recipient.socket === socket)) return;
+    const recipients: CommandRecipient[] = activeRecipients.map((recipient) => ({
+      seatId: recipient.attachment.seatId,
+      send: (serverMessage) => recipient.socket.send(JSON.stringify(serverMessage)),
+      close: (code, reason) => safeCloseSocket(recipient.socket, code, reason)
+    }));
+    const presence = this.presence(room, activeRecipients);
     await this.commands.handle({
       seatId: value.seatId,
       rawMessage: typeof message === "string" ? message : "",
@@ -307,8 +317,15 @@ export class RoomDurableObject {
     return result.room;
   }
 
-  private presence(room: PersistedRoom): PresenceEntry[] {
-    const counts = new Map(this.connectedPresence().map((entry) => [entry.seatId, entry.connectionCount]));
+  private presence(
+    room: PersistedRoom,
+    recipients: readonly ActiveRoomRecipient[]
+  ): PresenceEntry[] {
+    const counts = new Map<string, number>();
+    for (const recipient of recipients) {
+      const seatId = recipient.attachment.seatId;
+      counts.set(seatId, (counts.get(seatId) ?? 0) + 1);
+    }
     return [...room.seats]
       .sort((left, right) => left.joinOrder - right.joinOrder)
       .map((seat) => ({
@@ -318,24 +335,38 @@ export class RoomDurableObject {
       }));
   }
 
-  private connectedPresence(): PresenceEntry[] {
-    const counts = new Map<string, number>();
+  private activeRoomRecipients(room: PersistedRoom): ActiveRoomRecipient[] {
+    const seatIds = new Set(room.seats.map((seat) => seat.seatId));
+    const recipients: ActiveRoomRecipient[] = [];
     for (const socket of this.ctx.getWebSockets()) {
-      const value = attachment(socket);
-      if (value && socket.readyState === WebSocket.OPEN) {
-        counts.set(value.seatId, (counts.get(value.seatId) ?? 0) + 1);
+      if (socket.readyState !== WebSocket.OPEN) continue;
+      let value: ConnectionAttachment | undefined;
+      try {
+        value = attachment(socket);
+      } catch {
+        safeCloseSocket(socket, 4003, "INVALID_ATTACHMENT");
+        continue;
       }
+      if (value === undefined) {
+        safeCloseSocket(socket, 4003, "INVALID_ATTACHMENT");
+        continue;
+      }
+      if (!seatIds.has(value.seatId)) {
+        safeCloseSocket(socket, 4001, "SEAT_LEFT");
+        continue;
+      }
+      recipients.push({ socket, attachment: value });
     }
-    return [...counts].map(([seatId, connectionCount]) => ({
-      seatId,
-      connectionCount,
-      online: true
-    }));
+    return recipients;
   }
 
-  private snapshot(room: PersistedRoom, seatId: string): RoomSnapshotMessage {
+  private snapshot(
+    room: PersistedRoom,
+    seatId: string,
+    presence: readonly PresenceEntry[]
+  ): RoomSnapshotMessage {
     const projected = projectRoomView(room, seatId, {
-      connectedSeatIds: this.presence(room).filter((entry) => entry.online).map((entry) => entry.seatId)
+      connectedSeatIds: presence.filter((entry) => entry.online).map((entry) => entry.seatId)
     });
     return {
       type: "room.snapshot",
@@ -345,38 +376,42 @@ export class RoomDurableObject {
       publicState: projected.publicState as unknown as Record<string, unknown>,
       privateState: projected.privateState as unknown as Record<string, unknown>,
       allowedActions: (projected.allowedActions ?? {}) as unknown as Record<string, unknown>,
-      presence: this.presence(room)
+      presence: [...presence]
     };
   }
 
   private broadcastPresence(room: PersistedRoom): void {
-    const message = JSON.stringify({ type: "presence.changed", presence: this.presence(room) });
-    for (const socket of this.ctx.getWebSockets()) {
-      if (socket.readyState !== WebSocket.OPEN) continue;
+    const recipients = this.activeRoomRecipients(room);
+    const presence = this.presence(room, recipients);
+    this.sendPresence(recipients, presence);
+  }
+
+  private sendPresence(
+    recipients: readonly ActiveRoomRecipient[],
+    presence: readonly PresenceEntry[]
+  ): void {
+    const message = JSON.stringify({ type: "presence.changed", presence });
+    for (const recipient of recipients) {
       try {
-        socket.send(message);
+        recipient.socket.send(message);
       } catch {
         // A failed peer must not prevent convergence for the others.
       }
     }
   }
 
-  private broadcastSnapshots(room: PersistedRoom): void {
-    const seatIds = new Set(room.seats.map((seat) => seat.seatId));
-    for (const socket of this.ctx.getWebSockets()) {
-      const value = attachment(socket);
-      if (
-        socket.readyState !== WebSocket.OPEN ||
-        value === undefined ||
-        !seatIds.has(value.seatId)
-      ) {
-        continue;
-      }
+  private broadcastRoomState(room: PersistedRoom): void {
+    const recipients = this.activeRoomRecipients(room);
+    const presence = this.presence(room, recipients);
+    for (const recipient of recipients) {
       try {
-        socket.send(JSON.stringify(this.snapshot(room, value.seatId)));
+        recipient.socket.send(JSON.stringify(
+          this.snapshot(room, recipient.attachment.seatId, presence)
+        ));
       } catch {
         // One stale or failed peer must not block the remaining room members.
       }
     }
+    this.sendPresence(recipients, presence);
   }
 }
