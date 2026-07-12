@@ -90,7 +90,8 @@ function allowedActions(value: unknown, playerIds: ReadonlySet<string>, building
       !availability(turn.buyDevelopmentCard, 0, undefined, ["cost"]) || !resourceMap(turn.buyDevelopmentCard.cost) ||
       !Array.isArray(turn.developmentCards) || turn.developmentCards.length > 4 || !turn.developmentCards.every((card) =>
         object(card) && exact(card, ["count", "enabled", "kind"], ["cardId", "disabledReason"]) &&
-        nonNegativeInt(card.count, 25) && typeof card.enabled === "boolean" && playableDevelopmentKinds.has(card.kind as string) &&
+        nonNegativeInt(card.count, 25) && card.count >= 1 && typeof card.enabled === "boolean" &&
+        (!card.enabled || card.cardId !== undefined) && playableDevelopmentKinds.has(card.kind as string) &&
         (card.cardId === undefined || boundedString(card.cardId)) &&
         (card.disabledReason === undefined || reason(card.disabledReason)))) return false;
   const advertisedKinds = turn.developmentCards.map((card) => card.kind);
@@ -180,10 +181,9 @@ function publicGame(value: unknown): value is PublicGameView {
         !stringArray(setup.order, 8) || setup.order.length !== value.players.length * 2 ||
         !nonNegativeInt(setup.placementIndex, setup.order.length - 1) ||
         (setup.stage !== "settlement" && setup.stage !== "road")) return false;
-    const firstPass = setup.order.slice(0, value.players.length);
-    const secondPass = setup.order.slice(value.players.length);
-    if (!unique(firstPass) || firstPass.some((id) => !playerIds.has(id)) ||
-        secondPass.some((id, index) => id !== firstPass[firstPass.length - index - 1]) ||
+    const firstPass = value.players.map((player) => player.playerId);
+    const expectedOrder = [...firstPass, ...firstPass.slice().reverse()];
+    if (setup.order.some((id, index) => id !== expectedOrder[index]) ||
         value.activePlayerId !== setup.order[setup.placementIndex]) return false;
     if (setup.stage === "settlement") {
       if (setup.pendingSettlement !== undefined) return false;
