@@ -12,6 +12,24 @@ type Snapshot = {
 };
 
 const board = createStandardBoardData().board;
+const productionWireSnapshots = new WeakMap<Page, Snapshot[]>();
+const ticketRequestCounts = new WeakMap<Page, { count: number }>();
+
+async function trackProductionSockets(context: BrowserContext): Promise<void> {
+  await context.addInitScript(() => {
+    const NativeWebSocket = window.WebSocket;
+    const tracked: WebSocket[] = [];
+    const TrackingWebSocket = new Proxy(NativeWebSocket, {
+      construct(target, args) {
+        const socket = Reflect.construct(target, args) as WebSocket;
+        tracked.push(socket);
+        return socket;
+      }
+    });
+    Object.defineProperty(window, "WebSocket", { configurable: true, value: TrackingWebSocket });
+    (window as any).__catanTrackedSockets = tracked;
+  });
+}
 
 function resourceRichSetupTarget(targets: string[]): string | undefined {
   return [...targets].sort((left, right) => {
@@ -24,6 +42,19 @@ function resourceRichSetupTarget(targets: string[]): string | undefined {
 
 async function openOnline(context: BrowserContext, mobile = false): Promise<Page> {
   const page = await context.newPage();
+  const snapshots: Snapshot[] = [];
+  const tickets = { count: 0 };
+  productionWireSnapshots.set(page, snapshots);
+  ticketRequestCounts.set(page, tickets);
+  page.on("request", (request) => {
+    if (request.url().includes("/connection-ticket")) tickets.count += 1;
+  });
+  page.on("websocket", (socket) => socket.on("framereceived", ({ payload }) => {
+    try {
+      const message = JSON.parse(String(payload));
+      if (message.type === "room.snapshot") snapshots.push(message);
+    } catch { /* non-JSON frames are not room snapshots */ }
+  }));
   if (mobile) await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await page.getByRole("button", { name: "Online Game" }).click();
@@ -103,8 +134,15 @@ async function synchronized(pages: Page[]): Promise<Snapshot[]> {
   return Promise.all(pages.map(latestSnapshot));
 }
 
+async function uiMutation(pages: Page[], actor: Page, action: () => Promise<void>): Promise<Snapshot[]> {
+  const before = Math.max(...(await synchronized(pages)).map((snapshot) => snapshot.roomVersion));
+  await action();
+  await expect.poll(async () => (await latestSnapshot(actor)).roomVersion, { timeout: 8_000 }).toBeGreaterThan(before);
+  return synchronized(pages);
+}
+
 async function resolveSeven(pages: Page[]): Promise<boolean> {
-  let sawRobber = false;
+  let completedVictimSteal = false;
   for (let guard = 0; guard < 8; guard += 1) {
     const snapshots = await synchronized(pages);
     const phase = snapshots[0].publicState.game.turnState.phase;
@@ -120,29 +158,52 @@ async function resolveSeven(pages: Page[]): Promise<boolean> {
         discarded[resource] = amount;
         remaining -= amount;
       }
-      await command(pages[index], { type: "DISCARD_FOR_SEVEN", resources: discarded });
+      await uiMutation(pages, pages[index], async () => {
+        const nickname = snapshots[index].publicState.seats.find(
+          (seat: any) => seat.playerId === snapshots[index].privateState.playerId
+        ).nickname;
+        for (const [resource, amount] of Object.entries(discarded)) {
+          await pages[index].getByLabel(`${nickname} ${resource} discard`).fill(String(amount));
+        }
+        await pages[index].getByRole("button", { name: "Submit Discard" }).click();
+      });
       continue;
     }
     if (phase === "awaitingRobberPlacement") {
-      sawRobber = true;
       const index = snapshots.findIndex((snapshot) => snapshot.allowedActions.decisions.robberHex.enabled);
       const hexId = snapshots[index].allowedActions.decisions.robberHex.targets[0];
-      await command(pages[index], { type: "PLACE_ROBBER", hexId });
+      await uiMutation(pages, pages[index], async () => {
+        await pages[index].locator(`[data-robber-target="${hexId}"]`).press("Enter");
+      });
       continue;
     }
     if (phase === "awaitingRobberVictim") {
-      sawRobber = true;
       const index = snapshots.findIndex((snapshot) => snapshot.allowedActions.decisions.robberVictim.enabled);
       const victimId = snapshots[index].allowedActions.decisions.robberVictim.targets[0];
-      await command(pages[index], { type: "STEAL_ROBBER_RESOURCE", victimId });
+      const victimIndex = snapshots.findIndex((snapshot) => snapshot.privateState.playerId === victimId);
+      const count = (resources: Record<string, number>) => Object.values(resources).reduce((sum, amount) => sum + amount, 0);
+      const actorBefore = count(snapshots[index].privateState.resources);
+      const victimBefore = count(snapshots[victimIndex].privateState.resources);
+      const victimName = snapshots[index].publicState.seats.find((seat: any) => seat.playerId === victimId).nickname;
+      const after = await uiMutation(pages, pages[index], async () => {
+        await pages[index].locator('[data-turn-flow="robber-victim"]').getByRole("button", { name: victimName }).click();
+      });
+      expect(after[0].publicState.game.turnState.phase).not.toBe("awaitingRobberVictim");
+      expect(count(after[index].privateState.resources)).toBe(actorBefore + 1);
+      expect(count(after[victimIndex].privateState.resources)).toBe(victimBefore - 1);
+      completedVictimSteal = true;
       continue;
     }
-    return sawRobber;
+    return completedVictimSteal;
   }
   throw new Error("seven flow did not converge");
 }
 
-async function submitAuctionRound(pages: Page[], preferPositive: boolean): Promise<boolean> {
+async function submitAuctionRound(
+  pages: Page[],
+  preferPositive: boolean,
+  onUiBid: (index: number) => void
+): Promise<boolean> {
   let submittedPositive = false;
   for (let index = 0; index < pages.length; index += 1) {
     const snapshots = await synchronized(pages);
@@ -150,14 +211,13 @@ async function submitAuctionRound(pages: Page[], preferPositive: boolean): Promi
     const own = snapshots[index];
     const max = own.allowedActions.sealedBid.maxAmount as number;
     const amount: number = preferPositive && !submittedPositive && max > 0 ? 1 : 0;
-    const updated = await send(pages[index], {
-      type: "auction.submitBid",
-      commandId: crypto.randomUUID(),
-      expectedVersion: own.roomVersion,
-      amount
+    const projectedAfterBid = await uiMutation(pages, pages[index], async () => {
+      await pages[index].getByRole("tab", { name: "Commerce Guild" }).click();
+      await pages[index].getByLabel("Your sealed bid").fill(String(amount));
+      await pages[index].getByRole("button", { name: "Submit sealed bid" }).click();
     });
-    await waitForVersion(pages, updated.roomVersion);
-    const projected = await synchronized(pages);
+    onUiBid(index);
+    const projected = projectedAfterBid;
     const submittedSeatIds = projected[0].publicState.submittedBidSeatIds as string[];
     if (
       projected[0].publicState.guild.gathering.phase === "auction" &&
@@ -178,6 +238,7 @@ async function submitAuctionRound(pages: Page[], preferPositive: boolean): Promi
 test("three real browsers play an authoritative private room and reconnect", async ({ browser }) => {
   test.setTimeout(180_000);
   const contexts = await Promise.all([browser.newContext(), browser.newContext(), browser.newContext()]);
+  await Promise.all(contexts.map(trackProductionSockets));
 
   try {
     const [host, second, third] = await Promise.all([
@@ -213,6 +274,11 @@ test("three real browsers play an authoritative private room and reconnect", asy
     expect(await third.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
     const initial = await Promise.all(pages.map((page) => connectProtocolClient(page, roomCode)));
+    const uiDriven = {
+      setup: new Set<number>(), roll: false, build: false, maritime: false,
+      publish: false, accept: false, endTurn: false, startGathering: false,
+      openAuction: false, sealedBid: new Set<number>()
+    };
     for (const [viewerIndex, snapshot] of initial.entries()) {
       expect(snapshot.lifecycle).toBe("playing");
       expect(snapshot.privateState.resources).toBeTruthy();
@@ -233,18 +299,25 @@ test("three real browsers play an authoritative private room and reconnect", asy
       );
       const settlement = resourceRichSetupTarget(snapshots[activeIndex].allowedActions.setup.settlement.targets);
       expect(settlement).toBeTruthy();
-      const afterSettlement = await command(pages[activeIndex], { type: "PLACE_SETUP_SETTLEMENT", vertexId: settlement });
-      await waitForVersion(pages, afterSettlement.roomVersion);
-      const road = afterSettlement.allowedActions.setup.road.targets[0];
+      let after = await uiMutation(pages, pages[activeIndex], async () => {
+        await pages[activeIndex].locator(`[data-board-action-target="setupSettlement"][aria-label*="${settlement}"]`).press("Enter");
+      });
+      const road = after[activeIndex].allowedActions.setup.road.targets[0];
       expect(road).toBeTruthy();
-      const afterRoad = await command(pages[activeIndex], { type: "PLACE_SETUP_ROAD", edgeId: road });
-      await waitForVersion(pages, afterRoad.roomVersion);
+      after = await uiMutation(pages, pages[activeIndex], async () => {
+        await pages[activeIndex].locator(`[data-board-action-target="setupRoad"][aria-label*="${road}"]`).press("Enter");
+      });
+      uiDriven.setup.add(activeIndex);
     }
 
     const ready = await Promise.all(pages.map(latestSnapshot));
     expect(ready[0].publicState.game.phase).toBe("playing");
     const activeIndex = ready.findIndex((snapshot) => snapshot.privateState.playerId === snapshot.publicState.game.activePlayerId);
-    const rolled = await command(pages[activeIndex], { type: "ROLL_DICE" });
+    const rolledViews = await uiMutation(pages, pages[activeIndex], async () => {
+      await pages[activeIndex].getByRole("button", { name: "Roll Dice" }).click();
+    });
+    uiDriven.roll = true;
+    const rolled = rolledViews[activeIndex];
     expect(rolled.publicState.game.lastDice.first).toBeGreaterThanOrEqual(1);
     expect(rolled.publicState.game.lastDice.second).toBeGreaterThanOrEqual(1);
     expect(rolled.acknowledgedCommandId).toMatch(/^[0-9a-f-]{36}$/i);
@@ -268,11 +341,18 @@ test("three real browsers play an authoritative private room and reconnect", asy
       const auctionOpener = snapshots.findIndex((snapshot) => snapshot.allowedActions.commerce.openAuction.enabled);
       if (auctionOpener >= 0) {
         const tokensBefore = snapshots[0].publicState.game.players.reduce((sum: number, player: any) => sum + player.guildTokens, 0);
-        await command(pages[auctionOpener], { type: "OPEN_AUCTION" });
-        snapshots = await synchronized(pages);
+        snapshots = await uiMutation(pages, pages[auctionOpener], async () => {
+          await pages[auctionOpener].getByRole("tab", { name: "Commerce Guild" }).click();
+          await pages[auctionOpener].getByRole("button", { name: "Open Auctions" }).click();
+        });
+        uiDriven.openAuction = true;
         expect(tokensBefore).toBeGreaterThan(0);
         while (snapshots[0].publicState.guild.gathering.phase === "auction") {
-          const usedPositive = await submitAuctionRound(pages, !positiveAuction);
+          const usedPositive = await submitAuctionRound(
+            pages,
+            !positiveAuction,
+            (index) => uiDriven.sealedBid.add(index)
+          );
           positiveAuction ||= usedPositive;
           zeroBidRound ||= !usedPositive;
           snapshots = await synchronized(pages);
@@ -298,8 +378,13 @@ test("three real browsers play an authoritative private room and reconnect", asy
       if (!builtPiece) {
         const actions = snapshots[playerIndex].allowedActions.turn;
         if (actions.road.enabled && actions.road.targets[0]) {
-          await command(pages[playerIndex], { type: "BUILD_ROAD", edgeId: actions.road.targets[0] });
+          const edgeId = actions.road.targets[0];
+          snapshots = await uiMutation(pages, pages[playerIndex], async () => {
+            await pages[playerIndex].getByRole("button", { name: "Road", exact: true }).click();
+            await pages[playerIndex].locator(`[data-board-action-target="road"][aria-label*="${edgeId}"]`).press("Enter");
+          });
           builtPiece = true;
+          uiDriven.build = true;
         } else if (actions.settlement.enabled && actions.settlement.targets[0]) {
           await command(pages[playerIndex], { type: "BUILD_SETTLEMENT", vertexId: actions.settlement.targets[0] });
           builtPiece = true;
@@ -313,8 +398,13 @@ test("three real browsers play an authoritative private room and reconnect", asy
       if (!maritimeTrade) {
         const trade = snapshots[playerIndex].allowedActions.maritime.trades[0];
         if (snapshots[playerIndex].allowedActions.maritime.enabled && trade?.receives?.[0]) {
-          await command(pages[playerIndex], { type: "MARITIME_TRADE", give: trade.give, receive: trade.receives[0] });
+          snapshots = await uiMutation(pages, pages[playerIndex], async () => {
+            await pages[playerIndex].getByLabel("Maritime give resource").selectOption(trade.give);
+            await pages[playerIndex].getByLabel("Maritime receive resource").selectOption(trade.receives[0]);
+            await pages[playerIndex].getByRole("button", { name: "Maritime", exact: true }).click();
+          });
           maritimeTrade = true;
+          uiDriven.maritime = true;
           snapshots = await synchronized(pages);
         }
       }
@@ -328,17 +418,19 @@ test("three real browsers play an authoritative private room and reconnect", asy
           const recipientResources = snapshots[recipientIndex].privateState.resources as Record<string, number>;
           const requested = Object.keys(recipientResources).find((resource) => recipientResources[resource] > 0);
           if (requested) {
-            const empty = { wood: 0, brick: 0, grain: 0, wool: 0, ore: 0 };
-            await command(pages[playerIndex], {
-              type: "PUBLISH_PLAYER_TRADE",
-              offered: { ...empty, [offered]: 1 },
-              requested: { ...empty, [requested]: 1 }
+            const label = (resource: string) => resource[0].toUpperCase() + resource.slice(1);
+            snapshots = await uiMutation(pages, pages[playerIndex], async () => {
+              await pages[playerIndex].getByLabel(`Offer ${label(offered)}`).fill("1");
+              await pages[playerIndex].getByLabel(`Request ${label(requested)}`).fill("1");
+              await pages[playerIndex].getByRole("button", { name: "Publish Public Offer" }).click();
             });
-            snapshots = await synchronized(pages);
+            uiDriven.publish = true;
             if (snapshots[recipientIndex].allowedActions.publicTrade.accept.enabled) {
-              await command(pages[recipientIndex], { type: "ACCEPT_PLAYER_TRADE" });
+              snapshots = await uiMutation(pages, pages[recipientIndex], async () => {
+                await pages[recipientIndex].getByRole("button", { name: new RegExp("^Accept as ") }).click();
+              });
               publicTrade = true;
-              snapshots = await synchronized(pages);
+              uiDriven.accept = true;
             } else {
               await command(pages[playerIndex], { type: "CANCEL_PLAYER_TRADE" });
               snapshots = await synchronized(pages);
@@ -352,12 +444,18 @@ test("three real browsers play an authoritative private room and reconnect", asy
         0
       );
       if (totalGuildTokens > 0 && snapshots[playerIndex].allowedActions.commerce.startGathering.enabled) {
-        await command(pages[playerIndex], { type: "START_GATHERING" });
-        snapshots = await synchronized(pages);
+        snapshots = await uiMutation(pages, pages[playerIndex], async () => {
+          await pages[playerIndex].getByRole("tab", { name: "Commerce Guild" }).click();
+          await pages[playerIndex].getByRole("button", { name: "Start Gathering" }).click();
+        });
+        uiDriven.startGathering = true;
       }
       snapshots = await synchronized(pages);
       if (snapshots[playerIndex].allowedActions.turn.endTurn.enabled) {
-        await command(pages[playerIndex], { type: "END_TURN" });
+        await uiMutation(pages, pages[playerIndex], async () => {
+          await pages[playerIndex].getByRole("button", { name: "End Turn" }).click();
+        });
+        uiDriven.endTurn = true;
       }
     }
 
@@ -371,25 +469,51 @@ test("three real browsers play an authoritative private room and reconnect", asy
       positiveAuction: true,
       zeroBidRound: true
     });
+    expect({ ...uiDriven, setup: uiDriven.setup.size, sealedBid: uiDriven.sealedBid.size }).toMatchObject({
+      setup: 3, roll: true, build: true, maritime: true, publish: true, accept: true,
+      endTurn: true, startGathering: true, openAuction: true, sealedBid: 3
+    });
 
     const privateViews = await synchronized(pages);
+    const awardedCards = privateViews.flatMap((snapshot, owner) =>
+      (snapshot.privateState.developmentCards as Array<{ id: string; kind: string }>).map((card) => ({ card, owner }))
+    );
+    expect(awardedCards.length).toBeGreaterThan(0);
     for (let owner = 0; owner < privateViews.length; owner += 1) {
-      for (const card of privateViews[owner].privateState.developmentCards as Array<{ id: string }>) {
+      for (const card of privateViews[owner].privateState.developmentCards as Array<{ id: string; kind: string }>) {
+        expect(card.id).toBeTruthy();
+        expect(card.kind).toBeTruthy();
         for (let opponent = 0; opponent < privateViews.length; opponent += 1) {
           if (opponent === owner) continue;
           expect(JSON.stringify(privateViews[opponent])).not.toContain(card.id);
+          expect(JSON.stringify(privateViews[opponent].publicState)).not.toContain(`"cardKind":"${card.kind}"`);
         }
       }
     }
+    expect(JSON.stringify(privateViews[0].publicState.guild.gathering.lastAuctionResult)).toContain("developmentCard");
 
     const retainedCredential = await second.evaluate((code) => localStorage.getItem(`catan.online.seat.v1:${code}`), roomCode);
     expect(retainedCredential).toContain("seatToken");
-    await second.close();
-    const rebuilt = await contexts[1].newPage();
-    await rebuilt.goto("/");
-    const recovered = await connectProtocolClient(rebuilt, roomCode);
+    await second.evaluate(() => (window as any).__catanE2E.socket.close(1000, "observer complete"));
+    const ticketsBefore = ticketRequestCounts.get(second)!.count;
+    const handBefore = await second.locator(".player-card").filter({ hasText: "Second" }).locator(".resource-strip").innerText();
+    await contexts[1].setOffline(true);
+    await second.evaluate(() => {
+      const observer = (window as any).__catanE2E.socket as WebSocket;
+      for (const socket of (window as any).__catanTrackedSockets as WebSocket[]) {
+        if (socket !== observer && socket.readyState < WebSocket.CLOSING) socket.close(1000, "offline test");
+      }
+    });
+    await expect(second.locator(".connection-badge")).toHaveText(/Reconnecting|Offline/, { timeout: 12_000 });
+    await contexts[1].setOffline(false);
+    await expect(second.locator(".connection-badge")).toHaveText("Connected", { timeout: 20_000 });
+    await expect.poll(() => ticketRequestCounts.get(second)!.count, { timeout: 20_000 }).toBeGreaterThan(ticketsBefore);
+    const serverVersion = Math.max(...(await synchronized([host, third])).map((snapshot) => snapshot.roomVersion));
+    await expect.poll(() => productionWireSnapshots.get(second)!.at(-1)?.roomVersion ?? -1, { timeout: 20_000 })
+      .toBeGreaterThanOrEqual(serverVersion);
+    const recovered = productionWireSnapshots.get(second)!.at(-1)!;
     expect(recovered.privateState.seatId).toBe(initial[1].privateState.seatId);
-    expect(recovered.roomVersion).toBeGreaterThanOrEqual(rolled.roomVersion);
+    expect(await second.locator(".player-card").filter({ hasText: "Second" }).locator(".resource-strip").innerText()).toBe(handBefore);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

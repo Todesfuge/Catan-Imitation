@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { chromium } from "@playwright/test";
 
 const port = Number(process.env.CATAN_SMOKE_PORT ?? 8800);
@@ -20,6 +21,20 @@ const wrangler = spawn(
 let output = "";
 wrangler.stdout.on("data", (chunk) => { output += String(chunk); });
 wrangler.stderr.on("data", (chunk) => { output += String(chunk); });
+
+async function withDeadline(promise, milliseconds, label) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out`)), milliseconds);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function waitForHealth() {
   while (!controller.signal.aborted) {
@@ -54,10 +69,21 @@ async function openSocket(page, url) {
 
 async function stopWorker() {
   if (wrangler.exitCode !== null) return;
+  const exited = once(wrangler, "exit");
   if (process.platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(wrangler.pid), "/t", "/f"], { stdio: "ignore" });
+    spawnSync("taskkill", ["/pid", String(wrangler.pid), "/t", "/f"], {
+      stdio: "ignore",
+      timeout: 5_000
+    });
+    await withDeadline(exited, 5_000, "Windows Worker shutdown");
   } else {
     wrangler.kill("SIGTERM");
+    try {
+      await withDeadline(exited, 5_000, "Worker SIGTERM shutdown");
+    } catch {
+      wrangler.kill("SIGKILL");
+      await withDeadline(exited, 5_000, "Worker SIGKILL shutdown");
+    }
   }
 }
 
@@ -86,7 +112,7 @@ try {
   });
   if (ticketResponse.status !== 201) throw new Error(`ticket request failed: ${ticketResponse.status}`);
   const { ticket } = await ticketResponse.json();
-  browser = await chromium.launch({ headless: true });
+  browser = await withDeadline(chromium.launch({ headless: true }), 10_000, "Chromium launch");
   const page = await browser.newPage();
   await page.goto(origin);
   const message = await openSocket(page,
@@ -98,6 +124,9 @@ try {
   console.log("Worker smoke passed: health, SPA assets, room API, ticket exchange, and WebSocket snapshot.");
 } finally {
   clearTimeout(timeout);
-  await browser?.close();
-  await stopWorker();
+  try {
+    if (browser) await withDeadline(browser.close(), 5_000, "Chromium close");
+  } finally {
+    await stopWorker();
+  }
 }

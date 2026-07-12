@@ -130,7 +130,7 @@ function allowedActions(value: unknown, playerIds: ReadonlySet<string>, building
       !availability(value.publicTrade.publish, 0, undefined, ["maxOfferResources"]) || !resourceMap(value.publicTrade.publish.maxOfferResources) ||
       !availability(value.publicTrade.cancel, 0) || !availability(value.publicTrade.accept, 0) ||
       !object(value.sealedBid) || !exact(value.sealedBid, ["enabled", "round", "maxAmount", "submitted"], ["disabledReason"]) ||
-      typeof value.sealedBid.enabled !== "boolean" || !nonNegativeInt(value.sealedBid.round, 3) || !nonNegativeInt(value.sealedBid.maxAmount) ||
+      typeof value.sealedBid.enabled !== "boolean" || !nonNegativeInt(value.sealedBid.round, 4) || !nonNegativeInt(value.sealedBid.maxAmount) ||
       typeof value.sealedBid.submitted !== "boolean" || (value.sealedBid.disabledReason !== undefined && !reason(value.sealedBid.disabledReason))) return false;
   return true;
 }
@@ -209,7 +209,9 @@ function publicGuild(value: unknown, playerIds: ReadonlySet<string>): value is P
       !value.tradeSlots.every((slot) => object(slot) && exact(slot, ["id", "requires", "tokenReward"]) && boundedString(slot.id) && resourceCost(slot.requires) && nonNegativeInt(slot.tokenReward)) ||
       !stringArray(value.usedTradePlayerIds, 4) || !value.usedTradePlayerIds.every((id) => playerIds.has(id)) || !object(value.gathering) ||
       !exact(value.gathering, ["phase", "auctionRound", "auctionResults"], ["lastAuctionResult"]) || !gatheringPhases.has(value.gathering.phase as string) ||
-      !nonNegativeInt(value.gathering.auctionRound, 3) || !Array.isArray(value.gathering.auctionResults) || value.gathering.auctionResults.length > 3) return false;
+      !nonNegativeInt(value.gathering.auctionRound, 4) ||
+      (value.gathering.phase === "auction" && (value.gathering.auctionRound as number) > 3) ||
+      !Array.isArray(value.gathering.auctionResults) || value.gathering.auctionResults.length > 3) return false;
   const outcome = (candidate: unknown) => object(candidate) && exact(candidate, ["kind"], ["resourceCardCount"]) &&
     (candidate.kind === "voucher" || candidate.kind === "developmentCard" || (candidate.kind === "resources" && nonNegativeInt(candidate.resourceCardCount, 5)));
   if (!value.gathering.auctionResults.every(outcome)) return false;

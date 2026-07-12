@@ -726,6 +726,7 @@ describe("caller-specific room projection privacy", () => {
 
     const active = projectRoomView(room, "seat-1").allowedActions!;
     const bidder = projectRoomView(room, "seat-3").allowedActions!;
+    const zeroTokenBidder = projectRoomView(room, "seat-4").allowedActions!;
 
     expect(active.setup.settlement.disabledReason).toEqual({ code: "SETUP_NOT_ACTIVE" });
     expect(active.turn.endTurn.enabled).toBe(true);
@@ -750,6 +751,12 @@ describe("caller-specific room projection privacy", () => {
       enabled: true,
       round: 2,
       maxAmount: 3,
+      submitted: false
+    });
+    expect(zeroTokenBidder.sealedBid).toEqual({
+      enabled: true,
+      round: 2,
+      maxAmount: 0,
       submitted: false
     });
     expect(JSON.stringify(bidder)).not.toContain("765432");

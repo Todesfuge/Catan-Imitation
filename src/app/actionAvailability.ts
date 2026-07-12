@@ -342,9 +342,7 @@ export function getSealedBidAvailabilityFact(
       ? { code: "AUCTION_NOT_OPEN" as const }
       : submitted
         ? { code: "BID_ALREADY_SUBMITTED" as const }
-        : player.guildTokens === 0
-          ? { code: "NO_GUILD_TOKENS" as const }
-          : undefined;
+        : undefined;
   return {
     enabled: !disabledReason,
     round,

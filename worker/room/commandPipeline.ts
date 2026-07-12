@@ -144,7 +144,7 @@ function acceptedMatchRoom(
     throw new RoomLifecycleError("ROOM_ALREADY_STARTED");
   }
   const matchState = execute(room.matchState, trustedCommand(message.command, seat.playerId), context);
-  return {
+  const nextRoom: PersistedRoom = {
     ...room,
     lifecycle: matchState.game.phase === "gameOver" ? "finished" : "playing",
     matchState,
@@ -152,6 +152,17 @@ function acceptedMatchRoom(
     lastActivityAt: now,
     expiresAt: now + ROOM_RETENTION_MS
   };
+  if (matchState.guild.gathering.phase === "auction") {
+    const round = matchState.guild.gathering.auctionRound;
+    return {
+      ...nextRoom,
+      pendingAuction: room.pendingAuction?.round === round
+        ? room.pendingAuction
+        : { round, bidsBySeatId: {} }
+    };
+  }
+  const { pendingAuction: _clearedAuction, ...withoutPendingAuction } = nextRoom;
+  return withoutPendingAuction;
 }
 
 function acceptedAuctionRoom(
@@ -201,7 +212,7 @@ function acceptedAuctionRoom(
   }));
   const { pendingAuction: _clearedSecret, ...clearedRoom } = room;
   const resolved = execute(match, { type: "RESOLVE_AUCTION", bids }, context);
-  return {
+  const nextRoom: PersistedRoom = {
     ...clearedRoom,
     lifecycle: resolved.game.phase === "gameOver" ? "finished" : "playing",
     matchState: resolved,
@@ -209,6 +220,15 @@ function acceptedAuctionRoom(
     lastActivityAt: now,
     expiresAt: now + ROOM_RETENTION_MS
   };
+  return resolved.guild.gathering.phase === "auction"
+    ? {
+        ...nextRoom,
+        pendingAuction: {
+          round: resolved.guild.gathering.auctionRound,
+          bidsBySeatId: {}
+        }
+      }
+    : nextRoom;
 }
 
 function executeMessage(

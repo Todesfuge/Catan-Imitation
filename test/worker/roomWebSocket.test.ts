@@ -545,6 +545,68 @@ describe("authoritative room command pipeline", () => {
     }
   });
 
+  it("opens an immediately UI-submittable sealed auction and clears stale pending input outside auction", async () => {
+    const initial = playingRoom();
+    initial.matchState = {
+      ...initial.matchState!,
+      game: {
+        ...initial.matchState!.game,
+        phase: "playing",
+        turnState: { phase: "action", pendingDiscards: {}, developmentCardPlayed: false },
+        players: initial.matchState!.game.players.map((player, index) => ({
+          ...player,
+          guildTokens: index === 0 ? 1 : 0
+        }))
+      },
+      guild: {
+        ...initial.matchState!.guild,
+        gathering: { phase: "redemption", redemptions: {}, auctionRound: 1, auctionResults: [] }
+      }
+    };
+    const store = new MemoryCommandStore(initial);
+    const peers = recipients("seat-1", "seat-2", "seat-3");
+    const pipeline = createCommandPipeline({ store, createExecutionContext: () => context });
+
+    await pipeline.handle({
+      seatId: "seat-1",
+      rawMessage: JSON.stringify({
+        type: "match.command", commandId: ids[20], expectedVersion: initial.roomVersion,
+        command: { type: "OPEN_AUCTION" }
+      }),
+      now: 200, presence: noPresence, recipients: peers.recipients
+    });
+
+    expect(store.room!.roomVersion).toBe(initial.roomVersion + 1);
+    expect(store.room!.pendingAuction).toEqual({ round: 1, bidsBySeatId: {} });
+    expect(peers.messages.get("seat-1")!.at(-1)).toMatchObject({
+      type: "room.snapshot",
+      allowedActions: { sealedBid: { enabled: true, round: 1, submitted: false, maxAmount: 1 } }
+    });
+
+    store.room = {
+      ...store.room!,
+      pendingAuction: { round: 1, bidsBySeatId: { "seat-1": 1 } },
+      matchState: {
+        ...store.room!.matchState!,
+        guild: {
+          ...store.room!.matchState!.guild,
+          gathering: { phase: "complete", redemptions: {}, auctionRound: 1, auctionResults: [] }
+        }
+      }
+    };
+    const beforeEnd = store.room.roomVersion;
+    await pipeline.handle({
+      seatId: "seat-1",
+      rawMessage: JSON.stringify({
+        type: "match.command", commandId: ids[21], expectedVersion: beforeEnd,
+        command: { type: "END_TURN" }
+      }),
+      now: 201, presence: noPresence, recipients: peers.recipients
+    });
+    expect(store.room!.roomVersion).toBe(beforeEnd + 1);
+    expect(store.room!.pendingAuction).toBeUndefined();
+  });
+
   it("rejects unaffordable bids without changing auction state or leaking the amount", async () => {
     const initial = auctionRoom();
     const store = new MemoryCommandStore(initial);
@@ -564,7 +626,7 @@ describe("authoritative room command pipeline", () => {
     expect(JSON.stringify(peers.messages)).not.toContain("exceeds");
   });
 
-  it("resolves an all-zero round once, clears sealed bids before projection, and advances without randomness", async () => {
+  it("resolves an all-zero round once, opens the next empty round, and advances without randomness", async () => {
     const store = new MemoryCommandStore(auctionRoom());
     const peers = recipients("seat-1", "seat-2", "seat-3");
     const execute = vi.fn(applyMatchCommand);
@@ -586,13 +648,15 @@ describe("authoritative room command pipeline", () => {
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute.mock.calls[0][1]).toEqual({ type: "RESOLVE_AUCTION", bids: { p1: 0, p2: 0, p3: 0 } });
     expect(random).not.toHaveBeenCalled();
-    expect(store.room!.pendingAuction).toBeUndefined();
+    expect(store.room!.pendingAuction).toEqual({ round: 2, bidsBySeatId: {} });
     expect(store.room!.matchState!.guild.gathering.auctionRound).toBe(2);
     expect(store.room!.matchState!.guild.gathering.phase).toBe("auction");
     for (const messages of peers.messages.values()) {
       const final = messages.at(-1)!;
       expect(final).toMatchObject({
-        type: "room.snapshot", publicState: { submittedBidSeatIds: [] }
+        type: "room.snapshot",
+        publicState: { submittedBidSeatIds: [] },
+        allowedActions: { sealedBid: { enabled: true, round: 2, submitted: false } }
       });
       expect((final as { privateState: Record<string, unknown> }).privateState).not.toHaveProperty("ownPendingBid");
     }
@@ -622,7 +686,7 @@ describe("authoritative room command pipeline", () => {
 
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute.mock.calls[0][1]).toEqual({ type: "RESOLVE_AUCTION", bids: { p1: 1, p2: 2, p3: 1 } });
-    expect(store.room!.pendingAuction).toBeUndefined();
+    expect(store.room!.pendingAuction).toEqual({ round: 2, bidsBySeatId: {} });
     expect(store.room!.matchState!.game.players.find(({ id }) => id === "p2")!.guildTokens).toBe(0);
     expect(store.room!.matchState!.guild.gathering.lastAuctionResult).toMatchObject({
       winnerId: "p2", winningBid: 2

@@ -161,6 +161,29 @@ function expectIncompatibleProjection(snapshot: RoomSnapshotMessage) {
 }
 
 describe("online game projection adapter", () => {
+  it("accepts the completed three-round auction sentinel", () => {
+    const snapshot = snapshotFor();
+    const publicState = snapshot.publicState as unknown as PublicRoomState;
+    publicState.guild!.gathering = {
+      phase: "complete",
+      auctionRound: 4,
+      auctionResults: [
+        { kind: "developmentCard" },
+        { kind: "voucher" },
+        { kind: "resources", resourceCardCount: 2 }
+      ]
+    };
+    (snapshot.allowedActions as unknown as OnlineAllowedActions).sealedBid = {
+      enabled: false,
+      round: 4,
+      maxAmount: 0,
+      submitted: false,
+      disabledReason: { code: "AUCTION_NOT_OPEN" }
+    };
+
+    expect(() => createOnlineGameTableView(state(snapshot))).not.toThrow();
+  });
+
   it("keeps a complete caller-specific snapshot within the 16 KiB protocol limit", () => {
     const serialized = JSON.stringify(snapshotFor());
     expect(new TextEncoder().encode(serialized).byteLength).toBeLessThanOrEqual(MAX_WIRE_BYTES);
