@@ -1,7 +1,7 @@
 # Handoff Source: Cloudflare Online Multiplayer
 
 Date: 2026-07-13
-Current phase: T023 final-review fixes implemented; independent review and controller T022 terminal gates pending
+Current phase: T023 and the T022 controller gate verified; branch-finishing decision pending
 Branch: `codex/online-multiplayer`
 
 ## Current State
@@ -23,7 +23,8 @@ The shared pure match transition owns rules for both modes. The authenticated ro
 - Real preview/production evidence covers rendering, English-default/Chinese-switchable lobby, and room creation.
 - The user-approved substitution combines that remote evidence with the local combined-Worker full three-context API/WebSocket/privacy/reconnect/stored-recovery/responsive suite. No remote three-browser run is claimed.
 - T022 focused evidence and exact matrix/path checks are recorded in the T022 update packet and implementer report.
-- T023 remediation evidence proves 45/45 focused client/lobby tests, 51/51 focused Worker lifecycle tests, main 312/312, Worker 97/97, online E2E 2/2, passing builds/smoke/diff check, and a real three-browser `page.reload()` restoring the same caller-private seat through a fresh ticket without create/join. Saturated authenticated admissions stop later ticket crypto/storage, and legacy-v1 expired excess is normalized before strict bounds. The controller-owned T022 terminal gate remains pending.
+- T023 remediation evidence proves 45/45 focused client/lobby tests, 51/51 focused Worker lifecycle tests, and a real three-browser `page.reload()` restoring the same caller-private seat through a fresh ticket without create/join. Saturated authenticated admissions stop later ticket crypto/storage, and legacy-v1 expired excess is normalized before strict bounds.
+- Independent T023 and repeated whole-branch reviews passed with no remaining findings. The fresh controller gate passed main 312/312, Worker 97/97, browser 31/31, both builds, Worker smoke, Wrangler dry-run, 65/65 matrix and 34/34 cited-path checks, 19 relative Markdown links, the 36-line reducer boundary check, and `git diff --check`.
 
 ## Limits and Rollback
 
@@ -34,7 +35,5 @@ The shared pure match transition owns rules for both modes. The authenticated ro
 
 ## Next Actions
 
-1. Independent review of T023 active-session restoration, persisted ticket bounds, burst admission, and boundary/minimalism effects.
-2. Resolve any Critical/High findings and rerun focused tests.
-3. Controller fresh full gate.
-4. Finishing-branch merge/push/PR decision.
+1. Present the finishing-branch merge/push/PR/keep options.
+2. Execute the user's selected branch-finishing action.

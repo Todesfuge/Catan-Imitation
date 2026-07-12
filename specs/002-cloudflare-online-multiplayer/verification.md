@@ -10,8 +10,8 @@ Release: `https://catan-imitation.catan-imitation.workers.dev/`
 - `pnpm test` includes the `test/domain/` and `test/online/` suites; `pnpm test:worker` includes `test/worker/`; `pnpm test:e2e` includes `test/e2e/`.
 - Browser evidence in `test/e2e/online-multiplayer.spec.ts` runs three isolated browser contexts against the locally combined Worker. It is not described as a remote three-browser run.
 - T021 production acceptance uses the user-approved substitution recorded in `.codex/worklog/002-cloudflare-online-multiplayer/updates/2026-07-12-cloudflare-release.md`: the complete local combined-Worker three-context API/WebSocket/privacy/reconnect/stored-recovery/responsive suite, plus real preview/production rendering, bilingual lobby, and room creation.
-- Counts below are the released T021 gate: main 307/307, Worker 91/91, browser 31/31. The T022 controller owns the fresh terminal full gate.
-- T023 remediation GREEN evidence adds 45/45 client/lobby tests, 51/51 room-lifecycle tests, full main 312/312, full Worker 97/97, online E2E 2/2, and a passing focused real three-browser `page.reload()` scenario. These counts do not replace the controller-owned T022 terminal gate.
+- Released T021 evidence remains main 307/307, Worker 91/91, and browser 31/31. The fresh T022 controller gate passed main 312/312, Worker 97/97, and browser 31/31, plus both builds, Worker smoke, Wrangler dry-run, content/link/matrix checks, and diff check.
+- T023 remediation evidence includes 45/45 focused client/lobby tests, 51/51 focused room-lifecycle tests, and a passing focused real three-browser `page.reload()` scenario. Independent T023 and whole-branch reviews are approved with no remaining findings.
 
 ## Mode and Lobby
 
@@ -134,4 +134,4 @@ Release: `https://catan-imitation.catan-imitation.workers.dev/`
 
 ## Convergence Result
 
-All 65 numbered requirements have concrete automated or approved combined/manual evidence. The T022 whole-branch review found refresh-recovery and ticket-availability gaps; T023 implements and focuses tests for both. T022's independent re-review, fresh full final gate, and finishing-branch decision remain open and controller-owned.
+All 65 numbered requirements have concrete automated or approved combined/manual evidence. T023 closed the refresh-recovery and ticket-availability gaps found by the first whole-branch review. Independent T023 re-review and the repeated whole-branch review passed with no remaining Critical, Important, or Minor findings; the fresh T022 full final gate passed. Only the user-owned finishing-branch decision remains open.

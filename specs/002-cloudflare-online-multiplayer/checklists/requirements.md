@@ -53,14 +53,14 @@ The written specification is complete enough for user review and subsequent tech
 
 ## Implementation and Release Status
 
-Convergence evidence mapped: 2026-07-13
+Convergence independently verified: 2026-07-13
 
 - [x] OM-001 through OM-065 each have one explicit row with concrete evidence in `../verification.md`.
 - [x] The released production address, combined Worker architecture, anonymous-seat limitation, 24-hour expiry, rollback, and optional enhancements are recorded in `../handoff.md`.
 - [x] The T021 release gate passed 307 main, 91 Worker, and 31 browser tests plus both builds, local Worker smoke, Wrangler dry-run, content/link checks, and diff check.
 - [x] The approved evidence-substitution waiver is explicit and is not described as a remote three-browser run.
-- [ ] T022 independent implementation review is pending controller execution.
-- [ ] T022 fresh full final gate is pending controller execution.
+- [x] T022 independent implementation review passed with no remaining Critical, Important, or Minor findings.
+- [x] T022 fresh full final gate passed: main 312/312, Worker 97/97, browser 31/31, both builds, Worker smoke, Wrangler dry-run, content/link/matrix checks, and diff check.
 - [ ] T022 finishing-branch decision is pending controller execution.
 
-The specification-quality checks above remain a record of the approved requirements. The release is live, while the three unchecked items accurately preserve the controller-owned terminal convergence gates.
+The specification-quality checks above remain a record of the approved requirements. The release is live and independently verified; only the user-owned branch-finishing decision remains open.

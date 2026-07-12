@@ -3,7 +3,7 @@
 Feature: `002-cloudflare-online-multiplayer`
 Source specification: `spec.md`
 Technical plan: `plan.md`
-Status: T023 final-review fixes implemented; independent review, T022 final gate, and branch finishing pending
+Status: T023 complete; T022 independent review and fresh final gate passed; branch-finishing decision pending
 
 ## Execution Rules
 
@@ -509,10 +509,10 @@ Files:
 Steps:
 
 - [x] Map every OM requirement to passing automated or manual evidence and append any missing convergence tasks without renumbering prior tasks.
-- [ ] Run independent implementation review for domain boundaries, privacy, Durable Object correctness, client recovery, accessibility, and avoidable complexity.
-- [ ] Resolve all critical/high findings and rerun affected focused tests.
-- [ ] Run the final gate: `pnpm test`, `pnpm test:worker`, `pnpm test:e2e`, `pnpm build`, `pnpm build:worker`, `pnpm smoke:worker`, `pnpm exec wrangler deploy --dry-run`, and `git diff --check`.
-- [ ] Update task/checklist/spec status only after fresh evidence exists.
+- [x] Run independent implementation review for domain boundaries, privacy, Durable Object correctness, client recovery, accessibility, and avoidable complexity.
+- [x] Resolve all critical/high findings and rerun affected focused tests.
+- [x] Run the final gate: `pnpm test`, `pnpm test:worker`, `pnpm test:e2e`, `pnpm build`, `pnpm build:worker`, `pnpm smoke:worker`, `pnpm exec wrangler deploy --dry-run`, and `git diff --check`.
+- [x] Update task/checklist/spec status only after fresh evidence exists.
 - [x] Prepare the external handoff with production URL, architecture, verification, known anonymous-seat limitation, rollback, and remaining optional enhancements.
 - [ ] Use the finishing-branch workflow to offer merge/push/PR options.
 
@@ -535,7 +535,7 @@ Steps:
 - [x] Delete the unused direct crypto random-source factory.
 - [x] Run focused client/lobby/Worker tests and the real three-browser `page.reload()` scenario.
 - [x] Remediate saturated-store admission accounting and schema-v1 expired-ticket read normalization from independent review.
-- [ ] Obtain independent review and leave the T022 terminal final gate to the controller.
+- [x] Obtain independent review and leave the T022 terminal final gate to the controller.
 
 ## Requirement Coverage Map
 

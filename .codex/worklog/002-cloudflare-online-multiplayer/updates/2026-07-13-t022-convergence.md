@@ -28,7 +28,7 @@ Converge the released feature against every numbered requirement, preserve evide
 
 - `specs/002-cloudflare-online-multiplayer/verification.md`: requirement-level evidence matrix.
 - `specs/002-cloudflare-online-multiplayer/handoff.md`: team-facing release handoff.
-- `spec.md`, `tasks.md`, and `checklists/requirements.md`: released/convergence state, with controller-owned terminal gates left open.
+- `spec.md`, `tasks.md`, and `checklists/requirements.md`: independently verified convergence state, with only the user-owned branch-finishing decision left open.
 
 ## Decisions
 
@@ -48,15 +48,17 @@ Converge the released feature against every numbered requirement, preserve evide
 - `git diff --check` passed with only Windows LF-to-CRLF notices.
 - T023 RED: client storage 4 failed/27 passed; lobby 2 failed/12 passed; Worker lifecycle 3 failed/45 passed; real three-browser reload 1/1 failed because `.online-game-shell` disappeared after refresh.
 - T023 review-remediation GREEN: client/lobby 45/45; Worker lifecycle 51/51; main 312/312; Worker 97/97; online E2E 2/2; builds/smoke passed; real three-browser reload/reconnect scenario 1/1 passed. Saturated authenticated 429s stop before later crypto/storage, and legacy-v1 records normalize expired excess before strict bounds.
-- T023 implementer regression gates and exact current counts are in `.superpowers/sdd/reports/T023-recovery-ticket-hardening-implementer.md`.
-- The controller still owns independent re-review and the expensive fresh full final T022 gate.
+- T023 implementer regression gates and exact focused counts are in `.superpowers/sdd/reports/T023-recovery-ticket-hardening-implementer.md`.
+- T023 independent re-review and repeated whole-branch review passed with 0 Critical, 0 Important, and 0 Minor findings.
+- Fresh controller T022 gate: main 312/312, Worker 97/97, browser 31/31, `pnpm build`, `pnpm build:worker`, `pnpm smoke:worker`, and Wrangler dry-run passed.
+- Fresh deterministic checks passed: 65/65 matrix IDs exactly once, 34/34 cited repository paths present, 19 tracked relative Markdown links valid, `gameReducer.ts` boundary clean at 36 lines, and `git diff --check` clean.
 
 ## Risks / Follow-ups
 
 - Same-origin anonymous recovery remains intentionally unrecoverable after storage clearing or device change.
 - Remote three-browser and Cloudflare hibernation-callback evidence remain optional strengthening; neither is claimed here.
-- T023 requires independent re-review; T022 independent review, final full gate, and finishing-branch choice remain open.
+- Independent review and the final full gate are complete; only the user-owned finishing-branch choice remains open.
 
 ## Handoff
 
-Use `specs/002-cloudflare-online-multiplayer/handoff.md`, `verification.md`, and the T023 implementer report; controller proceeds to independent review and the fresh final gate.
+Use `specs/002-cloudflare-online-multiplayer/handoff.md`, `verification.md`, and the T023 review reports; controller proceeds to the finishing-branch options.
