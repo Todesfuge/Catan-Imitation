@@ -3,7 +3,7 @@
 Feature: `002-cloudflare-online-multiplayer`
 Source specification: `spec.md`
 Technical plan: `plan.md`
-Status: Ready for implementation; artifact analysis passed with no critical or high findings
+Status: Implementation released; T022 controller review, final gate, and branch finishing pending
 
 ## Execution Rules
 
@@ -261,7 +261,7 @@ Steps:
 - [x] Run the focused suite; expect all pass.
 - [x] Commit with `feat: connect authenticated room sockets`.
 
-### Task 12 (T012) — Implement expiry alarms and recovery after eviction
+### Task 12 (T012) — Implement expiry alarms and recovery in a fresh Durable Object instance
 
 Requirements: OM-016 through OM-021, OM-042, OM-052, OM-059
 
@@ -273,7 +273,7 @@ Files:
 
 Steps:
 
-- [x] Write failing tests using the Workers eviction helper to prove lobby/match/tickets/pending bids survive instance eviction, connected rooms defer expiry, disconnected rooms delete at 24 hours, and expired rooms return `ROOM_EXPIRED`.
+- [x] Add tests proving lobby/match/tickets/pending bids recover in a fresh Durable Object instance over the same persisted storage and proving through the production alarm handler that connected rooms defer expiry, disconnected rooms delete at 24 hours, and expired rooms return `ROOM_EXPIRED`; this test environment exercised neither a Workers eviction helper nor a Cloudflare hibernation callback.
 - [x] Run the focused Worker suite; expect recovery/alarm failures.
 - [x] Implement constructor-safe loading, alarm scheduling/deletion, open-socket deferral, and terminal expiry broadcasts without timer-based in-memory state.
 - [x] Run the focused suite; expect all pass.
@@ -508,12 +508,12 @@ Files:
 
 Steps:
 
-- [ ] Map every OM requirement to passing automated or manual evidence and append any missing convergence tasks without renumbering prior tasks.
+- [x] Map every OM requirement to passing automated or manual evidence and append any missing convergence tasks without renumbering prior tasks.
 - [ ] Run independent implementation review for domain boundaries, privacy, Durable Object correctness, client recovery, accessibility, and avoidable complexity.
 - [ ] Resolve all critical/high findings and rerun affected focused tests.
 - [ ] Run the final gate: `pnpm test`, `pnpm test:worker`, `pnpm test:e2e`, `pnpm build`, `pnpm build:worker`, `pnpm smoke:worker`, `pnpm exec wrangler deploy --dry-run`, and `git diff --check`.
 - [ ] Update task/checklist/spec status only after fresh evidence exists.
-- [ ] Prepare the external handoff with production URL, architecture, verification, known anonymous-seat limitation, rollback, and remaining optional enhancements.
+- [x] Prepare the external handoff with production URL, architecture, verification, known anonymous-seat limitation, rollback, and remaining optional enhancements.
 - [ ] Use the finishing-branch workflow to offer merge/push/PR options.
 
 ## Requirement Coverage Map

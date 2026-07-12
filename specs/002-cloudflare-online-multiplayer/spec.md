@@ -1,8 +1,8 @@
 # Feature Specification: Cloudflare Online Multiplayer
 
 Created: 2026-07-11
-Status: Specification approved; technical planning complete
-Workflow phase: Tasks generated and artifact analysis passed; awaiting execution choice
+Status: Released on Cloudflare Workers; OM-001 through OM-065 have convergence evidence
+Workflow phase: T022 evidence mapping and external handoff complete; controller review, final gate, and branch finishing pending
 
 ## Problem
 
