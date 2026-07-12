@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { chromium } from "@playwright/test";
+import { expectConsumedTicketRejected } from "./smoke-worker-ticket.mjs";
 
 const port = Number(process.env.CATAN_SMOKE_PORT ?? 8800);
 const origin = `http://127.0.0.1:${port}`;
@@ -64,24 +65,6 @@ async function openSocket(page, url) {
       clearTimeout(timer);
       reject(new Error("WebSocket smoke failed"));
     }, { once: true });
-  }), url);
-}
-
-async function expectConsumedTicketRejected(page, url) {
-  return page.evaluate((socketUrl) => new Promise((resolve, reject) => {
-    const socket = new WebSocket(socketUrl);
-    const timer = setTimeout(() => reject(new Error("consumed ticket socket timed out")), 5_000);
-    socket.addEventListener("message", () => {
-      clearTimeout(timer);
-      socket.close();
-      reject(new Error("consumed ticket upgraded twice"));
-    }, { once: true });
-    const rejected = () => {
-      clearTimeout(timer);
-      resolve(true);
-    };
-    socket.addEventListener("error", rejected, { once: true });
-    socket.addEventListener("close", rejected, { once: true });
   }), url);
 }
 
