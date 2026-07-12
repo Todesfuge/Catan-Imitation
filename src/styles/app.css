@@ -1496,6 +1496,22 @@ button.primary {
   }
 }
 
+.avatar-slot-1 {
+  border-color: #f2f2f2;
+}
+
+.avatar-slot-2 {
+  border-color: #ef4444;
+}
+
+.avatar-slot-3 {
+  border-color: #f97316;
+}
+
+.avatar-slot-4 {
+  border-color: #2563eb;
+}
+
 .online-game-shell {
   min-width: 0;
   max-width: 100vw;

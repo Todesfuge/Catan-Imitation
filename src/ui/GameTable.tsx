@@ -501,7 +501,7 @@ function PlayerPanel({ state }: { state: GameTableView }) {
         return (
           <article className={`player-card ${active ? "active" : ""}`} key={player.id}>
             <div className="player-main">
-              <span className="avatar" style={{ borderColor: player.color }}>
+              <span className={`avatar avatar-slot-${displaySlot + 1}`}>
                 {player.name.slice(0, 1)}
               </span>
               <div>

@@ -88,6 +88,8 @@ describe("shared game-table presentation boundary", () => {
     expect(view.controlledPlayers[0]?.resources).not.toBe(state.game.players[0]?.resources);
     expect(view.game.players.every((player) => !("privateResources" in player))).toBe(true);
     expect(html).toContain('class="game-shell"');
+    expect(html).toContain('class="avatar avatar-slot-1"');
+    expect(html).not.toContain('style="border-color:');
     expect(html).toContain('aria-label="Catan board"');
     expect(html).toContain('data-action="roll-dice"');
   });
