@@ -108,13 +108,34 @@ function snapshotFor(seatIndex = 0, overrides: { game?: Partial<PublicGameView>;
     type: "room.snapshot", schemaVersion: 1, roomVersion: 41,
     lifecycle: overrides.lifecycle ?? "playing", publicState: publicState as unknown as Record<string, unknown>, privateState: {
       seatId, playerId, seatTokenPresent: true,
-      resources: seatIndex === 0 ? callerResources : { ...zero, wood: seatIndex + 1 },
-      developmentCards: [{ id: seatIndex === 0 ? "caller-knight" : `private-card-seat-${seatIndex + 1}`, kind: seatIndex === 0 ? "knight" : "victoryPoint", purchasedTurn: 0, revealed: false }],
+      resources: seatIndex === 0 ? { ...callerResources } : { ...zero, wood: seatIndex + 1 },
+      developmentCards: [{ id: seatIndex === 0 ? "caller-knight" : `private-card-seat-${seatIndex + 1}`, kind: "knight", purchasedTurn: 0, revealed: false }],
       ...overrides.privateState
     },
     allowedActions: callerActions as unknown as Record<string, unknown>,
     presence: game.players.map((_, index) => ({ seatId: `seat-${index + 1}`, connectionCount: index === 2 ? 0 : 1, online: index !== 2 }))
   };
+}
+
+function setupSnapshot(stage: "settlement" | "road" = "settlement"): RoomSnapshotMessage {
+  const snapshot = snapshotFor();
+  const game = snapshot.publicState.game as unknown as PublicGameView;
+  const order = ["p1", "p2", "p3", "p4", "p4", "p3", "p2", "p1"];
+  game.phase = "setup";
+  if (stage === "settlement") {
+    game.activePlayerId = "p1";
+    game.setup = { order, placementIndex: 0, stage };
+  } else {
+    const pendingBuilding = game.buildings.find((building) => building.ownerId === "p2" && building.kind === "settlement")!;
+    game.activePlayerId = "p2";
+    game.setup = {
+      order,
+      placementIndex: 1,
+      stage,
+      pendingSettlement: { playerId: "p2", vertexId: pendingBuilding.vertexId }
+    };
+  }
+  return snapshot;
 }
 
 function state(snapshot = snapshotFor(), status: OnlineClientState["status"] = "connected"): OnlineClientState {
@@ -476,6 +497,65 @@ describe("online game projection adapter", () => {
       React.createElement(OnlineGame, { roomCode: "234567", state: state(malformed), dispatch: send, reconnect: vi.fn(), onExit: vi.fn(), createCommandId: crypto.randomUUID })
     ));
     expect(html).toContain("This game view is incompatible");
+  });
+
+  it.each([
+    ["duplicate advertised kind", (snapshot: RoomSnapshotMessage) => {
+      const allowed = snapshot.allowedActions as unknown as OnlineAllowedActions;
+      allowed.turn.developmentCards.push({ count: 0, enabled: false, kind: "knight" });
+    }],
+    ["duplicate advertised card id", (snapshot: RoomSnapshotMessage) => {
+      const allowed = snapshot.allowedActions as unknown as OnlineAllowedActions;
+      const privateState = snapshot.privateState as unknown as PrivateSeatState;
+      privateState.developmentCards!.push({ id: "caller-knight", kind: "roadBuilding", purchasedTurn: 0, revealed: false });
+      allowed.turn.developmentCards.push({ cardId: "caller-knight", count: 1, enabled: true, kind: "roadBuilding" });
+    }],
+    ["advertised card kind does not match private card", (snapshot: RoomSnapshotMessage) => {
+      const allowed = snapshot.allowedActions as unknown as OnlineAllowedActions;
+      allowed.turn.developmentCards[0] = { cardId: "caller-knight", count: 1, enabled: true, kind: "roadBuilding" };
+    }]
+  ])("rejects inconsistent development-card availability: %s", (_name, mutate) => {
+    const malformed = snapshotFor();
+    mutate(malformed);
+    const send = vi.fn(() => true);
+    expect(() => createOnlineGameTableView(state(malformed))).toThrow("Invalid online game projection");
+    expect(createOnlineGameTableController(() => state(malformed), send, crypto.randomUUID).dispatch({ type: "turn.roll" })).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it.each(["settlement", "road"] as const)("accepts a legal %s-stage snake setup projection", (stage) => {
+    expect(() => createOnlineGameTableView(state(setupSnapshot(stage)))).not.toThrow();
+  });
+
+  it.each([
+    ["unknown key", (snapshot: RoomSnapshotMessage) => { ((snapshot.publicState.game as unknown as PublicGameView).setup as unknown as Record<string, unknown>).future = true; }],
+    ["invalid stage", (snapshot: RoomSnapshotMessage) => { ((snapshot.publicState.game as unknown as PublicGameView).setup as unknown as Record<string, unknown>).stage = "city"; }],
+    ["unknown player in order", (snapshot: RoomSnapshotMessage) => { (snapshot.publicState.game as unknown as PublicGameView).setup!.order[2] = "p9"; }],
+    ["out-of-range placement index", (snapshot: RoomSnapshotMessage) => { (snapshot.publicState.game as unknown as PublicGameView).setup!.placementIndex = 8; }],
+    ["pending settlement without matching public settlement", (snapshot: RoomSnapshotMessage) => {
+      const game = snapshot.publicState.game as unknown as PublicGameView;
+      const vertexId = createStandardBoardData().board.flatMap((hex) => hex.vertexIds).find((id) => !game.buildings.some((building) => building.vertexId === id))!;
+      game.setup!.pendingSettlement = { playerId: "p2", vertexId };
+    }]
+  ])("rejects malformed setup projection: %s", (_name, mutate) => {
+    const malformed = setupSnapshot("road");
+    mutate(malformed);
+    const send = vi.fn(() => true);
+    expect(() => createOnlineGameTableView(state(malformed))).toThrow("Invalid online game projection");
+    expect(createOnlineGameTableController(() => state(malformed), send, crypto.randomUUID).dispatch({ type: "turn.roll" })).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["setup phase without setup state", (snapshot: RoomSnapshotMessage) => { (snapshot.publicState.game as unknown as PublicGameView).setup = undefined; }],
+    ["playing phase with setup state", (snapshot: RoomSnapshotMessage) => { (snapshot.publicState.game as unknown as PublicGameView).phase = "playing"; }]
+  ])("rejects an invalid game/setup phase boundary: %s", (_name, mutate) => {
+    const malformed = setupSnapshot();
+    mutate(malformed);
+    const send = vi.fn(() => true);
+    expect(() => createOnlineGameTableView(state(malformed))).toThrow("Invalid online game projection");
+    expect(createOnlineGameTableController(() => state(malformed), send, crypto.randomUUID).dispatch({ type: "turn.roll" })).toBe(false);
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("labels only the exact deterministic standard-v1 geometry", () => {

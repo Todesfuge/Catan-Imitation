@@ -79,7 +79,7 @@ function availability(value: unknown, targetMax: number, allowedTargets?: Readon
   return !allowedTargets || value.targets.every((target) => allowedTargets.has(target));
 }
 
-function allowedActions(value: unknown, playerIds: ReadonlySet<string>, buildingIds: ReadonlySet<string>, privateCards: ReadonlySet<string>): value is OnlineAllowedActions {
+function allowedActions(value: unknown, playerIds: ReadonlySet<string>, buildingIds: ReadonlySet<string>, privateCards: ReadonlyMap<string, string>): value is OnlineAllowedActions {
   if (!object(value) || !exact(value, ["turn", "maritime", "commerce", "setup", "decisions", "publicTrade", "sealedBid"]) ||
       !object(value.turn) || !exact(value.turn, ["roll", "endTurn", "road", "settlement", "city", "buyDevelopmentCard", "developmentCards"])) return false;
   const turn = value.turn;
@@ -91,8 +91,12 @@ function allowedActions(value: unknown, playerIds: ReadonlySet<string>, building
       !Array.isArray(turn.developmentCards) || turn.developmentCards.length > 4 || !turn.developmentCards.every((card) =>
         object(card) && exact(card, ["count", "enabled", "kind"], ["cardId", "disabledReason"]) &&
         nonNegativeInt(card.count, 25) && typeof card.enabled === "boolean" && playableDevelopmentKinds.has(card.kind as string) &&
-        (card.cardId === undefined || (boundedString(card.cardId) && privateCards.has(card.cardId))) &&
+        (card.cardId === undefined || boundedString(card.cardId)) &&
         (card.disabledReason === undefined || reason(card.disabledReason)))) return false;
+  const advertisedKinds = turn.developmentCards.map((card) => card.kind);
+  const advertisedCardIds = turn.developmentCards.flatMap((card) => card.cardId === undefined ? [] : [card.cardId]);
+  if (!unique(advertisedKinds) || !unique(advertisedCardIds) || !turn.developmentCards.every((card) =>
+    card.cardId === undefined || privateCards.get(card.cardId) === card.kind)) return false;
 
   if (!object(value.maritime) || !exact(value.maritime, ["enabled", "ratios", "trades"], ["disabledReason"]) ||
       typeof value.maritime.enabled !== "boolean" || (value.maritime.disabledReason !== undefined && !reason(value.maritime.disabledReason)) ||
@@ -169,6 +173,28 @@ function publicGame(value: unknown): value is PublicGameView {
       vertexIds.has(building.vertexId as string) && (building.kind === "settlement" || building.kind === "city")) ||
       !Array.isArray(value.roads) || value.roads.length > 60 || !value.roads.every((road) => object(road) && exact(road, ["ownerId", "edgeId"]) &&
         playerIds.has(road.ownerId as string) && edgeIds.has(road.edgeId as string))) return false;
+  if ((value.phase === "setup") !== (value.setup !== undefined)) return false;
+  if (value.setup !== undefined) {
+    const setup = value.setup;
+    if (!object(setup) || !exact(setup, ["order", "placementIndex", "stage"], ["pendingSettlement"]) ||
+        !stringArray(setup.order, 8) || setup.order.length !== value.players.length * 2 ||
+        !nonNegativeInt(setup.placementIndex, setup.order.length - 1) ||
+        (setup.stage !== "settlement" && setup.stage !== "road")) return false;
+    const firstPass = setup.order.slice(0, value.players.length);
+    const secondPass = setup.order.slice(value.players.length);
+    if (!unique(firstPass) || firstPass.some((id) => !playerIds.has(id)) ||
+        secondPass.some((id, index) => id !== firstPass[firstPass.length - index - 1]) ||
+        value.activePlayerId !== setup.order[setup.placementIndex]) return false;
+    if (setup.stage === "settlement") {
+      if (setup.pendingSettlement !== undefined) return false;
+    } else {
+      const pending = setup.pendingSettlement;
+      if (!object(pending) || !exact(pending, ["playerId", "vertexId"]) ||
+          pending.playerId !== value.activePlayerId || !vertexIds.has(pending.vertexId as string) ||
+          !value.buildings.some((building) => object(building) && building.ownerId === pending.playerId &&
+            building.vertexId === pending.vertexId && building.kind === "settlement")) return false;
+    }
+  }
   if (!Array.isArray(value.log) || value.log.length > 6 || !value.log.every((entry) => object(entry) && exact(entry, ["id"], ["messageKey", "params"]) &&
       boundedString(entry.id) && (entry.messageKey === undefined || publicLogKeys.has(entry.messageKey as string)) &&
       (entry.params === undefined || (object(entry.params) && Object.keys(entry.params).length <= 10 && Object.entries(entry.params).every(([key, param]) =>
@@ -210,12 +236,12 @@ export function parseOnlineGameProjection(snapshot: RoomSnapshotMessage | undefi
   const seatedPlayerIds = new Set(publicState.seats.map((seat) => seat.playerId));
   if (seatIds.size !== publicState.seats.length || seatedPlayerIds.size !== playerIds.size) return undefined;
   const privateSeat = publicState.seats.find((seat) => seat.seatId === snapshot.privateState.seatId);
-  const privateCardIds = new Set(snapshot.privateState.developmentCards?.map((card) => card.id) ?? []);
+  const privateCards = new Map(snapshot.privateState.developmentCards?.map((card) => [card.id, card.kind]) ?? []);
   const buildingIds = new Set(game.buildings.map((building) => building.id));
   if (!privateSeat || privateSeat.playerId !== snapshot.privateState.playerId ||
       !publicState.submittedBidSeatIds.every((id) => seatIds.has(id)) ||
       snapshot.presence.length !== publicState.seats.length || !snapshot.presence.every((entry) => seatIds.has(entry.seatId)) ||
-      !allowedActions(snapshot.allowedActions, playerIds, buildingIds, privateCardIds)) return undefined;
+      !allowedActions(snapshot.allowedActions, playerIds, buildingIds, privateCards)) return undefined;
   const result: ProjectedRoomView = {
     publicState: publicState as unknown as PublicRoomState,
     privateState: snapshot.privateState,
