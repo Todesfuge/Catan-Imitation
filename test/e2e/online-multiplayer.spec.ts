@@ -478,19 +478,20 @@ test("three real browsers play an authoritative private room and reconnect", asy
     const awardedCards = privateViews.flatMap((snapshot, owner) =>
       (snapshot.privateState.developmentCards as Array<{ id: string; kind: string }>).map((card) => ({ card, owner }))
     );
-    expect(awardedCards.length).toBeGreaterThan(0);
+    expect(awardedCards).toHaveLength(1);
     for (let owner = 0; owner < privateViews.length; owner += 1) {
       for (const card of privateViews[owner].privateState.developmentCards as Array<{ id: string; kind: string }>) {
         expect(card.id).toBeTruthy();
         expect(card.kind).toBeTruthy();
         for (let opponent = 0; opponent < privateViews.length; opponent += 1) {
           if (opponent === owner) continue;
-          expect(JSON.stringify(privateViews[opponent])).not.toContain(card.id);
-          expect(JSON.stringify(privateViews[opponent].publicState)).not.toContain(`"cardKind":"${card.kind}"`);
+          const opponentCards = privateViews[opponent].privateState.developmentCards as Array<{ id: string; kind: string }>;
+          expect(opponentCards).not.toContainEqual(expect.objectContaining({ id: card.id }));
+          expect(JSON.stringify(privateViews[opponent].publicState)).not.toContain(card.id);
         }
       }
     }
-    expect(JSON.stringify(privateViews[0].publicState.guild.gathering.lastAuctionResult)).toContain("developmentCard");
+    expect(privateViews[0].publicState.guild.gathering.lastAuctionResult.outcome).toEqual({ kind: "developmentCard" });
 
     const retainedCredential = await second.evaluate((code) => localStorage.getItem(`catan.online.seat.v1:${code}`), roomCode);
     expect(retainedCredential).toContain("seatToken");
