@@ -1,45 +1,39 @@
 # Handoff: Catan Imitation
 
-Date: 2026-07-11
-Scope: Implemented and verified through CR-053 / U069
+Date: 2026-07-13
+Scope: Local game, Cloudflare online multiplayer, and T021 production release documentation
 
 ## Current State
 
-Catan Imitation is a complete local hot-seat React and TypeScript prototype for the approved scope. Core Catan turn, robber, building, development-card, port, scoring, statistics, and Commerce Guild behavior remains intact. The latest update repairs reported readability/scrolling defects, adds public player resource offers, and adds an English-default Simplified Chinese interface and complete Chinese README.
+Catan Imitation supports both a four-player local hot-seat game and anonymous three/four-seat private online rooms. The React client and pure TypeScript rules remain shared. Online rooms run through a same-origin Cloudflare Worker; one Durable Object serializes each room's commands, persistence, WebSockets, expiry, and caller-specific projections.
 
-## Latest Delivery
+## Production Delivery
 
-- Added explicit high-contrast foregrounds to shared turn/robber/development overlays.
-- Made Game Log and Yield Statistics dice results bounded mouse, keyboard, and touch scroll owners at desktop and mobile widths; every log entry remains reachable.
-- Added one public multi-resource offer with action-phase publish/cancel, per-opponent eligibility reasons, atomic accept, stale-inventory rejection, conservation, and end-turn cleanup.
-- Kept exchange arithmetic in `src/domain/rules/playerTrade.ts`; React only edits bundles and dispatches typed commands.
-- Added an accessible Player Trade / Commerce Guild tab host that preserves each panel's state.
-- Added dependency-free `en` / `zh-CN` presentation state with guarded `sessionStorage`, translated core UI/notices, and keyed historical logs.
-- Preserved structured auction winner, bid, round, reward kind, resource names, and quantities across locale changes.
-- Added reciprocal `README.md` and complete `README.zh-CN.md` documentation.
+- Production: `https://catan-imitation.catan-imitation.workers.dev/`
+- Preview accepted for T021 through the approved combined-evidence waiver: `https://catan-imitation-preview.catan-imitation.workers.dev/`
+- Cloudflare Workers Builds is connected to GitHub `main`; build is `pnpm build:worker` and deploy is `pnpm exec wrangler deploy`.
+- The real preview and production pages rendered the React root, English-default Local/Online selector, complete Online lobby, and complete Simplified Chinese lobby.
+- The user confirmed six-character room creation in preview on 2026-07-12 and production on 2026-07-13.
+- GitHub Pages publishing is retired after production acceptance, leaving one production host; the former Pages URL returns HTTP 404.
+- Rollback uses the production Worker's Cloudflare deployment/version history to promote the last verified version.
 
 ## Verification
 
-- `pnpm test`: 23 files / 120 tests passed.
-- `pnpm test:e2e`: 17 production-preview browser tests passed.
-- `pnpm build`: passed.
-- `pnpm build:pages`: passed with `/Catan-Imitation/` base.
-- `pnpm smoke:ui`: passed against the built preview.
-- `git diff --check`: passed.
-- Independent review: no Critical finding; all Important findings fixed, including full log reachability, Chinese dynamic notices/outcomes, complete trade lifecycle coverage, and artifact convergence.
-
-Rendered checks:
-
-- 1280x720 English and Chinese: no overlap or clipping; Player Trade fields and publish action are visible; overlay/log/stat surfaces meet contrast and scroll expectations.
-- 768x1024: Playwright containment passed with board-adjacent actions and no horizontal overflow.
-- 390x844 Chinese: no horizontal overflow, 44px utility/target controls remain usable, and bounded log/stat lists reach their terminal entries.
+- Fresh pre-preview gate: `pnpm test` 307/307, `pnpm test:worker` 91/91, `pnpm test:e2e` 31/31, `pnpm build:worker`, `pnpm smoke:worker`, `pnpm exec wrangler deploy --dry-run`, and `git diff --check` passed.
+- Fresh final T021 gate: `pnpm test` 307/307, `pnpm test:worker` 91/91, `pnpm test:e2e` 31/31, `pnpm build`, `pnpm build:worker`, `pnpm smoke:worker`, `pnpm exec wrangler deploy --dry-run`, link/content checks, and `git diff --check` passed.
+- Independent T021 re-review approved the release with no Critical, Major, or Minor findings.
+- The full online browser suite uses three independent contexts against the combined local Worker and covers private projections, authoritative play, reconnect, and stored-state recovery.
+- Remote T021 evidence covers real rendering, both locales, the complete lobby, and user-accepted room creation. Because the controller network could not execute the full suite against `workers.dev`, the user explicitly approved the local combined-Worker three-context API/WebSocket/privacy/reconnect/stored-recovery/responsive suite as the remaining preview and production acceptance evidence. No remote three-browser run is claimed.
 
 ## Remaining Limits
 
-- Multiplayer remains local hot-seat only; persistence, real-time networking, AI players, and randomized/generalized board generation remain out of scope.
+- Online rooms are anonymous and private, with three or four seats; there are no accounts or public matchmaking.
+- The origin-local bearer credential enables same-origin browser reconnect. Clearing site storage loses the seat, and cross-device recovery is unavailable.
+- Inactive rooms expire after 24 hours; active connections defer expiry. Long-term saved games remain out of scope.
+- AI players and randomized/generalized board generation remain out of scope.
 - The prepared demo remains the initial portfolio view; New Game enters the complete setup flow.
-- Locale persistence is intentionally session-scoped and does not persist game state.
+- Locale persistence is intentionally session-scoped; authoritative online room state is held by the Durable Object.
 
 ## Next Action
 
-Review the completed local branch, then authorize one commit and GitHub push if accepted.
+Proceed to T022 convergence and branch finishing from the completed `docs: publish Cloudflare online multiplayer` release commit.

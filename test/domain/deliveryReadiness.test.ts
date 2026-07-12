@@ -6,30 +6,31 @@ function read(path: string) {
 }
 
 describe("delivery readiness", () => {
-  it("exposes CI, deployment, and UI smoke commands", () => {
+  it("exposes CI, Worker deployment, and UI smoke commands", () => {
     const packageJson = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
     const ci = read(".github/workflows/ci.yml");
-    const pages = read(".github/workflows/pages.yml");
+    const readme = read("README.md");
+    const quickstart = read("specs/002-cloudflare-online-multiplayer/quickstart.md");
     const workspace = read("pnpm-workspace.yaml");
 
     expect(packageJson.scripts["smoke:ui"]).toBe("node scripts/smoke-ui.mjs");
-    expect(packageJson.scripts["build:pages"]).toContain("--base /Catan-Imitation/");
+    expect(packageJson.scripts["build:worker"]).toContain("tsc -p tsconfig.worker.json");
     expect(workspace).toContain("allowBuilds:");
     expect(workspace).toContain("  esbuild: true");
     expect(ci).toContain("node-version: 22");
-    expect(pages).toContain("node-version: 22");
     expect(ci).toContain("      - main");
-    expect(pages).toContain("      - main");
     expect(ci).toContain("pnpm install --frozen-lockfile");
     expect(ci).toContain("pnpm test");
     expect(ci).toContain("pnpm build");
     expect(ci).toContain("pnpm smoke:ui");
-    expect(pages).toContain("actions/configure-pages@v6");
-    expect(pages).toContain("actions/upload-pages-artifact@v4");
-    expect(pages).toContain("actions/deploy-pages@v5");
-    expect(pages).toContain("deploy-pages");
-    expect(pages).toContain("upload-pages-artifact");
-    expect(pages).toContain("pnpm build:pages");
+    expect(existsSync(".github/workflows/pages.yml")).toBe(false);
+    expect(readme).toContain("https://catan-imitation.catan-imitation.workers.dev/");
+    expect(readme).toContain("pnpm build:worker");
+    expect(readme).toContain("pnpm exec wrangler deploy");
+    expect(readme).toContain("pnpm exec wrangler deploy --name catan-imitation-preview");
+    expect(readme).not.toContain("pnpm exec wrangler versions upload");
+    expect(quickstart).toContain("pnpm exec wrangler deploy --name catan-imitation-preview");
+    expect(quickstart).not.toContain("pnpm exec wrangler versions upload");
   });
 
   it("keeps collaboration templates and roadmap visible to reviewers", () => {
@@ -40,7 +41,7 @@ describe("delivery readiness", () => {
     expect(read(".github/ISSUE_TEMPLATE/bug_report.md")).toContain("Expected behavior");
     expect(read(".github/ISSUE_TEMPLATE/feature_request.md")).toContain("Acceptance criteria");
     expect(read("README.md")).toContain("Roadmap");
-    expect(read("README.md")).toContain("https://todesfuge.github.io/Catan-Imitation/");
+    expect(read("README.md")).not.toContain("https://todesfuge.github.io/Catan-Imitation/");
     expect(read("docs/roadmap.md")).toContain("Delivery Automation");
   });
 });

@@ -486,14 +486,14 @@ Files:
 
 Steps:
 
-- [ ] Run the full local release gate before uploading a preview.
-- [ ] Upload a Cloudflare preview and manually verify static assets, API, WebSocket, three seats, refresh reconnect, stored-state recovery, privacy, Local Game, English/Chinese, and responsive widths.
-- [ ] Record the preview URL and evidence in the update packet without storing credentials.
-- [ ] Configure Workers Builds for GitHub `main`, deploy production, and repeat the production smoke/privacy checks.
-- [ ] Update both READMEs and quickstart with the verified production URL and anonymous-seat limitations.
-- [ ] Disable/remove GitHub Pages publishing only after production passes; retain the workflow change in the same reviewed release commit.
-- [ ] Run link/content tests, `git diff --check`, and the full release gate again.
-- [ ] Commit with `docs: publish Cloudflare online multiplayer`.
+- [x] Run the full local release gate before uploading a preview.
+- [x] Upload a Cloudflare preview and manually verify static assets, API, WebSocket, three seats, refresh reconnect, stored-state recovery, privacy, Local Game, English/Chinese, and responsive widths.
+- [x] Record the preview URL and evidence in the update packet without storing credentials.
+- [x] Configure Workers Builds for GitHub `main`, deploy production, and repeat the production smoke/privacy checks.
+- [x] Update both READMEs and quickstart with the verified production URL and anonymous-seat limitations.
+- [x] Disable/remove GitHub Pages publishing only after production passes; retain the workflow change in the same reviewed release commit.
+- [x] Run link/content tests, `git diff --check`, and the full release gate again.
+- [x] Commit with `docs: publish Cloudflare online multiplayer`.
 
 ### Task 22 (T022) — Converge, review, and finish the feature
 
