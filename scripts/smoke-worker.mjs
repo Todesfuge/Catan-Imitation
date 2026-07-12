@@ -67,6 +67,29 @@ async function openSocket(page, url) {
   }), url);
 }
 
+async function expectConsumedTicketRejected(page, url) {
+  return page.evaluate((socketUrl) => new Promise((resolve, reject) => {
+    const socket = new WebSocket(socketUrl);
+    const timer = setTimeout(() => reject(new Error("consumed ticket socket timed out")), 5_000);
+    socket.addEventListener("message", () => {
+      clearTimeout(timer);
+      socket.close();
+      reject(new Error("consumed ticket upgraded twice"));
+    }, { once: true });
+    const rejected = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    socket.addEventListener("error", rejected, { once: true });
+    socket.addEventListener("close", rejected, { once: true });
+  }), url);
+}
+
+function requireHeader(response, name, expected) {
+  const actual = response.headers.get(name);
+  if (actual !== expected) throw new Error(`${name} mismatch: ${actual}`);
+}
+
 async function stopWorker() {
   if (wrangler.exitCode !== null) return;
   const exited = once(wrangler, "exit");
@@ -92,10 +115,24 @@ try {
   const health = await waitForHealth();
   const healthBody = await health.json();
   if (healthBody.ok !== true || healthBody.schemaVersion !== 1) throw new Error("invalid health response");
+  requireHeader(health, "cache-control", "no-store");
+  requireHeader(health, "x-content-type-options", "nosniff");
+  requireHeader(health, "referrer-policy", "no-referrer");
+  requireHeader(health, "x-frame-options", "DENY");
+  const csp = health.headers.get("content-security-policy") ?? "";
+  for (const directive of ["default-src 'self'", "connect-src 'self'", "object-src 'none'", "frame-ancestors 'none'"]) {
+    if (!csp.includes(directive)) throw new Error(`CSP is missing ${directive}`);
+  }
 
   const asset = await fetch(`${origin}/online/lobby`, { signal: controller.signal });
   const html = await asset.text();
   if (!asset.ok || !html.includes('id="root"')) throw new Error("SPA asset fallback is empty");
+  requireHeader(asset, "cache-control", "no-store");
+  const fingerprintedPath = html.match(/(?:src|href)="(\/assets\/[^"]+-[A-Za-z0-9_-]{8,}\.[^"]+)"/)?.[1];
+  if (fingerprintedPath === undefined) throw new Error("SPA shell has no fingerprinted asset");
+  const fingerprinted = await fetch(`${origin}${fingerprintedPath}`, { signal: controller.signal });
+  if (!fingerprinted.ok) throw new Error("fingerprinted asset failed");
+  requireHeader(fingerprinted, "cache-control", "public, max-age=31536000, immutable");
 
   const created = await fetch(`${origin}/api/rooms`, {
     method: "POST",
@@ -114,14 +151,17 @@ try {
   const { ticket } = await ticketResponse.json();
   browser = await withDeadline(chromium.launch({ headless: true }), 10_000, "Chromium launch");
   const page = await browser.newPage();
-  await page.goto(origin);
-  const message = await openSocket(page,
-    `${origin.replace(/^http/, "ws")}/api/rooms/${credential.roomCode}/connect?ticket=${encodeURIComponent(ticket)}`
-  );
+  await page.goto(`${origin}/online/lobby`);
+  await page.locator("#root").waitFor({ state: "visible" });
+  const renderedRoot = await page.locator("#root").evaluate((root) => root.childElementCount > 0 && root.innerHTML.trim().length > 0);
+  if (!renderedRoot) throw new Error("React root did not render content");
+  const socketUrl = `${origin.replace(/^http/, "ws")}/api/rooms/${credential.roomCode}/connect?ticket=${encodeURIComponent(ticket)}`;
+  const message = await openSocket(page, socketUrl);
   if (message.lifecycle !== "lobby" || message.privateState.seatId !== credential.seatId) {
     throw new Error("WebSocket did not return the caller lobby snapshot");
   }
-  console.log("Worker smoke passed: health, SPA assets, room API, ticket exchange, and WebSocket snapshot.");
+  await expectConsumedTicketRejected(page, socketUrl);
+  console.log("Worker smoke passed: security/cache headers, rendered SPA, room API, single-use ticket, and WebSocket snapshot.");
 } finally {
   clearTimeout(timeout);
   try {

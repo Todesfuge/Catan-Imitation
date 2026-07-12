@@ -11,6 +11,7 @@ import {
 import {
   HttpProtocolError,
   assertRequestOrigin,
+  hardenResponse,
   jsonResponse,
   parseBearerToken,
   readJsonObject,
@@ -279,6 +280,43 @@ describe("authorization and origin boundaries", () => {
 });
 
 describe("safe JSON responses", () => {
+  it("applies one strict same-origin response policy to API and SPA responses", () => {
+    const api = hardenResponse(
+      new Request("https://game.example/api/health"),
+      jsonResponse({ ok: true })
+    );
+    const html = hardenResponse(
+      new Request("https://game.example/online/lobby"),
+      new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } })
+    );
+
+    for (const response of [api, html]) {
+      expect(response.headers.get("content-security-policy")).toBe(
+        "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; " +
+        "form-action 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; " +
+        "object-src 'none'; script-src 'self'; style-src 'self'"
+      );
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(response.headers.get("x-frame-options")).toBe("DENY");
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+  });
+
+  it("caches only fingerprinted static assets immutably", () => {
+    const fingerprinted = hardenResponse(
+      new Request("https://game.example/assets/index-DNZDdB7s.js"),
+      new Response("asset", { headers: { "content-type": "text/javascript" } })
+    );
+    const stable = hardenResponse(
+      new Request("https://game.example/favicon.svg"),
+      new Response("asset", { headers: { "content-type": "image/svg+xml" } })
+    );
+
+    expect(fingerprinted.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    expect(stable.headers.get("cache-control")).toBe("no-cache");
+  });
+
   it("sets the stable JSON content type", async () => {
     const response = jsonResponse({ ok: true }, { status: 201 });
 

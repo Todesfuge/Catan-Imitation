@@ -1,4 +1,10 @@
-import { PROTOCOL_SCHEMA_VERSION, type PresenceEntry, type RoomSnapshotMessage } from "../../src/online/protocol";
+import {
+  MAX_WIRE_BYTES,
+  PROTOCOL_SCHEMA_VERSION,
+  type PresenceEntry,
+  type RoomSnapshotMessage,
+  type ServerWebSocketMessage
+} from "../../src/online/protocol";
 import { projectRoomView } from "../../src/online/projectRoomView";
 import { hashSecret, issueConnectionTicket, issueSeatToken } from "../crypto";
 import type { Env } from "../env";
@@ -82,6 +88,20 @@ function safeCloseSocket(socket: WebSocket, code: number, reason: string): void 
     socket.close(code, reason);
   } catch {
     // Continue cleanup or delivery for remaining peers.
+  }
+}
+
+export function sendWebSocketMessage(
+  socket: WebSocket,
+  message: ServerWebSocketMessage
+): boolean {
+  try {
+    const serialized = JSON.stringify(message);
+    if (new TextEncoder().encode(serialized).byteLength > MAX_WIRE_BYTES) return false;
+    socket.send(serialized);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -262,7 +282,7 @@ export class RoomDurableObject {
     if (!activeRecipients.some((recipient) => recipient.socket === socket)) return;
     const recipients: CommandRecipient[] = activeRecipients.map((recipient) => ({
       seatId: recipient.attachment.seatId,
-      send: (serverMessage) => recipient.socket.send(JSON.stringify(serverMessage)),
+      send: (serverMessage) => { sendWebSocketMessage(recipient.socket, serverMessage); },
       close: (code, reason) => safeCloseSocket(recipient.socket, code, reason)
     }));
     const presence = this.presence(room, activeRecipients);
@@ -300,17 +320,13 @@ export class RoomDurableObject {
     );
     if (result.kind !== "expired") return;
 
-    const message = JSON.stringify({
+    const message: ServerWebSocketMessage = {
       type: "room.expired",
       error: { code: "ROOM_EXPIRED", params: {}, retryable: false }
-    });
+    };
     for (const socket of this.ctx.getWebSockets()) {
       if (socket.readyState === WebSocket.OPEN) {
-        try {
-          socket.send(message);
-        } catch {
-          // A failed peer must not prevent terminal delivery to the others.
-        }
+        sendWebSocketMessage(socket, message);
         safeCloseSocket(socket, 4002, "ROOM_EXPIRED");
       }
     }
@@ -396,13 +412,9 @@ export class RoomDurableObject {
     recipients: readonly ActiveRoomRecipient[],
     presence: readonly PresenceEntry[]
   ): void {
-    const message = JSON.stringify({ type: "presence.changed", presence });
+    const message: ServerWebSocketMessage = { type: "presence.changed", presence: [...presence] };
     for (const recipient of recipients) {
-      try {
-        recipient.socket.send(message);
-      } catch {
-        // A failed peer must not prevent convergence for the others.
-      }
+      sendWebSocketMessage(recipient.socket, message);
     }
   }
 
@@ -410,13 +422,10 @@ export class RoomDurableObject {
     const recipients = this.activeRoomRecipients(room);
     const presence = this.presence(room, recipients);
     for (const recipient of recipients) {
-      try {
-        recipient.socket.send(JSON.stringify(
-          this.snapshot(room, recipient.attachment.seatId, presence)
-        ));
-      } catch {
-        // One stale or failed peer must not block the remaining room members.
-      }
+      sendWebSocketMessage(
+        recipient.socket,
+        this.snapshot(room, recipient.attachment.seatId, presence)
+      );
     }
     this.sendPresence(recipients, presence);
   }

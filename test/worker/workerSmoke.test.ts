@@ -11,6 +11,8 @@ describe("combined Worker", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/json");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("content-security-policy")).toContain("connect-src 'self'");
     await expect(response.json()).resolves.toEqual({ ok: true, schemaVersion: 1 });
   });
 
@@ -33,6 +35,8 @@ describe("combined Worker", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(await response.text()).toContain("<title>Catan Imitation</title>");
   });
 });

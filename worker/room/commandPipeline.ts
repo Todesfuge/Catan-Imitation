@@ -16,6 +16,7 @@ import {
 import { projectRoomView } from "../../src/online/projectRoomView";
 import type { OnlineAvailabilityContext } from "../../src/online/allowedActions";
 import { prepareBufferedCryptoRandomSource } from "../crypto";
+import { hashSecret } from "../crypto";
 import { RoomLifecycleError, setLobbyReady, startLobby } from "./roomLifecycle";
 import type { LatestRoomMutation, LatestRoomMutationResult } from "./roomStore";
 import type { PersistedRoom, PersistedSeat } from "./roomTypes";
@@ -62,6 +63,16 @@ interface PipelineDependencies {
     context: OnlineAvailabilityContext
   ) => ReturnType<typeof projectRoomView>;
   rateLimit?: { maximum: number; windowMs: number };
+  audit?: (record: CommandAuditRecord) => void;
+}
+
+export interface CommandAuditRecord {
+  event: "room.command";
+  roomHashPrefix: string;
+  commandType: string;
+  roomVersion: number;
+  durationMs: number;
+  errorCode?: ProtocolErrorCode;
 }
 
 type MutationOutcome =
@@ -301,6 +312,28 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
   const execute = dependencies.executeMatchCommand ?? applyMatchCommand;
   const project = dependencies.projectRoom ?? projectRoomView;
   const rateLimit = dependencies.rateLimit ?? { maximum: 10, windowMs: 2_000 };
+  const audit = dependencies.audit ?? ((record: CommandAuditRecord) => console.log(record));
+
+  async function emitAudit(
+    roomCode: string,
+    roomVersion: number,
+    commandType: string,
+    startedAt: number,
+    errorCode?: ProtocolErrorCode
+  ): Promise<void> {
+    try {
+      audit({
+        event: "room.command",
+        roomHashPrefix: (await hashSecret(roomCode)).slice(0, 12),
+        commandType,
+        roomVersion,
+        durationMs: Math.max(0, performance.now() - startedAt),
+        ...(errorCode === undefined ? {} : { errorCode })
+      });
+    } catch {
+      // Observability must never change command delivery or persisted room state.
+    }
+  }
 
   return {
     async handle(input: CommandPipelineInput): Promise<void> {
@@ -323,7 +356,11 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
 
       const authenticated = await dependencies.store.mutateLatest(input.now, (room) => ({
         kind: "unchanged",
-        value: room.seats.some((seat) => seat.seatId === input.seatId)
+        value: {
+          authorized: room.seats.some((seat) => seat.seatId === input.seatId),
+          roomCode: room.roomCode,
+          roomVersion: room.roomVersion
+        }
       }));
       if (authenticated.kind === "expired") {
         expireRoom(input.recipients);
@@ -331,7 +368,7 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
       }
       const authenticationError: ProtocolErrorCode | undefined =
         authenticated.kind === "missing" ? "ROOM_NOT_FOUND"
-          : !authenticated.value ? "COMMAND_NOT_ALLOWED" : undefined;
+          : !authenticated.value.authorized ? "COMMAND_NOT_ALLOWED" : undefined;
 
       if (authenticationError !== undefined) {
         for (const recipient of input.recipients) {
@@ -351,6 +388,8 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
         return;
       }
       if (parsed.type === "connection.heartbeat") return;
+      const auditStartedAt = performance.now();
+      const commandType = parsed.type === "match.command" ? parsed.command.type : parsed.type;
       const prepareRandom = prepareBufferedCryptoRandomSource();
       const logIds = Array.from({ length: 128 }, () => crypto.randomUUID());
       const preparedContext = dependencies.prepareExecutionContext?.(input.now) ?? (() => {
@@ -438,6 +477,15 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
         });
       } catch (caught) {
         const code = rejectionCode(caught);
+        if (authenticated.kind === "active") {
+          await emitAudit(
+            authenticated.value.roomCode,
+            authenticated.value.roomVersion,
+            commandType,
+            auditStartedAt,
+            code
+          );
+        }
         for (const recipient of input.recipients) {
           if (recipient.seatId === input.seatId) {
             safeSend(recipient, {
@@ -462,6 +510,13 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
       }
 
       const outcome = mutation.value;
+      await emitAudit(
+        mutation.room.roomCode,
+        mutation.room.roomVersion,
+        commandType,
+        auditStartedAt,
+        outcome.kind === "rejected" ? outcome.code : undefined
+      );
       if (outcome.kind === "accepted") {
         for (const recipient of input.recipients) {
           if (!mutation.room.seats.some((seat) => seat.seatId === recipient.seatId)) continue;

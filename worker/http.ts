@@ -7,6 +7,20 @@ import {
 
 const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 const BASE64URL_SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const FINGERPRINTED_ASSET_PATTERN = /(?:^|\/)[^/]+-[A-Za-z0-9_-]{8,}\.[^/]+$/;
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "img-src 'self'",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "script-src 'self'",
+  "style-src 'self'"
+].join("; ");
 
 export class HttpProtocolError extends Error {
   readonly code: ProtocolErrorCode;
@@ -28,6 +42,32 @@ export function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
   headers.set("content-type", JSON_CONTENT_TYPE);
   return new Response(JSON.stringify(body), { ...init, headers });
+}
+
+export function hardenResponse(request: Request, response: Response): Response {
+  if (response.status === 101) return response;
+
+  const headers = new Headers(response.headers);
+  headers.set("content-security-policy", CONTENT_SECURITY_POLICY);
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("referrer-policy", "no-referrer");
+  headers.set("x-frame-options", "DENY");
+
+  const { pathname } = new URL(request.url);
+  const contentType = headers.get("content-type")?.toLowerCase() ?? "";
+  if (pathname.startsWith("/api/") || contentType.includes("text/html")) {
+    headers.set("cache-control", "no-store");
+  } else if (FINGERPRINTED_ASSET_PATTERN.test(pathname)) {
+    headers.set("cache-control", "public, max-age=31536000, immutable");
+  } else {
+    headers.set("cache-control", "no-cache");
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
 }
 
 export function safeErrorResponse(error: unknown): Response {

@@ -12,7 +12,7 @@ import {
 } from "../../worker/room/commandPipeline";
 import { createLobby, joinLobby, setLobbyReady, startLobby } from "../../worker/room/roomLifecycle";
 import type { PersistedRoom } from "../../worker/room/roomTypes";
-import { RoomDurableObject } from "../../worker/room/RoomDurableObject";
+import { RoomDurableObject, sendWebSocketMessage } from "../../worker/room/RoomDurableObject";
 import type { Env } from "../../worker/env";
 import { RoomStore, type LatestRoomMutationResult, type RoomStorage } from "../../worker/room/roomStore";
 
@@ -123,6 +123,110 @@ function command(commandId: string, expectedVersion: number, ready = true): stri
 const noPresence: PresenceEntry[] = [];
 
 describe("authoritative room command pipeline", () => {
+  it("drops oversized UTF-8 messages at the shared outbound socket boundary", () => {
+    const sent: string[] = [];
+    const socket = { send: (value: string) => sent.push(value) } as unknown as WebSocket;
+    const small: ServerWebSocketMessage = { type: "presence.changed", presence: [] };
+    const snapshot = {
+      type: "room.snapshot",
+      schemaVersion: 1,
+      roomVersion: 1,
+      lifecycle: "lobby",
+      publicState: {},
+      privateState: { padding: "" },
+      allowedActions: {},
+      presence: []
+    } as ServerWebSocketMessage;
+    const emptyBytes = new TextEncoder().encode(JSON.stringify(snapshot)).byteLength;
+    const exact = {
+      ...snapshot,
+      privateState: { padding: "x".repeat(MAX_WIRE_BYTES - emptyBytes) }
+    } as ServerWebSocketMessage;
+    const oversized = {
+      ...snapshot,
+      privateState: { padding: "界".repeat(6_000) }
+    } as ServerWebSocketMessage;
+
+    expect(sendWebSocketMessage(socket, small)).toBe(true);
+    expect(new TextEncoder().encode(JSON.stringify(exact))).toHaveLength(MAX_WIRE_BYTES);
+    expect(sendWebSocketMessage(socket, exact)).toBe(true);
+    expect(sendWebSocketMessage(socket, oversized)).toBe(false);
+    expect(sent).toEqual([JSON.stringify(small), JSON.stringify(exact)]);
+  });
+
+  it("emits only bounded structured audit fields and skips heartbeats", async () => {
+    const room = lobbyRoom();
+    const store = new MemoryCommandStore(room);
+    const peers = recipients("seat-1");
+    const audit = vi.fn();
+    const pipeline = createCommandPipeline({ store, audit });
+
+    await pipeline.handle({
+      seatId: "seat-1",
+      rawMessage: JSON.stringify({ type: "connection.heartbeat", schemaVersion: 1 }),
+      now: 90,
+      presence: noPresence,
+      recipients: peers.recipients
+    });
+    await pipeline.handle({
+      seatId: "seat-1",
+      rawMessage: command(ids[0], room.roomVersion),
+      now: 100,
+      presence: noPresence,
+      recipients: peers.recipients
+    });
+
+    expect(audit).toHaveBeenCalledTimes(1);
+    const record = audit.mock.calls[0][0] as Record<string, unknown>;
+    expect(Object.keys(record).sort()).toEqual([
+      "commandType", "durationMs", "event", "roomHashPrefix", "roomVersion"
+    ]);
+    expect(record).toMatchObject({
+      event: "room.command",
+      commandType: "room.ready",
+      roomVersion: room.roomVersion + 1
+    });
+    expect(record.roomHashPrefix).toMatch(/^[A-Za-z0-9_-]{12}$/);
+    expect(record.durationMs).toEqual(expect.any(Number));
+    const serialized = JSON.stringify(record);
+    for (const forbidden of [room.roomCode, "One", "token", "ticket", "payload", "amount", ids[0]]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  it("audits rate limits and internal failures with stable generic codes only", async () => {
+    const limitedRoom = lobbyRoom();
+    limitedRoom.seats[0].commandAttemptTimestamps = Array.from({ length: 10 }, () => 100);
+    const limitedAudit = vi.fn();
+    const limitedPeers = recipients("seat-1");
+    await createCommandPipeline({ store: new MemoryCommandStore(limitedRoom), audit: limitedAudit }).handle({
+      seatId: "seat-1", rawMessage: command(ids[0], limitedRoom.roomVersion), now: 101,
+      presence: noPresence, recipients: limitedPeers.recipients
+    });
+    expect(limitedAudit.mock.calls[0][0]).toMatchObject({ errorCode: "RATE_LIMITED" });
+    expect(limitedPeers.messages.get("seat-1")?.[0]).toMatchObject({
+      type: "command.rejected", error: { code: "RATE_LIMITED" }
+    });
+
+    const failingAudit = vi.fn();
+    const failingPeers = recipients("seat-1");
+    const secret = "private exception with token and stack";
+    const failingRoom = lobbyRoom();
+    await createCommandPipeline({
+      store: new MemoryCommandStore(failingRoom),
+      audit: failingAudit,
+      createExecutionContext: () => { throw new Error(secret); }
+    }).handle({
+      seatId: "seat-1", rawMessage: command(ids[1], failingRoom.roomVersion), now: 200,
+      presence: noPresence, recipients: failingPeers.recipients
+    });
+    expect(failingAudit.mock.calls[0][0]).toMatchObject({ errorCode: "INTERNAL_ERROR" });
+    expect(JSON.stringify(failingAudit.mock.calls[0][0])).not.toContain(secret);
+    expect(failingPeers.messages.get("seat-1")?.[0]).toMatchObject({
+      type: "command.rejected", error: { code: "INTERNAL_ERROR", params: {} }
+    });
+  });
+
   it("rejects unknown, oversized, malformed, and actor-bearing wire messages before mutation", async () => {
     const store = new MemoryCommandStore(lobbyRoom());
     const peers = recipients("seat-1");

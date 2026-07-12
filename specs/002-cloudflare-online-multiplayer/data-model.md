@@ -44,6 +44,7 @@ interface PersistedSeat {
     commandId: string;
     resultingVersion: number;
   }>;
+  commandAttemptTimestamps: number[]; // latest 10 admitted attempts in the 2-second window
 }
 ```
 
