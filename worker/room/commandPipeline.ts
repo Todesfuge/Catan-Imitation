@@ -50,6 +50,7 @@ interface PipelineDependencies {
   store: CommandMutationStore;
   createExecutionContext?: (now: number) => MatchExecutionContext;
   prepareExecutionContext?: (now: number) => () => MatchExecutionContext;
+  prepareExecutionContextForRoom?: (now: number) => (roomVersion: number) => MatchExecutionContext;
   executeMatchCommand?: (
     state: MatchState,
     command: MatchCommand,
@@ -347,6 +348,7 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
           now: () => input.now
         };
       });
+      const contextForRoomVersion = dependencies.prepareExecutionContextForRoom?.(input.now);
 
       let mutation: LatestRoomMutationResult<MutationOutcome>;
       try {
@@ -388,7 +390,14 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
 
           try {
             const next = recordAccepted(
-              executeMessage(admittedRoom, seat, parsed, preparedContext(), execute, input.now),
+              executeMessage(
+                admittedRoom,
+                seat,
+                parsed,
+                contextForRoomVersion?.(room.roomVersion) ?? preparedContext(),
+                execute,
+                input.now
+              ),
               seat.seatId,
               parsed.commandId
             );

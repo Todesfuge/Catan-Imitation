@@ -15,11 +15,12 @@
     "smoke:ui": "node scripts/smoke-ui.mjs",
     "test": "vitest run",
     "test:e2e": "pnpm build && playwright test",
+    "test:e2e:online": "pnpm build && playwright test --project=online-worker",
     "test:watch": "vitest",
     "test:worker": "pnpm build && vitest run --config vitest.worker.config.ts",
     "build:worker": "pnpm build && tsc -p tsconfig.worker.json",
     "dev:worker": "pnpm build && wrangler dev --host 127.0.0.1",
-    "smoke:worker": "pnpm build && vitest run --config vitest.worker.config.ts test/worker/workerSmoke.test.ts"
+    "smoke:worker": "pnpm build && node scripts/smoke-worker.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

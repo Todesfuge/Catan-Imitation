@@ -17,6 +17,7 @@ import {
 import { RoomSchemaError, RoomStore } from "./roomStore";
 import type { PersistedRoom } from "./roomTypes";
 import { createCommandPipeline, type CommandRecipient } from "./commandPipeline";
+import { prepareE2EExecutionContext } from "../testing/e2eExecutionContext";
 
 const ROOM_RETENTION_MS = 24 * 60 * 60 * 1_000;
 
@@ -89,9 +90,14 @@ export class RoomDurableObject {
   private readonly commands;
   private commandTail: Promise<void> = Promise.resolve();
 
-  constructor(private readonly ctx: DurableObjectState, _env: Env) {
+  constructor(private readonly ctx: DurableObjectState, env: Env) {
     this.store = new RoomStore(ctx.storage);
-    this.commands = createCommandPipeline({ store: this.store });
+    this.commands = createCommandPipeline({
+      store: this.store,
+      ...(env.CATAN_E2E_DETERMINISTIC === "room-version-v1"
+        ? { prepareExecutionContextForRoom: prepareE2EExecutionContext }
+        : {})
+    });
   }
 
   async fetch(request: Request): Promise<Response> {

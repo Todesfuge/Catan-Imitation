@@ -5,14 +5,33 @@ export default defineConfig({
   fullyParallel: false,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: "http://127.0.0.1:4173",
     screenshot: "only-on-failure",
     trace: "retain-on-failure"
   },
-  webServer: {
-    command: "pnpm preview --port 4173",
-    reuseExistingServer: false,
-    timeout: 120_000,
-    url: "http://127.0.0.1:4173"
-  }
+  projects: [
+    {
+      name: "local-preview",
+      testIgnore: /online-multiplayer\.spec\.ts/,
+      use: { baseURL: "http://127.0.0.1:4173" }
+    },
+    {
+      name: "online-worker",
+      testMatch: /online-multiplayer\.spec\.ts/,
+      use: { baseURL: "http://127.0.0.1:8799" }
+    }
+  ],
+  webServer: [
+    {
+      command: "pnpm preview --port 4173",
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: "http://127.0.0.1:4173"
+    },
+    {
+      command: "pnpm dev:worker --config wrangler.e2e.jsonc --port 8799 --persist-to .wrangler/state/playwright",
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: "http://127.0.0.1:8799/api/health"
+    }
+  ]
 });
