@@ -412,18 +412,18 @@ Files:
 
 Steps:
 
-- [ ] Write failing UI tests for own private hand, opponent counts, hidden VP/cards, server allowed actions, disabled offline controls, active/waiting player labels, robber/seven choices, development effects, maritime/public trades, Commerce Guild redemption, own sealed bid, others' submitted status, sanitized blind-box result, and game over.
-- [ ] Run `pnpm vitest run test/online/onlineGameUi.test.ts`; expect missing online adapter failures.
-- [ ] Implement `OnlineGame` as a projection/command adapter; do not synthesize fake opponent resources or run authoritative reducers in the browser.
-- [ ] Add bilingual connection, wait, room, protocol, privacy, all-pass, and no-token auction copy.
-- [ ] Verify 1280, 768, and 390 width containment in focused browser tests.
-- [ ] Run the focused UI suite, `pnpm test`, and current E2E suite; expect all pass.
-- [ ] Commit with `feat: play full matches from private online seats`.
+- [x] Write failing UI tests for own private hand, opponent counts, hidden VP/cards, server allowed actions, disabled offline controls, active/waiting player labels, robber/seven choices, development effects, maritime/public trades, Commerce Guild redemption, own sealed bid, others' submitted status, sanitized blind-box result, and game over.
+- [x] Run `pnpm vitest run test/online/onlineGameUi.test.ts`; expect missing online adapter failures.
+- [x] Implement `OnlineGame` as a projection/command adapter; do not synthesize fake opponent resources or run authoritative reducers in the browser.
+- [x] Add bilingual connection, wait, room, protocol, privacy, all-pass, and no-token auction copy.
+- [x] Verify 1280, 768, and 390 width containment in focused browser tests.
+- [x] Run the focused UI suite, `pnpm test`, and current E2E suite; expect all pass.
+- [x] Commit with `feat: play full matches from private online seats`.
 
 Phase D exit gate:
 
-- [ ] Run `pnpm test`, `pnpm test:worker`, and `pnpm test:e2e`.
-- [ ] Manually compare Local Game before/after and inspect all four seat projections at desktop and mobile widths.
+- [x] Run `pnpm test`, `pnpm test:worker`, and `pnpm test:e2e`.
+- [x] Manually compare Local Game before/after and inspect all four seat projections at desktop and mobile widths.
 
 ## Phase E: Browser Convergence and Deployment
 
