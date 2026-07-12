@@ -440,11 +440,11 @@ Files:
 
 Steps:
 
-- [ ] Add a failing Playwright suite that runs against `pnpm dev:worker`, opens three isolated contexts, creates/joins/readies/starts, verifies per-seat privacy, completes setup, rolls/builds/trades/ends turn, exercises seven/robber and Commerce Guild sealed/no-bid paths, disconnects one context, and reconnects it from stored token.
-- [ ] Run the online spec; expect failures until all routes/UI paths are wired.
-- [ ] Add only deterministic test hooks at the Worker execution-context boundary; production clients must not be able to choose randomness.
-- [ ] Run `pnpm test:e2e`; expect existing local and new online suites pass at desktop and mobile widths.
-- [ ] Commit with `test: cover online multiplayer in real browsers`.
+- [x] Add a failing Playwright suite that runs against `pnpm dev:worker`, opens three isolated contexts, creates/joins/readies/starts, verifies per-seat privacy, completes setup, rolls/builds/trades/ends turn, exercises seven/robber and Commerce Guild sealed/no-bid paths, disconnects one context, and reconnects it from stored token.
+- [x] Run the online spec; expect failures until all routes/UI paths are wired.
+- [x] Add only deterministic test hooks at the Worker execution-context boundary; production clients must not be able to choose randomness.
+- [x] Run `pnpm test:e2e`; expect existing local and new online suites pass at desktop and mobile widths.
+- [x] Commit with `test: cover online multiplayer in real browsers`.
 
 ### Task 20 (T020) — Add production security, observability, and combined smoke gates
 
