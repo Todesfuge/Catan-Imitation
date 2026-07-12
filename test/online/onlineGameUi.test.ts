@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { createInitialAppState, createLocalGameTableView } from "../../src/app/localGameState";
 import { createStandardBoardData } from "../../src/domain/board";
+import { resources } from "../../src/domain/types";
 import type { OnlineAllowedActions } from "../../src/online/allowedActions";
 import {
   OnlineGame,
@@ -30,9 +31,9 @@ function actions(overrides: Partial<OnlineAllowedActions> = {}): OnlineAllowedAc
   return {
     turn: {
       roll: available(), endTurn: available(),
-      road: { ...available(["edge-0"]), cost: zero },
-      settlement: { ...available(["vertex-0"]), cost: zero },
-      city: { ...available(["building-0"]), cost: zero },
+      road: { ...available(), cost: zero },
+      settlement: { ...available(), cost: zero },
+      city: { ...available(), cost: zero },
       buyDevelopmentCard: { ...available(), cost: zero },
       developmentCards: [{ cardId: "caller-knight", count: 1, enabled: true, kind: "knight" }]
     },
@@ -48,7 +49,7 @@ function actions(overrides: Partial<OnlineAllowedActions> = {}): OnlineAllowedAc
       redeemGathering: { ...available(["wood"]), maxAmount: 2, bankStock: callerResources },
       redeemPrize: available()
     },
-    setup: { settlement: available(["vertex-0"]), road: available(["edge-0"]) },
+    setup: { settlement: available(), road: available() },
     decisions: {
       discard: { ...unavailable(), exactCount: 0, maxByResource: zero },
       robberHex: unavailable(), robberVictim: unavailable(),
@@ -69,15 +70,15 @@ function publicGame(): PublicGameView {
   return {
     phase: local.phase,
     players: [
-      { playerId: "p1", nickname: "Caller", color: "#e76f51", visibleScore: 1, resourceCardCount: 21, developmentCardCount: 2, guildTokens: 2, vouchers: 0, prizeCards: 0, knightsPlayed: 0 },
-      { playerId: "p2", nickname: "North", color: "#2a9d8f", visibleScore: 1, resourceCardCount: 99, developmentCardCount: 3, guildTokens: 1, vouchers: 0, prizeCards: 0, knightsPlayed: 0 },
-      { playerId: "p3", nickname: "East", color: "#e9c46a", visibleScore: 1, resourceCardCount: 8, developmentCardCount: 0, guildTokens: 0, vouchers: 0, prizeCards: 0, knightsPlayed: 0 },
-      { playerId: "p4", nickname: "West", color: "#264653", visibleScore: 1, resourceCardCount: 6, developmentCardCount: 1, guildTokens: 0, vouchers: 0, prizeCards: 0, knightsPlayed: 0 }
+      { playerId: "p1", color: "#e76f51", visibleScore: 1, resourceCardCount: 21, developmentCardCount: 2, guildTokens: 2, vouchers: 0, prizeCards: 0, knightsPlayed: 0 },
+      { playerId: "p2", color: "#2a9d8f", visibleScore: 1, resourceCardCount: 99, developmentCardCount: 3, guildTokens: 1, vouchers: 0, prizeCards: 0, knightsPlayed: 0 },
+      { playerId: "p3", color: "#e9c46a", visibleScore: 1, resourceCardCount: 8, developmentCardCount: 0, guildTokens: 0, vouchers: 0, prizeCards: 0, knightsPlayed: 0 },
+      { playerId: "p4", color: "#264653", visibleScore: 1, resourceCardCount: 6, developmentCardCount: 1, guildTokens: 0, vouchers: 0, prizeCards: 0, knightsPlayed: 0 }
     ],
     activePlayerId: "p1", turn: 2, round: 1,
     turnState: { phase: "action", awaitedPlayerIds: [] }, targetScore: local.targetScore,
     boardLayout: "standard-v1",
-    buildings: local.buildings.map((value) => ({ ...value })), roads: local.roads.map((value) => ({ ...value })),
+    buildings: local.buildings.map((value) => ({ ...value })), roads: local.roads.map(({ ownerId, edgeId }) => ({ ownerId, edgeId })),
     robberHexId: local.robberHexId, bank: { resources: { ...local.bank.resources } },
     log: [{ id: "safe-log", messageKey: "game.welcome" }], developmentDeckCount: 19, lastDice: { first: 3, second: 4, total: 7 }
   };
@@ -93,7 +94,7 @@ function snapshotFor(seatIndex = 0, overrides: { game?: Partial<PublicGameView>;
   const game = { ...publicGame(), ...overrides.game } as PublicGameView;
   const publicState: PublicRoomState = {
     roomCode: "234567", lifecycle: overrides.lifecycle ?? "playing", roomVersion: 41,
-    seats: game.players.map((player, index) => ({ seatId: `seat-${index + 1}`, playerId: player.playerId, nickname: player.nickname, ready: true })),
+    seats: game.players.map((player, index) => ({ seatId: `seat-${index + 1}`, playerId: player.playerId, nickname: ["Caller", "North", "East", "West"][index]!, ready: true })),
     game, guild: guild(), submittedBidSeatIds: []
   };
   const baseActions = overrides.allowedActions ?? actions();
@@ -153,27 +154,66 @@ describe("online game projection adapter", () => {
     const players = local.game.players.map((player, index) => ({
       ...player,
       resources: { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 },
-      developmentCards: Array.from({ length: index === 0 ? 20 : 12 }, (_, card) => ({
-        id: `seat-${index + 1}-card-${card}`, kind: card % 5 === 0 ? "victoryPoint" as const : "knight" as const,
+      developmentCards: Array.from({ length: index === 0 ? 25 : 12 }, (_, card) => ({
+        id: `card-${index}-${card}-${"c".repeat(24)}`, kind: (["victoryPoint", "knight", "roadBuilding", "yearOfPlenty", "monopoly"] as const)[card % 5]!,
         purchasedTurn: 0, revealed: false
       }))
     }));
     const vertexIds = [...new Set(local.game.board.flatMap((hex) => hex.vertexIds))];
-    const roads = local.game.edges.slice(0, 60).map((edge, index) => ({ id: `road-${index}`, edgeId: edge.id, ownerId: players[index % 4]!.id }));
-    const buildings = vertexIds.slice(0, 20).map((vertexId, index) => ({ id: `building-${index}`, vertexId,
+    const roads = local.game.edges.slice(0, 60).map((edge, index) => ({ id: `road-${index}-${"r".repeat(64)}`, edgeId: edge.id, ownerId: players[index % 4]!.id }));
+    const buildings = vertexIds.slice(0, 20).map((vertexId, index) => ({ id: `building-${index}-${"b".repeat(48)}`, vertexId,
       ownerId: players[index % 4]!.id, kind: index % 2 === 0 ? "city" as const : "settlement" as const }));
     const log = Array.from({ length: 20 }, (_, index) => ({ id: `high-log-${index}`, message: "safe", messageKey: "dice.rolled" as const,
       params: { playerName: longNames[0]!, total: 8, eventCount: 0 } }));
     const game = { ...local.game, players, roads, buildings, log, phase: "playing" as const,
+      pendingPlayerTrade: undefined,
       turnState: { ...local.game.turnState, phase: "action" as const, developmentCardPlayed: false } };
-    const seats = players.map((player, index) => ({ seatId: `seat-${index + 1}`, playerId: player.id, nickname: longNames[index]!, ready: true }));
-    const projected = projectRoomView({ roomCode: "234567", lifecycle: "playing", roomVersion: 99, seats,
-      matchState: { game, guild: local.guild, lastDice: { first: 6, second: 6, total: 12 } } }, "seat-1",
+    const seats = players.map((player, index) => ({ seatId: `00000000-0000-4000-8000-00000000000${index}`, playerId: player.id, nickname: longNames[index]!, ready: true }));
+    const guild = { ...local.guild, usedTradePlayerIds: players.map((player) => player.id), gathering: {
+      ...local.guild.gathering, phase: "auction" as const, auctionRound: 3,
+      auctionResults: [{ kind: "resources" as const, resources: { ...zero, wood: 5 } }, { kind: "voucher" as const }, { kind: "developmentCard" as const, card: "monopoly" as const }],
+      lastAuctionResult: { winnerId: players[0]!.id, winnerName: longNames[0]!, round: 3, winningBid: 9999, outcome: { kind: "voucher" as const } }
+    } };
+    const pendingPlayerTrade = { proposerId: players[0]!.id, offered: { ...zero, wood: 19 }, requested: { ...zero, ore: 19 } };
+    const projected = projectRoomView({ roomCode: "234567", lifecycle: "playing", roomVersion: 999999, seats,
+      matchState: { game, guild, lastDice: { first: 6, second: 6, total: 12 }, pendingPlayerTrade },
+      pendingAuction: { round: 3, bidsBySeatId: Object.fromEntries(seats.map((seat, index) => [seat.seatId, index + 1])) }
+    }, seats[0]!.seatId,
     { connectedSeatIds: seats.map((seat) => seat.seatId) });
-    const wire = JSON.stringify({ type: "room.snapshot", schemaVersion: 1, roomVersion: 99, lifecycle: "playing", ...projected,
-      presence: seats.map((seat) => ({ seatId: seat.seatId, connectionCount: 2, online: true })) });
+    const envelope = { type: "room.snapshot" as const, schemaVersion: 1 as const, roomVersion: 999999, lifecycle: "playing" as const, ...projected,
+      presence: seats.map((seat) => ({ seatId: seat.seatId, connectionCount: 9, online: true })),
+      acknowledgedCommandId: "00000000-0000-4000-8000-000000000099" };
+    const wire = JSON.stringify(envelope);
     expect(new TextEncoder().encode(wire).byteLength).toBeLessThanOrEqual(MAX_WIRE_BYTES);
     expect(parseServerWebSocketMessage(wire).type).toBe("room.snapshot");
+    expect(() => createOnlineGameTableView(state(envelope as unknown as RoomSnapshotMessage))).not.toThrow();
+  });
+
+  it("keeps a conservative early-game target superset within 16 KiB", () => {
+    const local = createInitialAppState();
+    const seats = local.game.players.map((player, index) => ({ seatId: `10000000-0000-4000-8000-00000000000${index}`, playerId: player.id, nickname: "界".repeat(20), ready: true }));
+    const projected = projectRoomView({ roomCode: "234567", lifecycle: "playing", roomVersion: 1000000, seats,
+      matchState: { game: local.game, guild: local.guild, lastDice: null } }, seats[0]!.seatId,
+    { connectedSeatIds: seats.map((seat) => seat.seatId) });
+    const allowed = projected.allowedActions!;
+    const vertices = [...new Set(local.game.board.flatMap((hex) => hex.vertexIds))];
+    const edges = local.game.edges.map((edge) => edge.id);
+    allowed.turn.road.targets = edges;
+    allowed.turn.settlement.targets = vertices;
+    allowed.setup.road.targets = edges;
+    allowed.setup.settlement.targets = vertices;
+    allowed.decisions.robberHex.targets = local.game.board.filter((hex) => hex.id !== local.game.robberHexId).map((hex) => hex.id);
+    allowed.decisions.robberVictim.targets = local.game.players.slice(1).map((player) => player.id);
+    allowed.decisions.freeRoad.targets = edges;
+    allowed.decisions.yearOfPlenty.targets = [...resources];
+    allowed.decisions.monopoly.targets = [...resources];
+    const envelope = { type: "room.snapshot" as const, schemaVersion: 1 as const, roomVersion: 1000000, lifecycle: "playing" as const, ...projected,
+      presence: seats.map((seat) => ({ seatId: seat.seatId, connectionCount: 9, online: true })),
+      acknowledgedCommandId: "10000000-0000-4000-8000-000000000099" };
+    const wire = JSON.stringify(envelope);
+    expect(new TextEncoder().encode(wire).byteLength).toBeLessThanOrEqual(MAX_WIRE_BYTES);
+    expect(parseServerWebSocketMessage(wire).type).toBe("room.snapshot");
+    expect(() => createOnlineGameTableView(state(envelope as unknown as RoomSnapshotMessage))).not.toThrow();
   });
 
   it("projects only the caller private hand while retaining opponent public counts", () => {
@@ -187,7 +227,7 @@ describe("online game projection adapter", () => {
 
   it("keeps all four caller projections isolated from every other seat secret", () => {
     const views = [0, 1, 2, 3].map((index) => createOnlineGameTableView(state(snapshotFor(index, {
-      privateState: { resources: { ...zero, wood: 7001 + index }, ownPendingBid: 9001 + index }
+      privateState: { resources: { ...zero, wood: 81 + index }, ownPendingBid: 9001 + index }
     }))));
     views.forEach((view, viewerIndex) => {
       expect(view.controlledPlayers).toHaveLength(1);
@@ -195,29 +235,87 @@ describe("online game projection adapter", () => {
       const serialized = JSON.stringify(view);
       [0, 1, 2, 3].filter((index) => index !== viewerIndex).forEach((index) => {
         expect(serialized).not.toContain(`private-card-seat-${index + 1}`);
-        expect(serialized).not.toContain(`\"wood\":${7001 + index}`);
+        expect(serialized).not.toContain(`\"wood\":${81 + index}`);
         expect(serialized).not.toContain(`\"ownPendingBid\":${9001 + index}`);
       });
     });
   });
 
   it("uses server decisions and targets for seven, robber, and development effects", () => {
+    const freeRoadId = createStandardBoardData().edges[0]!.id;
     const allowed = actions();
     allowed.decisions.discard = { ...available(), exactCount: 3, maxByResource: callerResources };
     allowed.decisions.robberVictim = available(["p2"]);
-    allowed.decisions.freeRoad = { ...available(["edge-0"]), remainingRoads: 1 };
+    allowed.decisions.freeRoad = { ...available([freeRoadId]), remainingRoads: 1 };
     const discard = createOnlineGameTableView(state(snapshotFor(0, {
       game: { turnState: { phase: "awaitingDiscards", awaitedPlayerIds: ["p1"] } },
       privateState: { requiredDecision: { kind: "discardResources", count: 3 } }, allowedActions: allowed
     })));
     expect(discard.controlledPlayers[0]?.decision).toEqual({ kind: "discard", count: 3 });
-    expect(discard.legality.freeRoadEdgeIds).toEqual(["edge-0"]);
+    expect(discard.legality.freeRoadEdgeIds).toEqual([freeRoadId]);
 
     const robber = createOnlineGameTableView(state(snapshotFor(0, {
       game: { turnState: { phase: "awaitingRobberVictim", awaitedPlayerIds: ["p1"] } },
       privateState: { requiredDecision: { kind: "chooseRobberVictim", eligiblePlayerIds: ["p2"] } }, allowedActions: allowed
     })));
     expect(robber.game.turnState.pendingRobber?.eligibleVictimIds).toEqual(["p2"]);
+  });
+
+  it("exposes a complete server-owned decision policy and clears it while reconnecting", () => {
+    const geometry = createStandardBoardData();
+    const robberHexId = geometry.board.find((hex) => hex.id !== publicGame().robberHexId)!.id;
+    const freeRoadId = geometry.edges[0]!.id;
+    const allowed = actions();
+    allowed.decisions.discard = { ...available(), exactCount: 3, maxByResource: callerResources };
+    allowed.decisions.robberHex = available([robberHexId]);
+    allowed.decisions.robberVictim = available(["p2"]);
+    allowed.decisions.freeRoad = { ...available([freeRoadId]), remainingRoads: 1 };
+    allowed.decisions.yearOfPlenty = { ...available(["grain"]), remainingPicks: 2 };
+    allowed.decisions.monopoly = available(["ore"]);
+    const connected = createOnlineGameTableView(state(snapshotFor(0, { allowedActions: allowed })));
+    const policy = (connected as unknown as { decisionPolicy?: OnlineAllowedActions["decisions"] }).decisionPolicy;
+    expect(policy).toMatchObject({
+      discard: { enabled: true, exactCount: 3 },
+      robberHex: { enabled: true, targets: [robberHexId] },
+      robberVictim: { enabled: true, targets: ["p2"] },
+      freeRoad: { enabled: true, targets: [freeRoadId] },
+      yearOfPlenty: { enabled: true, targets: ["grain"] },
+      monopoly: { enabled: true, targets: ["ore"] }
+    });
+    const reconnecting = createOnlineGameTableView(state(snapshotFor(0, { allowedActions: allowed }), "reconnecting"));
+    const disabled = (reconnecting as unknown as { decisionPolicy?: OnlineAllowedActions["decisions"] }).decisionPolicy;
+    expect(Object.values(disabled ?? {}).every((entry) => !entry.enabled && entry.targets.length === 0)).toBe(true);
+  });
+
+  it("renders only server decision targets and removes them while reconnecting", () => {
+    const geometry = createStandardBoardData();
+    const targetHex = geometry.board.find((hex) => hex.id !== publicGame().robberHexId)!.id;
+    const allowed = actions();
+    allowed.decisions.robberHex = available([targetHex]);
+    const robberSnapshot = snapshotFor(0, {
+      game: { turnState: { phase: "awaitingRobberPlacement", awaitedPlayerIds: ["p1"] } },
+      privateState: { requiredDecision: { kind: "placeRobber" } },
+      allowedActions: allowed
+    });
+    const renderGame = (clientState: OnlineClientState) => renderToStaticMarkup(React.createElement(I18nProvider, null,
+      React.createElement(OnlineGame, { roomCode: "234567", state: clientState, dispatch: vi.fn(), reconnect: vi.fn(), onExit: vi.fn(), createCommandId: crypto.randomUUID })
+    ));
+    const connectedHtml = renderGame(state(robberSnapshot));
+    expect(connectedHtml).toContain(`data-robber-target="${targetHex}"`);
+    expect((connectedHtml.match(/data-robber-target=/g) ?? [])).toHaveLength(1);
+    expect(renderGame(state(robberSnapshot, "reconnecting"))).not.toContain("data-robber-target=");
+
+    const developmentAllowed = actions();
+    developmentAllowed.decisions.yearOfPlenty = { ...available(["grain"]), remainingPicks: 2 };
+    const developmentSnapshot = snapshotFor(0, {
+      game: { turnState: { phase: "awaitingDevelopmentEffect", awaitedPlayerIds: ["p1"] } },
+      privateState: { requiredDecision: { kind: "chooseYearOfPlentyResource", remainingPicks: 2 } },
+      allowedActions: developmentAllowed
+    });
+    const developmentHtml = renderGame(state(developmentSnapshot));
+    expect(developmentHtml).toContain('data-resource-choice="grain"');
+    expect(developmentHtml).not.toContain('data-resource-choice="ore"');
+    expect(renderGame(state(developmentSnapshot, "reconnecting"))).not.toContain("data-resource-choice=");
   });
 
   it("uses only server allowed actions and disables every command while disconnected", () => {
@@ -284,7 +382,14 @@ describe("online game projection adapter", () => {
       state(snapshotFor(), "incompatible"), state(snapshotFor(0, { lifecycle: "finished" }), "connected")
     ]) {
       const send = vi.fn(() => true);
-      createOnlineGameTableController(() => clientState, send, crypto.randomUUID).dispatch({ type: "turn.roll" });
+      const controller = createOnlineGameTableController(() => clientState, send, crypto.randomUUID);
+      controller.dispatch({ type: "turn.roll" });
+      controller.dispatch({ type: "robber.place", hexId: "hex" });
+      controller.dispatch({ type: "robber.steal", victimId: "p2" });
+      controller.dispatch({ type: "decision.discard", controlId: "seat-1", resources: zero });
+      controller.dispatch({ type: "development.chooseResource", choice: "yearOfPlenty", resource: "grain" });
+      controller.dispatch({ type: "development.placeRoad", edgeId: "edge" });
+      controller.dispatch({ type: "auction.submitBid", controlId: "seat-1", bid: 0 });
       expect(send).not.toHaveBeenCalled();
     }
   });
@@ -349,6 +454,28 @@ describe("online game projection adapter", () => {
     expect(() => createOnlineGameTableView(state(unknownLayout))).toThrow("Invalid online game projection");
     expect(createOnlineGameTableController(() => state(unknownLayout), unknownSend, crypto.randomUUID).dispatch({ type: "turn.roll" })).toBe(false);
     expect(unknownSend).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["future phase", (snapshot: RoomSnapshotMessage) => { (snapshot.publicState.game as Record<string, unknown>).phase = "future"; }],
+    ["future reason", (snapshot: RoomSnapshotMessage) => { ((snapshot.allowedActions.turn as Record<string, unknown>).roll as Record<string, unknown>).disabledReason = { code: "FUTURE_CODE" }; }],
+    ["future development kind", (snapshot: RoomSnapshotMessage) => { ((snapshot.privateState.developmentCards as unknown[])![0] as Record<string, unknown>).kind = "futureCard"; }],
+    ["negative public count", (snapshot: RoomSnapshotMessage) => { (((snapshot.publicState.game as Record<string, unknown>).players as unknown[])[1] as Record<string, unknown>).resourceCardCount = -1; }],
+    ["unknown resource key", (snapshot: RoomSnapshotMessage) => { (snapshot.privateState.resources as Record<string, unknown>).gold = 1; }],
+    ["oversize target list", (snapshot: RoomSnapshotMessage) => { ((snapshot.allowedActions.decisions as Record<string, unknown>).robberHex as Record<string, unknown>).targets = Array.from({ length: 129 }, (_, index) => `hex-${index}`); }],
+    ["oversize id", (snapshot: RoomSnapshotMessage) => { snapshot.privateState.seatId = "s".repeat(129); }],
+    ["public secret field", (snapshot: RoomSnapshotMessage) => { (((snapshot.publicState.game as Record<string, unknown>).players as unknown[])[1] as Record<string, unknown>).resources = callerResources; }]
+  ])("rejects malformed nested projection: %s", (_name, mutate) => {
+    const malformed = snapshotFor();
+    mutate(malformed);
+    const send = vi.fn(() => true);
+    expect(() => createOnlineGameTableView(state(malformed))).toThrow("Invalid online game projection");
+    expect(createOnlineGameTableController(() => state(malformed), send, crypto.randomUUID).dispatch({ type: "turn.roll" })).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    const html = renderToStaticMarkup(React.createElement(I18nProvider, null,
+      React.createElement(OnlineGame, { roomCode: "234567", state: state(malformed), dispatch: send, reconnect: vi.fn(), onExit: vi.fn(), createCommandId: crypto.randomUUID })
+    ));
+    expect(html).toContain("This game view is incompatible");
   });
 
   it("labels only the exact deterministic standard-v1 geometry", () => {

@@ -1,7 +1,7 @@
 import React from "react";
 import { resources } from "../domain/types";
 import { edgeProjection } from "./boardGeometry";
-import type { GameTableDispatch, GameTableGameView, GameTableView } from "./GameTable";
+import type { GameTableDispatch, GameTableGameView, GameTableResource, GameTableView } from "./GameTable";
 import { translateRuleText, useI18n } from "./i18n";
 
 export function DevelopmentCardPanel({
@@ -25,6 +25,7 @@ export function DevelopmentCardPanel({
     }
 
     const isPlenty = effect.kind === "yearOfPlenty";
+    const resourcePolicy = isPlenty ? state.decisionPolicy.yearOfPlenty : state.decisionPolicy.monopoly;
     return (
       <section
         className="turn-flow-panel development-effect-panel"
@@ -36,10 +37,10 @@ export function DevelopmentCardPanel({
             : t("development.chooseMonopoly")}
         </strong>
         <div className="development-resource-buttons">
-          {resources.map((resource) => (
+          {(resourcePolicy.targets as readonly GameTableResource[]).map((resource) => (
             <button
               data-resource-choice={resource}
-              disabled={isPlenty && game.bank.resources[resource] === 0}
+              disabled={!resourcePolicy.enabled}
               key={resource}
               onClick={() =>
                 dispatch({

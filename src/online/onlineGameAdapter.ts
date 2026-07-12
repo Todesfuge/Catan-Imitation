@@ -1,130 +1,16 @@
 import { formatAvailabilityReason, type AvailabilityFact, type AvailabilityReason } from "../app/actionAvailability";
-import { createStandardBoardData } from "../domain/board";
-import { resources, type ResourceMap } from "../domain/types";
 import type { GameTableActions, GameTableIntent, GameTableView } from "../ui/GameTable";
 import type { OnlineAllowedActions } from "./allowedActions";
 import type { OnlineClientState } from "./onlineReducer";
 import type { ClientWebSocketMessage, OnlineMatchCommand, RoomSnapshotMessage } from "./protocol";
-import type { PrivateSeatState, ProjectedRoomView, PublicGameView, PublicGuildView, PublicRoomState } from "./view";
+import type { PrivateSeatState, PublicGameView } from "./view";
+import { parseOnlineGameProjection, standardOnlineBoardGeometry } from "./onlineGameProjection";
 
 type SendMessage = (message: ClientWebSocketMessage) => boolean;
 
 const disconnectedReason = "The online connection is not ready.";
-const standardGeometry = createStandardBoardData();
-const standardHexIds = new Set(standardGeometry.board.map((hex) => hex.id));
-const standardVertexIds = new Set(standardGeometry.board.flatMap((hex) => hex.vertexIds));
-const standardEdgeIds = new Set(standardGeometry.edges.map((edge) => edge.id));
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
-}
-
-function isResourceMap(value: unknown): value is ResourceMap {
-  return isObject(value) && resources.every((resource) =>
-    Number.isSafeInteger(value[resource]) && (value[resource] as number) >= 0
-  );
-}
-
-function isAvailability(value: unknown): value is AvailabilityFact<string> {
-  return isObject(value) && typeof value.enabled === "boolean" && isStringArray(value.targets) &&
-    (value.disabledReason === undefined || (isObject(value.disabledReason) && typeof value.disabledReason.code === "string"));
-}
-
-function isAllowedActions(value: unknown): value is OnlineAllowedActions {
-  if (!isObject(value) || !isObject(value.turn) || !isObject(value.maritime) ||
-      !isObject(value.commerce) || !isObject(value.setup) || !isObject(value.decisions) ||
-      !isObject(value.publicTrade) || !isObject(value.sealedBid)) return false;
-  const turn = value.turn;
-  const maritime = value.maritime;
-  const commerce = value.commerce;
-  const decisions = value.decisions;
-  if (![turn.roll, turn.endTurn, turn.road, turn.settlement, turn.city, turn.buyDevelopmentCard]
-    .every(isAvailability)) return false;
-  if (!Array.isArray(turn.developmentCards) || !turn.developmentCards.every((card) =>
-    isObject(card) && typeof card.kind === "string" && typeof card.count === "number" && typeof card.enabled === "boolean"
-  )) return false;
-  if (typeof maritime.enabled !== "boolean" || !isObject(maritime.ratios)) return false;
-  const maritimeRatios = maritime.ratios;
-  if (!resources.every((resource) => Number.isSafeInteger(maritimeRatios[resource])) ||
-      !Array.isArray(maritime.trades) || !maritime.trades.every((trade) =>
-        isObject(trade) && typeof trade.give === "string" && Number.isSafeInteger(trade.ratio) && isStringArray(trade.receives))) return false;
-  if (!Array.isArray(commerce.tradeSlots) || !commerce.tradeSlots.every((slot) =>
-    isObject(slot) && isAvailability(slot) && typeof slot.id === "string")) return false;
-  if (![commerce.transfer, commerce.startGathering, commerce.openAuction, commerce.redeemGathering, commerce.redeemPrize]
-    .every(isAvailability)) return false;
-  if (!isObject(commerce.transfer) || !isObject(commerce.redeemGathering) ||
-      !Number.isSafeInteger(commerce.transfer.maxAmount) || !isStringArray(commerce.transfer.recipientIds) ||
-      !Number.isSafeInteger(commerce.redeemGathering.maxAmount) || !isResourceMap(commerce.redeemGathering.bankStock)) return false;
-  if (!isAvailability(value.setup.settlement) || !isAvailability(value.setup.road)) return false;
-  if (![decisions.discard, decisions.robberHex, decisions.robberVictim, decisions.freeRoad, decisions.yearOfPlenty, decisions.monopoly]
-    .every(isAvailability)) return false;
-  if (![value.publicTrade.publish, value.publicTrade.cancel, value.publicTrade.accept].every(isAvailability)) return false;
-  if (!isObject(value.publicTrade.publish) || !isResourceMap(value.publicTrade.publish.maxOfferResources)) return false;
-  return typeof value.sealedBid.enabled === "boolean" && Number.isSafeInteger(value.sealedBid.maxAmount) &&
-    typeof value.sealedBid.submitted === "boolean";
-}
-
-function isPublicGame(value: unknown): value is PublicGameView {
-  if (!isObject(value) || !Array.isArray(value.players) || !isObject(value.turnState) ||
-      value.boardLayout !== "standard-v1" || !Array.isArray(value.buildings) || !Array.isArray(value.roads) || !isObject(value.bank) ||
-      !isResourceMap(value.bank.resources) || !Array.isArray(value.log)) return false;
-  if (typeof value.phase !== "string" || typeof value.activePlayerId !== "string" ||
-      typeof value.turnState.phase !== "string" || !isStringArray(value.turnState.awaitedPlayerIds)) return false;
-  if (!value.players.every((player) => isObject(player) && typeof player.playerId === "string" &&
-      typeof player.nickname === "string" && typeof player.color === "string" &&
-      [player.visibleScore, player.resourceCardCount, player.developmentCardCount, player.guildTokens,
-        player.vouchers, player.prizeCards, player.knightsPlayed].every(Number.isFinite) &&
-      !Object.hasOwn(player, "resources") && !Object.hasOwn(player, "developmentCards"))) return false;
-  return value.buildings.every((building) => isObject(building) && typeof building.id === "string" &&
-      typeof building.ownerId === "string" && typeof building.vertexId === "string" && standardVertexIds.has(building.vertexId) &&
-      (building.kind === "settlement" || building.kind === "city")) &&
-    value.roads.every((road) => isObject(road) && typeof road.id === "string" && typeof road.ownerId === "string" &&
-      typeof road.edgeId === "string" && standardEdgeIds.has(road.edgeId)) &&
-    value.log.every((entry) => isObject(entry) && typeof entry.id === "string");
-}
-
-function isPublicGuild(value: unknown): value is PublicGuildView {
-  return isObject(value) && Array.isArray(value.tradeSlots) && isObject(value.gathering) &&
-    typeof value.gathering.phase === "string" && Number.isSafeInteger(value.gathering.auctionRound) &&
-    value.tradeSlots.every((slot) => isObject(slot) && typeof slot.id === "string" &&
-      isObject(slot.requires) && typeof slot.tokenReward === "number");
-}
-
-function isPrivateState(value: unknown): value is PrivateSeatState {
-  if (!isObject(value) || typeof value.seatId !== "string" || value.seatTokenPresent !== true) return false;
-  if (value.playerId !== undefined && typeof value.playerId !== "string") return false;
-  if (value.resources !== undefined && !isResourceMap(value.resources)) return false;
-  if (value.developmentCards !== undefined && (!Array.isArray(value.developmentCards) ||
-      !value.developmentCards.every((card) => isObject(card) && typeof card.id === "string" &&
-        typeof card.kind === "string" && typeof card.purchasedTurn === "number" && typeof card.revealed === "boolean"))) return false;
-  if (value.playerId !== undefined && (!isResourceMap(value.resources) || !Array.isArray(value.developmentCards))) return false;
-  return value.requiredDecision === undefined || (isObject(value.requiredDecision) && typeof value.requiredDecision.kind === "string");
-}
-
-export function readOnlineGameProjection(snapshot: RoomSnapshotMessage | undefined): ProjectedRoomView | undefined {
-  if (!snapshot || (snapshot.lifecycle !== "playing" && snapshot.lifecycle !== "finished") ||
-      !isObject(snapshot.publicState) || !isObject(snapshot.privateState) || !isAllowedActions(snapshot.allowedActions)) return undefined;
-  const publicState = snapshot.publicState;
-  if (typeof publicState.roomCode !== "string" || publicState.lifecycle !== snapshot.lifecycle ||
-      publicState.roomVersion !== snapshot.roomVersion || !Array.isArray(publicState.seats) ||
-      !isStringArray(publicState.submittedBidSeatIds) || !isPublicGame(publicState.game) ||
-      !isPublicGuild(publicState.guild) || !isPrivateState(snapshot.privateState)) return undefined;
-  if (!publicState.seats.every((seat) => isObject(seat) && typeof seat.seatId === "string" &&
-      typeof seat.nickname === "string" && typeof seat.ready === "boolean" &&
-      (seat.playerId === undefined || typeof seat.playerId === "string"))) return undefined;
-  const privateState = snapshot.privateState;
-  const callerSeat = publicState.seats.find((seat) => seat.seatId === privateState.seatId);
-  if (!callerSeat || callerSeat.playerId !== privateState.playerId ||
-      !publicState.game.players.some((player) => player.playerId === privateState.playerId)) return undefined;
-  const publicSeats = publicState.seats as PublicRoomState["seats"];
-  if (!standardHexIds.has(publicState.game.robberHexId) ||
-      !snapshot.presence.every((entry) => publicSeats.some((seat) => seat.seatId === entry.seatId))) return undefined;
-  return { publicState: publicState as unknown as PublicRoomState, privateState, allowedActions: snapshot.allowedActions };
-}
+export const readOnlineGameProjection = parseOnlineGameProjection;
 
 function reason(value?: AvailabilityReason): string | undefined {
   return formatAvailabilityReason(value);
@@ -133,7 +19,7 @@ function reason(value?: AvailabilityReason): string | undefined {
 function availability(value: AvailabilityFact<string>, connected: boolean) {
   return connected
     ? { enabled: value.enabled, ...(reason(value.disabledReason) ? { reason: reason(value.disabledReason) } : {}), targets: [...value.targets] }
-    : { enabled: false, reason: disconnectedReason, targets: [...value.targets] };
+    : { enabled: false, reason: disconnectedReason, targets: [] };
 }
 
 function projectActions(source: OnlineAllowedActions, connected: boolean, privateState: PrivateSeatState, game: PublicGameView): GameTableActions {
@@ -187,11 +73,13 @@ export function createOnlineGameTableView(state: OnlineClientState): GameTableVi
   const ownSeat = publicState.seats.find((seat) => seat.seatId === privateState.seatId)!;
   const tableActions = projectActions(allowedActions, connected, privateState, game);
   const required = privateState.requiredDecision;
-  const boardData = standardGeometry;
+  const boardData = standardOnlineBoardGeometry;
   return {
     game: {
       phase: game.phase,
-      players: game.players.map((player) => ({ id: player.playerId, name: player.nickname, color: player.color,
+      players: game.players.map((player) => ({ id: player.playerId,
+        name: publicState.seats.find((seat) => seat.playerId === player.playerId)?.nickname ?? player.playerId,
+        color: player.color,
         visibleScore: player.visibleScore, resourceCardCount: player.resourceCardCount,
         developmentCardCount: player.developmentCardCount, guildTokens: player.guildTokens,
         vouchers: player.vouchers, prizeCards: player.prizeCards, knightsPlayed: player.knightsPlayed })),
@@ -207,7 +95,8 @@ export function createOnlineGameTableView(state: OnlineClientState): GameTableVi
       board: boardData.board.map(({ edgeIds: _edgeIds, ...hex }) => ({ ...hex, vertexIds: [...hex.vertexIds] })),
       edges: boardData.edges.map(({ hexId: _hexId, ...edge }) => ({ ...edge, vertexIds: [...edge.vertexIds] as [string, string] })),
       ports: boardData.ports.map((port) => ({ ...port, vertexIds: [...port.vertexIds] })),
-      buildings: game.buildings.map((building) => ({ ...building })), roads: game.roads.map((road) => ({ ...road })),
+      buildings: game.buildings.map((building) => ({ ...building })),
+      roads: game.roads.map((road) => ({ id: `${road.ownerId}:${road.edgeId}`, ...road })),
       robberHexId: game.robberHexId, bank: { resources: { ...game.bank.resources } },
       log: game.log.map((entry) => ({ id: entry.id, fallbackText: "Game activity updated.",
         ...(entry.messageKey ? { messageKey: entry.messageKey } : {}), ...(entry.params ? { params: { ...entry.params } } : {}) })),
@@ -243,6 +132,15 @@ export function createOnlineGameTableView(state: OnlineClientState): GameTableVi
       ...(game.phase === "setup" ? { setupControlId: privateState.seatId } : {}),
       setupRoadEdgeIds: [...allowedActions.setup.road.targets], setupSettlementVertexIds: [...allowedActions.setup.settlement.targets],
       freeRoadEdgeIds: [...allowedActions.decisions.freeRoad.targets]
+    },
+    decisionPolicy: {
+      discard: { ...availability(allowedActions.decisions.discard, connected), exactCount: allowedActions.decisions.discard.exactCount,
+        maxByResource: { ...allowedActions.decisions.discard.maxByResource } },
+      robberHex: availability(allowedActions.decisions.robberHex, connected),
+      robberVictim: availability(allowedActions.decisions.robberVictim, connected),
+      freeRoad: { ...availability(allowedActions.decisions.freeRoad, connected), remainingRoads: allowedActions.decisions.freeRoad.remainingRoads },
+      yearOfPlenty: { ...availability(allowedActions.decisions.yearOfPlenty, connected), remainingPicks: allowedActions.decisions.yearOfPlenty.remainingPicks },
+      monopoly: availability(allowedActions.decisions.monopoly, connected)
     },
     tradePolicy: {
       publishEnabled: connected && allowedActions.publicTrade.publish.enabled,

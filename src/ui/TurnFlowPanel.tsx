@@ -6,14 +6,17 @@ import type { GameTableDispatch, GameTableGameView, GameTableView } from "./Game
 export function TurnFlowPanel({
   game,
   gameControls,
+  decisionPolicy,
   dispatch
 }: {
   game: GameTableGameView;
   gameControls: GameTableView["controlledPlayers"];
+  decisionPolicy: GameTableView["decisionPolicy"];
   dispatch: GameTableDispatch;
 }) {
   const { locale, t } = useI18n();
   const pendingControl = gameControls.find((control) => control.decision?.kind === "discard");
+  const discardPolicy = decisionPolicy.discard;
   const pendingPlayerId = pendingControl?.controlId;
   const [discarded, setDiscarded] = useState<ResourceMap>(emptyResources);
 
@@ -23,7 +26,7 @@ export function TurnFlowPanel({
 
   if (game.turnState.phase === "awaitingDiscards" && pendingPlayerId) {
     const playerName = pendingControl.displayName;
-    const required = pendingControl.decision?.kind === "discard" ? pendingControl.decision.count : 0;
+    const required = discardPolicy.exactCount;
     const selectedTotal = resources.reduce((total, resource) => total + discarded[resource], 0);
     const validSelection =
       selectedTotal === required &&
@@ -31,7 +34,7 @@ export function TurnFlowPanel({
         (resource) =>
           Number.isInteger(discarded[resource]) &&
           discarded[resource] >= 0 &&
-          discarded[resource] <= pendingControl.resources[resource]
+          discarded[resource] <= discardPolicy.maxByResource[resource]
       );
 
     return (
@@ -44,7 +47,8 @@ export function TurnFlowPanel({
               {t(`resource.${resource}`)}
               <input
                 aria-label={locale === "en" ? `${playerName} ${resource} discard` : `${playerName} ${t(`resource.${resource}`)}弃牌`}
-                max={pendingControl.resources[resource]}
+                disabled={!discardPolicy.enabled}
+                max={discardPolicy.maxByResource[resource]}
                 min={0}
                 onChange={(event) =>
                   setDiscarded((current) => ({
@@ -60,7 +64,7 @@ export function TurnFlowPanel({
           ))}
         </div>
         <button
-          disabled={!validSelection}
+          disabled={!discardPolicy.enabled || !validSelection}
           onClick={() =>
             dispatch({ type: "decision.discard", controlId: pendingPlayerId, resources: discarded })
           }
@@ -86,10 +90,11 @@ export function TurnFlowPanel({
       <section className="turn-flow-panel" data-turn-flow="robber-victim">
         <strong>{t("turn.chooseVictim")}</strong>
         <div className="robber-victim-buttons">
-          {game.turnState.pendingRobber.eligibleVictimIds.map((victimId) => {
+          {decisionPolicy.robberVictim.targets.map((victimId) => {
             const victim = game.players.find((player) => player.id === victimId);
             return (
               <button
+                disabled={!decisionPolicy.robberVictim.enabled}
                 key={victimId}
                 onClick={() =>
                   dispatch({

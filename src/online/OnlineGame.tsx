@@ -57,14 +57,16 @@ export function OnlineGame({
   const view = { ...baseView, selectedDiceTotal };
   const controller = createOnlineGameTableController(() => state, send, createCommandId);
   const game = projection.publicState.game!;
+  const playerName = (playerId: string | undefined) =>
+    projection.publicState.seats.find((seat) => seat.playerId === playerId)?.nickname ?? playerId;
   const awaited = game.turnState.awaitedPlayerIds;
-  const awaitedNames = awaited.map((playerId) => game.players.find((player) => player.playerId === playerId)?.nickname ?? playerId);
+  const awaitedNames = awaited.map((playerId) => playerName(playerId) ?? playerId);
   const offlineNames = projection.publicState.seats.flatMap((seat) => {
     const online = state.snapshot?.presence.find((entry) => entry.seatId === seat.seatId)?.online ?? false;
     return online ? [] : [seat.nickname];
   });
-  const winner = game.players.find((player) => player.playerId === game.winnerId)?.nickname;
-  const actor = game.players.find((player) => player.playerId === game.activePlayerId)?.nickname;
+  const winner = game.winnerId ? playerName(game.winnerId) : undefined;
+  const actor = playerName(game.activePlayerId);
   const dispatch = (intent: GameTableIntent) => {
     if (intent.type === "ui.selectDiceTotal") { setSelectedDiceTotal(intent.diceTotal); return; }
     controller.dispatch(intent);

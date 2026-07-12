@@ -42,8 +42,9 @@ describe("product polish UI", () => {
         pendingDiscards: { p2: 4 }
       }
     };
+    const view = tableViewForGame(game);
     const html = renderToString(
-      createElement(TurnFlowPanel, { game: tableViewForGame(game).game, gameControls: tableViewForGame(game).controlledPlayers, dispatch: () => undefined })
+      createElement(TurnFlowPanel, { game: view.game, gameControls: view.controlledPlayers, decisionPolicy: view.decisionPolicy, dispatch: () => undefined })
     );
     const visibleHtml = html.replaceAll("<!-- -->", "");
 
@@ -67,8 +68,9 @@ describe("product polish UI", () => {
         }
       }
     };
+    const placementView = tableViewForGame(placementGame);
     const placementHtml = renderToString(
-      createElement(TurnFlowPanel, { game: tableViewForGame(placementGame).game, gameControls: tableViewForGame(placementGame).controlledPlayers, dispatch: () => undefined })
+      createElement(TurnFlowPanel, { game: placementView.game, gameControls: placementView.controlledPlayers, decisionPolicy: placementView.decisionPolicy, dispatch: () => undefined })
     );
     expect(placementHtml).toContain('data-turn-flow="robber-placement"');
     expect(placementHtml).toContain("Move the robber to a different hex");
@@ -89,8 +91,9 @@ describe("product polish UI", () => {
         }
       }
     };
+    const victimView = tableViewForGame(victimGame);
     const victimHtml = renderToString(
-      createElement(TurnFlowPanel, { game: tableViewForGame(victimGame).game, gameControls: tableViewForGame(victimGame).controlledPlayers, dispatch: () => undefined })
+      createElement(TurnFlowPanel, { game: victimView.game, gameControls: victimView.controlledPlayers, decisionPolicy: victimView.decisionPolicy, dispatch: () => undefined })
     );
     expect(victimHtml).toContain('data-turn-flow="robber-victim"');
     expect(victimHtml).toContain("Choose a player to steal from");
@@ -160,7 +163,7 @@ describe("product polish UI", () => {
     expect(plentyHtml).toContain('data-development-effect="yearOfPlenty"');
     expect(plentyHtml).toContain("Choose 2 resources");
     expect(plentyHtml.match(/data-resource-choice="wood"[^>]*disabled/)).toBeNull();
-    expect(plentyHtml.match(/data-resource-choice="brick"[^>]*disabled/)).not.toBeNull();
+    expect(plentyHtml).not.toContain('data-resource-choice="brick"');
 
     const monopolyGame = {
       ...base,
@@ -254,7 +257,7 @@ describe("product polish UI", () => {
     expect(actionDockSource).toContain("state.legality.actions");
     expect(actionDockSource).not.toContain("getActionAvailability");
     expect(source).toContain("<BoardActionTargets");
-    expect(source).toContain("canPlaceRobber && hex.id !== state.game.robberHexId");
+    expect(source).toContain("state.decisionPolicy.robberHex.targets.includes(hex.id)");
   });
 
   it("renders connected utility actions, phase guidance, and activity instead of fake chat", () => {

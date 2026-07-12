@@ -137,7 +137,7 @@ export interface GameTableLogEntry {
   };
 }
 
-interface GameTableAvailability { readonly enabled: boolean; readonly reason?: string; readonly targets: readonly string[] }
+export interface GameTableAvailability { readonly enabled: boolean; readonly reason?: string; readonly targets: readonly string[] }
 export interface GameTableActions {
   readonly roll: GameTableAvailability;
   readonly endTurn: GameTableAvailability;
@@ -175,6 +175,14 @@ export interface GameTableView {
   readonly notice: string | null;
   readonly statistics?: { readonly playerRows: Readonly<Record<string, readonly { readonly diceTotal: number; readonly probability: number; readonly resources: GameTableResourceMap; readonly expected: GameTableResourceMap }[]>>; readonly diceIncome: Readonly<Record<number, { readonly players: Readonly<Record<string, GameTableResourceMap>> }>>; readonly matrix: { readonly totals: Readonly<Record<string, GameTableResourceMap>> } };
   readonly legality: { readonly actions: GameTableActions; readonly setupControlId?: string; readonly setupRoadEdgeIds: readonly string[]; readonly setupSettlementVertexIds: readonly string[]; readonly freeRoadEdgeIds: readonly string[] };
+  readonly decisionPolicy: {
+    readonly discard: GameTableAvailability & { readonly exactCount: number; readonly maxByResource: GameTableResourceMap };
+    readonly robberHex: GameTableAvailability;
+    readonly robberVictim: GameTableAvailability;
+    readonly freeRoad: GameTableAvailability & { readonly remainingRoads: number };
+    readonly yearOfPlenty: GameTableAvailability & { readonly remainingPicks: number };
+    readonly monopoly: GameTableAvailability;
+  };
   readonly tradePolicy: {
     readonly publishEnabled: boolean;
     readonly publishReason?: string;
@@ -290,7 +298,7 @@ function BoardView({
   onFullscreen: () => void;
 }) {
   const { t } = useI18n();
-  const canPlaceRobber = state.game.turnState.phase === "awaitingRobberPlacement";
+  const canPlaceRobber = state.game.turnState.phase === "awaitingRobberPlacement" && state.decisionPolicy.robberHex.enabled;
   const playerColorById = new Map(state.game.players.map((player) => [player.id, player.color]));
 
   return (
@@ -356,12 +364,13 @@ function BoardView({
             {state.game.board.map((hex) => {
               const center = hexCenterPoint(hex);
               const polygonPoints = hexPolygonPoints(hex);
-              const canTargetHex = canPlaceRobber && hex.id !== state.game.robberHexId;
+              const canTargetHex = canPlaceRobber && state.decisionPolicy.robberHex.targets.includes(hex.id);
 
               return (
                 <g
                   aria-label={t(`terrain.${hex.terrain}`)}
                   className="hex-tile"
+                  data-robber-target={canTargetHex ? hex.id : undefined}
                   key={hex.id}
                   onClick={
                     canTargetHex
@@ -465,7 +474,7 @@ function BoardView({
           </g>
           <RoadBuildingTargets
             game={state.game}
-            edgeIds={state.legality.freeRoadEdgeIds}
+            edgeIds={state.decisionPolicy.freeRoad.targets}
             dispatch={dispatch}
           />
           <BoardActionTargets
@@ -786,7 +795,7 @@ export function GameTable({
         <StatsPanel state={state} dispatch={dispatch} />
         <TradeHubPanel state={state} dispatch={dispatch} />
       </div>
-      <TurnFlowPanel game={state.game} gameControls={state.controlledPlayers} dispatch={dispatch} />
+      <TurnFlowPanel game={state.game} gameControls={state.controlledPlayers} decisionPolicy={state.decisionPolicy} dispatch={dispatch} />
       <ActionDock
         state={state}
         dispatch={dispatch}

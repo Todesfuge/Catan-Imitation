@@ -155,7 +155,6 @@ function projectPlayer(
   game: GameState,
   player: Player,
   viewerPlayerId: string | undefined,
-  nickname: string,
   revealFinalScores: boolean
 ): PublicPlayerView {
   const completeScore = calculatePlayerScore(game, player.id);
@@ -165,7 +164,6 @@ function projectPlayer(
       : completeScore - hiddenVictoryPointCount(player);
   return {
     playerId: player.id,
-    nickname,
     color: player.color,
     resourceCardCount: resourceCount(player),
     developmentCardCount: player.developmentCards.length,
@@ -393,7 +391,6 @@ function projectGame(
         game,
         player,
         viewerPlayerId,
-        playerNameById.get(player.id) ?? player.name,
         revealFinalScores
       )
     ),
@@ -404,7 +401,7 @@ function projectGame(
     targetScore: game.targetScore,
     boardLayout: "standard-v1",
     buildings: game.buildings.map((building) => ({ ...building })),
-    roads: game.roads.map((road) => ({ ...road })),
+    roads: game.roads.map(({ ownerId, edgeId }) => ({ ownerId, edgeId })),
     robberHexId: game.robberHexId,
     bank: { resources: copyResourceMap(game.bank.resources) },
     log: game.log.flatMap((entry) => {

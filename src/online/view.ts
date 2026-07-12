@@ -6,7 +6,6 @@ import type {
   GamePhase,
   PlayerId,
   ResourceMap,
-  Road,
   TurnPhase
 } from "../domain/types";
 import type { OnlineAllowedActions } from "./allowedActions";
@@ -22,7 +21,6 @@ export interface PublicSeatView {
 
 export interface PublicPlayerView {
   playerId: PlayerId;
-  nickname: string;
   color: string;
   resourceCardCount: number;
   developmentCardCount: number;
@@ -70,7 +68,7 @@ export interface PublicGameView {
   targetScore: number;
   boardLayout: "standard-v1";
   buildings: Building[];
-  roads: Road[];
+  roads: Array<{ ownerId: PlayerId; edgeId: string }>;
   robberHexId: string;
   bank: { resources: ResourceMap };
   log: PublicLogEntry[];

@@ -61,6 +61,14 @@ function callerOnlyFixture(): GameTableView {
       },
       setupRoadEdgeIds: [], setupSettlementVertexIds: [], freeRoadEdgeIds: []
     },
+    decisionPolicy: {
+      discard: { ...unavailable, exactCount: 0, maxByResource: noResources },
+      robberHex: unavailable,
+      robberVictim: unavailable,
+      freeRoad: { ...unavailable, remainingRoads: 0 },
+      yearOfPlenty: { ...unavailable, remainingPicks: 0 },
+      monopoly: unavailable
+    },
     tradePolicy: { publishEnabled: false, publishReason: "Unavailable", maxOfferResources: noResources }
   };
 }

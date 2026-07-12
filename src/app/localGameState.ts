@@ -170,6 +170,12 @@ export function createLocalGameTableView(state: AppState): GameTableView {
   const { players } = state.game;
   const activePlayerId = state.game.activePlayerId;
   const actionFacts = getActionAvailabilityFacts(state, activePlayerId);
+  const decisionPlayerId = state.game.turnState.phase === "awaitingDiscards"
+    ? Object.keys(state.game.turnState.pendingDiscards)[0] ?? activePlayerId
+    : activePlayerId;
+  const decisionFacts = decisionPlayerId === activePlayerId
+    ? actionFacts
+    : getActionAvailabilityFacts(state, decisionPlayerId);
   const tableActions = projectLocalActions(state);
   return {
     game: {
@@ -324,6 +330,21 @@ export function createLocalGameTableView(state: AppState): GameTableView {
       setupRoadEdgeIds: [...actionFacts.setup.road.targets],
       setupSettlementVertexIds: [...actionFacts.setup.settlement.targets],
       freeRoadEdgeIds: [...actionFacts.decisions.freeRoad.targets]
+    },
+    decisionPolicy: {
+      discard: { enabled: decisionFacts.decisions.discard.enabled, targets: [], exactCount: decisionFacts.decisions.discard.exactCount,
+        maxByResource: cloneResources(decisionFacts.decisions.discard.maxByResource),
+        ...(formatAvailabilityReason(decisionFacts.decisions.discard.disabledReason) ? { reason: formatAvailabilityReason(decisionFacts.decisions.discard.disabledReason) } : {}) },
+      robberHex: { enabled: decisionFacts.decisions.robberHex.enabled, targets: [...decisionFacts.decisions.robberHex.targets],
+        ...(formatAvailabilityReason(decisionFacts.decisions.robberHex.disabledReason) ? { reason: formatAvailabilityReason(decisionFacts.decisions.robberHex.disabledReason) } : {}) },
+      robberVictim: { enabled: decisionFacts.decisions.robberVictim.enabled, targets: [...decisionFacts.decisions.robberVictim.targets],
+        ...(formatAvailabilityReason(decisionFacts.decisions.robberVictim.disabledReason) ? { reason: formatAvailabilityReason(decisionFacts.decisions.robberVictim.disabledReason) } : {}) },
+      freeRoad: { enabled: decisionFacts.decisions.freeRoad.enabled, targets: [...decisionFacts.decisions.freeRoad.targets], remainingRoads: decisionFacts.decisions.freeRoad.remainingRoads,
+        ...(formatAvailabilityReason(decisionFacts.decisions.freeRoad.disabledReason) ? { reason: formatAvailabilityReason(decisionFacts.decisions.freeRoad.disabledReason) } : {}) },
+      yearOfPlenty: { enabled: decisionFacts.decisions.yearOfPlenty.enabled, targets: [...decisionFacts.decisions.yearOfPlenty.targets], remainingPicks: decisionFacts.decisions.yearOfPlenty.remainingPicks,
+        ...(formatAvailabilityReason(decisionFacts.decisions.yearOfPlenty.disabledReason) ? { reason: formatAvailabilityReason(decisionFacts.decisions.yearOfPlenty.disabledReason) } : {}) },
+      monopoly: { enabled: decisionFacts.decisions.monopoly.enabled, targets: [...decisionFacts.decisions.monopoly.targets],
+        ...(formatAvailabilityReason(decisionFacts.decisions.monopoly.disabledReason) ? { reason: formatAvailabilityReason(decisionFacts.decisions.monopoly.disabledReason) } : {}) }
     },
     tradePolicy: {
       publishEnabled: actionFacts.publicTrade.publish.enabled,
