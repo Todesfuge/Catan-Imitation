@@ -30,15 +30,6 @@ export class BufferedCryptoRandomSource {
   }
 }
 
-export function createBufferedCryptoRandomSource(drawCount = 512): BufferedCryptoRandomSource {
-  if (!Number.isSafeInteger(drawCount) || drawCount <= 0) {
-    throw new RangeError("drawCount must be a positive safe integer.");
-  }
-  const values = new Uint32Array(drawCount);
-  crypto.getRandomValues(values);
-  return new BufferedCryptoRandomSource(values);
-}
-
 /** Captures entropy once and returns replayable readers for transaction retries. */
 export function prepareBufferedCryptoRandomSource(drawCount = 512): () => BufferedCryptoRandomSource {
   if (!Number.isSafeInteger(drawCount) || drawCount <= 0) {

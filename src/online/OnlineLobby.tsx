@@ -408,9 +408,20 @@ export interface OnlineLobbyServices {
   createRoom(nickname: string): Promise<OnlineSeatSession>;
   joinRoom(roomCode: string, nickname: string): Promise<OnlineSeatSession>;
   leaveRoom(session: OnlineSeatSession): Promise<void>;
+  resumeSession(): OnlineSeatSession | undefined;
+  clearActiveSession(session: OnlineSeatSession): void;
   useRoom: typeof useOnlineRoom;
   copyText(value: string): Promise<void>;
   createCommandId(): string;
+}
+
+export function exitConnectedOnlineRoom(
+  session: OnlineSeatSession,
+  services: Pick<OnlineLobbyServices, "clearActiveSession">,
+  onExit: () => void
+): void {
+  services.clearActiveSession(session);
+  onExit();
 }
 
 function browserServices(): OnlineLobbyServices {
@@ -424,6 +435,8 @@ function browserServices(): OnlineLobbyServices {
     createRoom: (nickname) => createOnlineRoom(nickname, requestDependencies()),
     joinRoom: (roomCode, nickname) => joinOnlineRoom(roomCode, nickname, requestDependencies()),
     leaveRoom: (session) => leaveOnlineRoom(session, requestDependencies()),
+    resumeSession: () => credentials.loadActive(),
+    clearActiveSession: (session) => credentials.clearActive(session.roomCode),
     useRoom: useOnlineRoom,
     copyText: async (value) => {
       if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
@@ -572,7 +585,7 @@ export function OnlineLobby({
   const servicesRef = useRef<OnlineLobbyServices>();
   servicesRef.current ??= injectedServices ?? browserServices();
   const services = servicesRef.current;
-  const [session, setSession] = useState<OnlineSeatSession>();
+  const [session, setSession] = useState<OnlineSeatSession | undefined>(() => services.resumeSession());
   const [nickname, setNickname] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [joinNickname, setJoinNickname] = useState("");
@@ -601,10 +614,11 @@ export function OnlineLobby({
     }
   };
   if (session) {
+    const exit = () => exitConnectedOnlineRoom(session, services, onExit);
     return (
       <ConnectedOnlineRoom
         locale={locale}
-        onExit={onExit}
+        onExit={exit}
         onLocaleChange={onLocaleChange}
         services={services}
         session={session}

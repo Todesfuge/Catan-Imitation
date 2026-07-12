@@ -6,10 +6,13 @@ import {
   type AppRoute
 } from "../../src/app/AppRouter";
 import {
+  exitConnectedOnlineRoom,
+  OnlineLobby,
   OnlineLobbyEntryView,
   OnlineRoomView,
   normalizeLobbyNickname,
   normalizeLobbyRoomCode,
+  type OnlineLobbyServices,
   type OnlineRoomViewProps
 } from "../../src/online/OnlineLobby";
 import type { OnlineClientState } from "../../src/online/onlineReducer";
@@ -107,12 +110,59 @@ describe("Local / Online router", () => {
 });
 
 describe("online room entry", () => {
+  it("resumes an injected active session without creating or joining again", () => {
+    const session = { roomCode: "234567", seatId: "seat-host" };
+    const createRoom = vi.fn();
+    const joinRoom = vi.fn();
+    const useRoom = vi.fn(() => ({
+      state: { status: "connecting" as const, retryAttempt: 0 },
+      dispatch: vi.fn(() => false),
+      reconnect: vi.fn()
+    }));
+    const services = {
+      createRoom,
+      joinRoom,
+      leaveRoom: vi.fn(),
+      resumeSession: vi.fn(() => session),
+      clearActiveSession: vi.fn(),
+      useRoom,
+      copyText: vi.fn(),
+      createCommandId: vi.fn(() => "11111111-1111-4111-8111-111111111111")
+    } as unknown as OnlineLobbyServices;
+
+    const html = render(React.createElement(OnlineLobby, {
+      locale: "en",
+      onExit: vi.fn(),
+      onLocaleChange: vi.fn(),
+      services
+    }));
+
+    expect(services.resumeSession).toHaveBeenCalledOnce();
+    expect(useRoom).toHaveBeenCalledWith("234567");
+    expect(html).toContain("234567");
+    expect(createRoom).not.toHaveBeenCalled();
+    expect(joinRoom).not.toHaveBeenCalled();
+  });
+
+  it("clears only the active marker on explicit connected-room exit", () => {
+    const session = { roomCode: "234567", seatId: "seat-host" };
+    const clearActiveSession = vi.fn();
+    const onExit = vi.fn();
+
+    exitConnectedOnlineRoom(session, { clearActiveSession }, onExit);
+
+    expect(clearActiveSession).toHaveBeenCalledWith(session);
+    expect(onExit).toHaveBeenCalledOnce();
+  });
+
   it("removes a seat credential only after the lobby leave succeeds", async () => {
     const remove = vi.fn();
     const credentials: SeatCredentialStore = {
       load: () => ({ roomCode: "234567", seatId: "seat-host", seatToken: "t".repeat(43) }),
+      loadActive: () => ({ roomCode: "234567", seatId: "seat-host" }),
       save: () => ({ saved: true, persistent: true }),
-      remove
+      remove,
+      clearActive: vi.fn()
     };
     const fetch = vi.fn(async () => new Response(null, { status: 204 }));
     await leaveOnlineRoom(

@@ -3,7 +3,7 @@
 Feature: `002-cloudflare-online-multiplayer`
 Source specification: `spec.md`
 Technical plan: `plan.md`
-Status: Implementation released; T022 controller review, final gate, and branch finishing pending
+Status: T023 final-review fixes implemented; independent review, T022 final gate, and branch finishing pending
 
 ## Execution Rules
 
@@ -516,21 +516,42 @@ Steps:
 - [x] Prepare the external handoff with production URL, architecture, verification, known anonymous-seat limitation, rollback, and remaining optional enhancements.
 - [ ] Use the finishing-branch workflow to offer merge/push/PR options.
 
+### Task 23 (T023) — Restore refreshed seats and bound connection tickets
+
+Requirements: OM-009, OM-012, OM-014, OM-019, OM-047, OM-054, OM-056
+
+Files:
+
+- Modify: `src/online/sessionStorage.ts`, `src/app/AppRouter.tsx`, `src/online/OnlineLobby.tsx`
+- Modify: `worker/room/roomStore.ts`, `worker/room/RoomDurableObject.ts`, `worker/crypto.ts`
+- Modify: focused client, lobby, Worker, and production-UI reload tests
+- Modify: T022 verification, handoff, worklog, and progress records
+
+Steps:
+
+- [x] Reproduce actual page-refresh session loss and unbounded ticket issuance with focused failing tests.
+- [x] Persist only an active normalized room-code pointer and reconstruct the retained seat through the existing credential/transport.
+- [x] Enforce 8 outstanding tickets per seat, 32 per room, and 10 authenticated issuance admissions per credential in a rolling two-second window.
+- [x] Delete the unused direct crypto random-source factory.
+- [x] Run focused client/lobby/Worker tests and the real three-browser `page.reload()` scenario.
+- [x] Remediate saturated-store admission accounting and schema-v1 expired-ticket read normalization from independent review.
+- [ ] Obtain independent review and leave the T022 terminal final gate to the controller.
+
 ## Requirement Coverage Map
 
 | Requirements | Primary tasks |
 |---|---|
 | OM-001–OM-002 | T015, T017, T018, T019 |
 | OM-003–OM-007 | T004, T010, T011, T017 |
-| OM-008–OM-014 | T009, T011, T016 |
-| OM-015–OM-021 | T010, T011, T012, T016, T018 |
+| OM-008–OM-014 | T009, T011, T016, T023 |
+| OM-015–OM-021 | T010, T011, T012, T016, T018, T023 |
 | OM-022–OM-024 | T002, T003, T004, T015 |
 | OM-025–OM-030 | T002, T003, T005, T013 |
 | OM-031–OM-037 | T006, T007, T014, T018 |
 | OM-038–OM-043 | T001, T014, T018, T019 |
-| OM-044–OM-051 | T005–T007, T016–T019 |
-| OM-052–OM-059 | T005, T008–T014, T020 |
+| OM-044–OM-051 | T005–T007, T016–T019, T023 |
+| OM-052–OM-059 | T005, T008–T014, T020, T023 |
 | OM-060–OM-063 | T008, T020, T021 |
 | OM-064–OM-065 | T021, T022 |
 
-All 65 requirements have at least one implementation owner and one verification path. The minimum playable online slice is T001 through T018; production completion requires T019 through T022.
+All 65 requirements have at least one implementation owner and one verification path. The minimum playable online slice is T001 through T018; final review convergence now includes T023, while T022 retains the independent-review/final-gate/finishing ownership.

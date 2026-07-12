@@ -12,6 +12,7 @@ Production: `https://catan-imitation.catan-imitation.workers.dev/`
 - The released T021 gate passed 307/307 main tests, 91/91 Worker tests, and 31/31 browser tests, plus `pnpm build`, `pnpm build:worker`, `pnpm smoke:worker`, Wrangler dry-run, documentation/link checks, and `git diff --check`. The requirement-by-requirement evidence is in `verification.md`.
 - Acceptance uses an explicit evidence-substitution waiver: the complete three-context API/WebSocket/privacy/reconnect/stored-recovery/responsive suite ran against the locally combined Worker, while the real preview and production Workers supplied rendering, bilingual lobby, and room-creation evidence. This is not a remote three-browser run.
 - Anonymous seat recovery is same-origin and credential-based. Clearing site storage or moving to another device loses the seat; there are no accounts or cross-device recovery.
+- T023 now proves a true browser refresh: the active record contains only the normalized room code, startup resolves the existing room-keyed credential, requests a fresh one-time ticket, and restores the same seat's equal-or-newer complete private projection without create/join.
 - Rooms expire after 24 hours without valid activity and no active connections. Active connections defer expiry; cleanup deletes the snapshot, credentials, and pending secret input.
 
 ## Technical Details
@@ -35,7 +36,8 @@ Browser
 - `src/domain/match/applyMatchCommand.ts` is the gameplay authority shared by Local and Online modes. `src/app/gameReducer.ts` remains a thin local UI adapter and owns no networking, projection, dice, or rule execution.
 - `worker/room/commandPipeline.ts` derives the actor from the authenticated seat, validates and deduplicates the command, checks the expected room version, executes the shared transition with server-owned randomness, persists, projects, and broadcasts.
 - `src/online/projectRoomView.ts` is the projection boundary. It exposes public counts/state and only the caller's resources, development cards, and private choices. Opponent card/resource identities, hidden victory points, unresolved or losing bid values, credentials, tickets, token hashes, and raw persisted state stay server-side.
-- Reconnect reads the origin-local seat credential, exchanges it over HTTPS for a fresh single-use ticket, and replaces client state with a complete current caller projection. Presence derives from active sockets and is not game-rule state.
+- Reconnect and page refresh resolve a room-code-only active pointer through the origin-local seat credential, exchange the token over HTTPS for a fresh single-use ticket, and replace client state with a complete current caller projection. Explicit connected-room exit clears the pointer; lobby leave continues to remove the credential. Presence derives from active sockets and is not game-rule state.
+- Persisted connection tickets are capped at 8 outstanding per seat and 32 per room. The Durable Object also allows at most 10 authenticated issuance admissions per credential in a rolling two-second window, including store-level saturation rejections, and returns the existing stable HTTP 429 / `RATE_LIMITED` response before further ticket crypto/storage work. Invalid credentials do not allocate limiter entries.
 - Pending sealed bids are persisted with the room and survive room-runtime recreation. Repository evidence covers Durable Object reconstruction/storage and the production alarm path; it does not claim a Cloudflare hibernation callback test that was not run.
 
 ### Verification and Production Evidence
@@ -46,7 +48,7 @@ Browser
 - Workers Builds source: GitHub `main`; build `pnpm build:worker`; deploy `pnpm exec wrangler deploy`.
 - Preview uses `pnpm build:worker`, then `pnpm exec wrangler deploy --name catan-imitation-preview` because a separate Worker is required for the Durable Object preview.
 - GitHub Pages publishing is retired; the former Pages address returned HTTP 404 after production acceptance.
-- T022 has mapped all 65 requirements without finding a new implementation gap. The controller still owns independent review, the fresh full final gate, and branch-finishing options.
+- T022 mapped all 65 requirements, and its whole-branch review then found two Important implementation gaps. T023 fixes refresh restoration and ticket issuance bounds with focused RED/GREEN evidence. Independent re-review, the fresh T022 full final gate, and branch-finishing options remain controller-owned.
 
 ### Rollback
 

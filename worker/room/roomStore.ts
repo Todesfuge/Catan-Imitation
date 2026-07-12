@@ -12,6 +12,8 @@ import {
 
 export const ROOM_RECORD_KEY = "room";
 export const ROOM_EXPIRED_KEY = "expired";
+export const MAX_OUTSTANDING_TICKETS_PER_SEAT = 8;
+export const MAX_OUTSTANDING_TICKETS_PER_ROOM = 32;
 
 export interface RoomStorage {
   get(key: string): Promise<unknown>;
@@ -162,7 +164,7 @@ function pendingAuctionIsConsistent(room: PersistedRoom, seats: PersistedSeat[])
   });
 }
 
-export function assertPersistedRoom(value: unknown): asserts value is PersistedRoom {
+function assertPersistedRoomSemantics(value: unknown): asserts value is PersistedRoom {
   if (!record(value) || !exactKeys(value, [
     "schemaVersion", "roomCode", "lifecycle", "createdAt", "lastActivityAt", "expiresAt",
     "hostSeatId", "nextJoinOrder", "roomVersion", "seats", "connectionTickets"
@@ -203,6 +205,22 @@ export function assertPersistedRoom(value: unknown): asserts value is PersistedR
   }
 }
 
+function assertTicketBounds(room: PersistedRoom): void {
+  const ticketCounts = new Map<string, number>();
+  for (const item of room.connectionTickets) {
+    ticketCounts.set(item.seatId, (ticketCounts.get(item.seatId) ?? 0) + 1);
+  }
+  if (room.connectionTickets.length > MAX_OUTSTANDING_TICKETS_PER_ROOM ||
+    [...ticketCounts.values()].some((count) => count > MAX_OUTSTANDING_TICKETS_PER_SEAT)) {
+    throw new RoomSchemaError();
+  }
+}
+
+export function assertPersistedRoom(value: unknown): asserts value is PersistedRoom {
+  assertPersistedRoomSemantics(value);
+  assertTicketBounds(value);
+}
+
 function expiredAt(value: unknown): number | undefined {
   if (!record(value) || !exactKeys(value, ["schemaVersion", "expiredAt"]) ||
     value.schemaVersion !== 1 || !integer(value.expiredAt)) {
@@ -225,12 +243,15 @@ async function readStoredRoom(
     return { kind: "expired", expiredAt: timestamp };
   }
 
-  assertPersistedRoom(value);
+  assertPersistedRoomSemantics(value);
   const connectionTickets = value.connectionTickets.filter((item) => item.expiresAt > now);
+  const cleaned = connectionTickets.length === value.connectionTickets.length
+    ? value
+    : { ...value, connectionTickets };
+  assertTicketBounds(cleaned);
   if (connectionTickets.length === value.connectionTickets.length) {
     return { kind: "active", room: value };
   }
-  const cleaned = { ...value, connectionTickets };
   await storage.put(ROOM_RECORD_KEY, cleaned);
   return { kind: "active", room: cleaned };
 }
@@ -372,7 +393,7 @@ export class RoomStore {
     tokenHash: string,
     ticket: Omit<ConnectionTicket, "seatId">,
     now: number
-  ): Promise<"missing" | "expired" | "invalid-token" | { room: PersistedRoom; seatId: string }> {
+  ): Promise<"missing" | "expired" | "invalid-token" | "rate-limited" | { room: PersistedRoom; seatId: string }> {
     return this.transaction(async (storage) => {
       const current = await readStoredRoom(storage, now);
       if (current.kind !== "active") return current.kind;
@@ -380,6 +401,11 @@ export class RoomStore {
       const seat = value.seats.find((candidate) => hashesMatch(candidate.tokenHash, tokenHash));
       if (seat === undefined) return "invalid-token";
       const validTickets = value.connectionTickets.filter((candidate) => candidate.expiresAt > now);
+      const seatTicketCount = validTickets.filter((candidate) => candidate.seatId === seat.seatId).length;
+      if (seatTicketCount >= MAX_OUTSTANDING_TICKETS_PER_SEAT ||
+        validTickets.length >= MAX_OUTSTANDING_TICKETS_PER_ROOM) {
+        return "rate-limited";
+      }
       const room = {
         ...value,
         connectionTickets: [...validTickets, { ...ticket, seatId: seat.seatId }]

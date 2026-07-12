@@ -1,5 +1,5 @@
 import { env, runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import worker from "../../worker/index";
 import { hashSecret } from "../../worker/crypto";
 import { RoomDurableObject } from "../../worker/room/RoomDurableObject";
@@ -20,6 +20,8 @@ import {
   startLobby
 } from "../../worker/room/roomLifecycle";
 import {
+  MAX_OUTSTANDING_TICKETS_PER_ROOM,
+  MAX_OUTSTANDING_TICKETS_PER_SEAT,
   ROOM_RECORD_KEY,
   RoomSchemaError,
   RoomStore,
@@ -106,6 +108,7 @@ class MemoryStorage implements RoomStorage {
   readonly values = new Map<string, unknown>();
   readonly alarms: number[] = [];
   alarm: number | null = null;
+  transactionCount = 0;
   beforeNextTransaction?: () => Promise<void>;
   private transactionTail: Promise<void> = Promise.resolve();
 
@@ -132,6 +135,7 @@ class MemoryStorage implements RoomStorage {
   }
 
   async transaction<T>(closure: (transaction: RoomStorage) => Promise<T>): Promise<T> {
+    this.transactionCount += 1;
     const previous = this.transactionTail;
     let release!: () => void;
     this.transactionTail = new Promise<void>((resolve) => { release = resolve; });
@@ -441,6 +445,116 @@ describe("RoomStore", () => {
         RoomSchemaError
       );
     }
+  });
+
+  it("rejects more than 32 total or 8 per-seat persisted tickets", async () => {
+    const fourSeatRoom = roomWithSeats(4);
+    const totalOverflow = {
+      ...fourSeatRoom,
+      connectionTickets: Array.from({ length: 33 }, (_, index) => ({
+        ticketHash: "T".repeat(43),
+        seatId: fourSeatRoom.seats[index % fourSeatRoom.seats.length].seatId,
+        expiresAt: 10_000
+      }))
+    };
+    const seatOverflow = {
+      ...roomWithSeats(),
+      connectionTickets: Array.from({ length: 9 }, () => ({
+        ticketHash: "U".repeat(43),
+        seatId: "seat-1",
+        expiresAt: 10_000
+      }))
+    };
+
+    expect(MAX_OUTSTANDING_TICKETS_PER_ROOM).toBe(32);
+    expect(MAX_OUTSTANDING_TICKETS_PER_SEAT).toBe(8);
+    await expect(new RoomStore(new MemoryStorage()).save(totalOverflow))
+      .rejects.toBeInstanceOf(RoomSchemaError);
+    await expect(new RoomStore(new MemoryStorage()).save(seatOverflow))
+      .rejects.toBeInstanceOf(RoomSchemaError);
+  });
+
+  it("rejects a ninth outstanding seat ticket without mutation and prunes expired tickets first", async () => {
+    const storage = new MemoryStorage();
+    const store = new RoomStore(storage);
+    await store.createIfEmpty(roomWithSeats());
+    for (let index = 0; index < 8; index += 1) {
+      await expect(store.issueTicketLatest(HASH, {
+        ticketHash: String.fromCharCode(65 + index).repeat(43),
+        expiresAt: 10_000
+      }, 1_000)).resolves.toMatchObject({ seatId: "seat-1" });
+    }
+    const before = structuredClone(storage.values.get(ROOM_RECORD_KEY));
+    await expect(store.issueTicketLatest(HASH, {
+      ticketHash: "Z".repeat(43),
+      expiresAt: 10_000
+    }, 1_000)).resolves.toBe("rate-limited");
+    expect(storage.values.get(ROOM_RECORD_KEY)).toEqual(before);
+
+    const expiringStorage = new MemoryStorage();
+    const expiringRoom = {
+      ...roomWithSeats(),
+      connectionTickets: [
+        ...Array.from({ length: 7 }, (_, index) => ({
+          ticketHash: String.fromCharCode(65 + index).repeat(43),
+          seatId: "seat-1",
+          expiresAt: 10_000
+        })),
+        { ticketHash: "Y".repeat(43), seatId: "seat-1", expiresAt: 999 }
+      ]
+    };
+    expiringStorage.values.set(ROOM_RECORD_KEY, expiringRoom);
+    const issued = await new RoomStore(expiringStorage).issueTicketLatest(HASH, {
+      ticketHash: "X".repeat(43),
+      expiresAt: 10_000
+    }, 1_000);
+    expect(issued).toMatchObject({ seatId: "seat-1" });
+    expect((issued as { room: PersistedRoom }).room.connectionTickets).toHaveLength(8);
+    expect((issued as { room: PersistedRoom }).room.connectionTickets)
+      .not.toContainEqual(expect.objectContaining({ expiresAt: 999 }));
+  });
+
+  it("normalizes a legacy v1 room whose over-bound excess tickets are expired", async () => {
+    const storage = new MemoryStorage();
+    const legacy = {
+      ...roomWithSeats(),
+      connectionTickets: [
+        ...Array.from({ length: 8 }, (_, index) => ({
+          ticketHash: String.fromCharCode(65 + index).repeat(43),
+          seatId: "seat-1",
+          expiresAt: 10_000
+        })),
+        { ticketHash: "Y".repeat(43), seatId: "seat-1", expiresAt: 999 },
+        { ticketHash: "Z".repeat(43), seatId: "seat-1", expiresAt: 500 }
+      ]
+    };
+    storage.values.set(ROOM_RECORD_KEY, legacy);
+
+    const loaded = await new RoomStore(storage).load(1_000);
+
+    expect(loaded?.connectionTickets).toHaveLength(8);
+    expect((storage.values.get(ROOM_RECORD_KEY) as PersistedRoom).connectionTickets)
+      .toEqual(loaded?.connectionTickets);
+  });
+
+  it("rejects a legacy v1 room still over-bound after pruning without mutation", async () => {
+    const storage = new MemoryStorage();
+    const legacy = {
+      ...roomWithSeats(),
+      connectionTickets: [
+        ...Array.from({ length: 9 }, (_, index) => ({
+          ticketHash: String.fromCharCode(65 + index).repeat(43),
+          seatId: "seat-1",
+          expiresAt: 10_000
+        })),
+        { ticketHash: "Z".repeat(43), seatId: "seat-1", expiresAt: 999 }
+      ]
+    };
+    storage.values.set(ROOM_RECORD_KEY, legacy);
+    const before = structuredClone(storage.values.get(ROOM_RECORD_KEY));
+
+    await expect(new RoomStore(storage).load(1_000)).rejects.toBeInstanceOf(RoomSchemaError);
+    expect(storage.values.get(ROOM_RECORD_KEY)).toEqual(before);
   });
 
   it("rejects malformed nested match state", async () => {
@@ -1136,6 +1250,74 @@ describe("room HTTP routes and authenticated sockets", () => {
         presence: [{ seatId: host.seatId, connectionCount: 1, online: true }]
       });
       closeSocket(hostSocket);
+    }
+  });
+
+  it("rate-limits the eleventh successful ticket in two seconds without charging invalid credentials", async () => {
+    const host = await createRoom("Ticket Burst Host");
+    for (let index = 0; index < 3; index += 1) {
+      const invalid = await api(`/api/rooms/${host.roomCode}/connection-ticket`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${"x".repeat(43)}` }
+      });
+      expect(invalid.status).toBe(401);
+    }
+
+    for (let index = 0; index < 10; index += 1) {
+      const issued = await issueTicket(host.roomCode, host.seatToken);
+      const socket = await connect(host.roomCode, issued.ticket);
+      closeSocket(socket);
+    }
+
+    const limited = await api(`/api/rooms/${host.roomCode}/connection-ticket`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${host.seatToken}` }
+    });
+    expect(limited.status).toBe(429);
+    await expect(limited.json()).resolves.toEqual({
+      error: { code: "RATE_LIMITED", params: {}, retryable: true }
+    });
+  });
+
+  it("charges saturated authenticated admissions and stops ticket crypto and storage after ten", async () => {
+    const host = await createRoom("Saturated Host");
+    const storage = testRooms.state(host.roomCode).storage as unknown as MemoryStorage;
+    const random = vi.spyOn(crypto, "getRandomValues");
+    try {
+      for (let index = 0; index < 11; index += 1) {
+        const invalid = await api(`/api/rooms/${host.roomCode}/connection-ticket`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${"x".repeat(43)}` }
+        });
+        expect(invalid.status).toBe(401);
+      }
+
+      for (let index = 0; index < 8; index += 1) {
+        await issueTicket(host.roomCode, host.seatToken);
+      }
+      for (let index = 0; index < 2; index += 1) {
+        const saturated = await api(`/api/rooms/${host.roomCode}/connection-ticket`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${host.seatToken}` }
+        });
+        expect(saturated.status).toBe(429);
+      }
+
+      const transactionsAtLimit = storage.transactionCount;
+      const randomCallsAtLimit = random.mock.calls.length;
+      const rejectedBeforeWork = await api(`/api/rooms/${host.roomCode}/connection-ticket`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${host.seatToken}` }
+      });
+
+      expect(rejectedBeforeWork.status).toBe(429);
+      await expect(rejectedBeforeWork.json()).resolves.toEqual({
+        error: { code: "RATE_LIMITED", params: {}, retryable: true }
+      });
+      expect(storage.transactionCount).toBe(transactionsAtLimit);
+      expect(random.mock.calls).toHaveLength(randomCallsAtLimit);
+    } finally {
+      random.mockRestore();
     }
   });
 });

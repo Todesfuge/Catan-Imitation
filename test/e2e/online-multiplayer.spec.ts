@@ -515,6 +515,33 @@ test("three real browsers play an authoritative private room and reconnect", asy
     const recovered = productionWireSnapshots.get(second)!.at(-1)!;
     expect(recovered.privateState.seatId).toBe(initial[1].privateState.seatId);
     expect(await second.locator(".player-card").filter({ hasText: "Second" }).locator(".resource-strip").innerText()).toBe(handBefore);
+
+    const ticketsBeforeReload = ticketRequestCounts.get(second)!.count;
+    const snapshotsBeforeReload = productionWireSnapshots.get(second)!.length;
+    let createOrJoinRequests = 0;
+    const countBootstrap = (request: import("@playwright/test").Request) => {
+      const url = new URL(request.url());
+      if (request.method() === "POST" &&
+        (url.pathname === "/api/rooms" || url.pathname.endsWith("/join"))) {
+        createOrJoinRequests += 1;
+      }
+    };
+    second.on("request", countBootstrap);
+    await second.reload();
+    await expect(second.locator(".online-game-shell")).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => ticketRequestCounts.get(second)!.count, { timeout: 20_000 })
+      .toBeGreaterThan(ticketsBeforeReload);
+    await expect.poll(() => productionWireSnapshots.get(second)!.length, { timeout: 20_000 })
+      .toBeGreaterThan(snapshotsBeforeReload);
+    second.off("request", countBootstrap);
+    expect(createOrJoinRequests).toBe(0);
+    const reloaded = productionWireSnapshots.get(second)!.at(-1)!;
+    expect(reloaded.roomVersion).toBeGreaterThanOrEqual(recovered.roomVersion);
+    expect(reloaded.privateState.seatId).toBe(initial[1].privateState.seatId);
+    expect(reloaded.privateState.resources).toBeTruthy();
+    expect(reloaded.privateState.developmentCards).toBeTruthy();
+    expect(await second.locator(".player-card").filter({ hasText: "Second" }).locator(".resource-strip").innerText())
+      .toBe(handBefore);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

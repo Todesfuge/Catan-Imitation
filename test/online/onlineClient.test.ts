@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  activeSeatCredentialStorageKey,
   createSeatCredentialStore,
   getDefaultSeatCredentialStore,
   seatCredentialStorageKey,
@@ -101,6 +102,54 @@ async function flush(): Promise<void> {
 }
 
 describe("online seat credential storage", () => {
+  it("persists only an active room pointer and resolves it through the existing credential", () => {
+    const storage = memoryStorage();
+    const store = createSeatCredentialStore(storage);
+
+    expect(store.save({ roomCode: " 7kmpqx ", seatId: "seat-1", seatToken }))
+      .toEqual({ saved: true, persistent: true });
+    expect(storage.values.get(activeSeatCredentialStorageKey)).toBe(roomCode);
+    expect(storage.values.get(activeSeatCredentialStorageKey)).not.toContain(seatToken);
+    expect(store.loadActive()).toEqual({ roomCode, seatId: "seat-1" });
+
+    store.clearActive(roomCode);
+    expect(store.loadActive()).toBeUndefined();
+    expect(store.load(roomCode)).toEqual({ roomCode, seatId: "seat-1", seatToken });
+
+    store.save({ roomCode, seatId: "seat-1", seatToken });
+    store.remove(roomCode);
+    expect(store.loadActive()).toBeUndefined();
+  });
+
+  it("removes malformed and stale active pointers", () => {
+    const storage = memoryStorage();
+    storage.values.set(activeSeatCredentialStorageKey, " 7kmpqx ");
+    expect(createSeatCredentialStore(storage).loadActive()).toBeUndefined();
+    expect(storage.values.has(activeSeatCredentialStorageKey)).toBe(false);
+
+    storage.values.set(activeSeatCredentialStorageKey, roomCode);
+    expect(createSeatCredentialStore(storage).loadActive()).toBeUndefined();
+    expect(storage.values.has(activeSeatCredentialStorageKey)).toBe(false);
+  });
+
+  it("keeps the active session volatile when storage is unavailable or quota-failing", () => {
+    for (const storage of [
+      undefined,
+      {
+        getItem: () => { throw new DOMException("blocked"); },
+        setItem: () => { throw new DOMException("quota"); },
+        removeItem: () => { throw new DOMException("blocked"); }
+      } satisfies StorageLike
+    ]) {
+      const store = createSeatCredentialStore(storage);
+      expect(store.save({ roomCode, seatId: "seat-1", seatToken }))
+        .toEqual({ saved: true, persistent: false });
+      expect(store.loadActive()).toEqual({ roomCode, seatId: "seat-1" });
+      expect(() => store.clearActive(roomCode)).not.toThrow();
+      expect(store.loadActive()).toBeUndefined();
+    }
+  });
+
   it("uses an origin-local room namespace and lets multiple tabs reuse one token", () => {
     const storage = memoryStorage();
     const firstTab = createSeatCredentialStore(storage);
@@ -109,7 +158,10 @@ describe("online seat credential storage", () => {
     expect(seatCredentialStorageKey(" 7kmpqx ")).toBe("catan.online.seat.v1:7KMPQX");
     expect(firstTab.save({ roomCode, seatId: "seat-1", seatToken })).toEqual({ saved: true, persistent: true });
     expect(secondTab.load(roomCode)).toEqual({ roomCode, seatId: "seat-1", seatToken });
-    expect([...storage.values.keys()]).toEqual(["catan.online.seat.v1:7KMPQX"]);
+    expect([...storage.values.keys()]).toEqual([
+      "catan.online.seat.v1:7KMPQX",
+      activeSeatCredentialStorageKey
+    ]);
   });
 
   it("falls back safely when storage is malformed or unavailable", () => {
@@ -359,8 +411,10 @@ describe("online HTTP bootstrap", () => {
   it("rejects false-success seat creation when an injected credential store cannot save", async () => {
     const failingStore: SeatCredentialStore = {
       load: () => undefined,
+      loadActive: () => undefined,
       save: () => ({ saved: false, persistent: false }),
-      remove: () => undefined
+      remove: () => undefined,
+      clearActive: () => undefined
     };
     await expect(createOnlineRoom("Alice", {
       origin: "https://game.test",

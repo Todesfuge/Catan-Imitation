@@ -26,6 +26,8 @@ import { createCommandPipeline, type CommandRecipient } from "./commandPipeline"
 import { prepareE2EExecutionContext } from "../testing/e2eExecutionContext";
 
 const ROOM_RETENTION_MS = 24 * 60 * 60 * 1_000;
+const TICKET_BURST_WINDOW_MS = 2_000;
+const MAX_TICKET_ISSUANCE_ADMISSIONS_PER_WINDOW = 10;
 
 interface ConnectionAttachment {
   seatId: string;
@@ -109,6 +111,8 @@ export class RoomDurableObject {
   private readonly store: RoomStore;
   private readonly commands;
   private commandTail: Promise<void> = Promise.resolve();
+  private ticketTail: Promise<void> = Promise.resolve();
+  private readonly ticketIssuances = new Map<string, number[]>();
 
   constructor(private readonly ctx: DurableObjectState, env: Env) {
     this.store = new RoomStore(ctx.storage);
@@ -147,7 +151,9 @@ export class RoomDurableObject {
       return this.leave(request, segments[4]);
     }
     if (request.method === "POST" && segments.length === 4 && segments[3] === "connection-ticket") {
-      return this.ticket(request);
+      const response = this.ticketTail.then(() => this.ticket(request));
+      this.ticketTail = response.then(() => undefined, () => undefined);
+      return response;
     }
     if (request.method === "GET" && segments.length === 4 && segments[3] === "connect") {
       return this.upgrade(request, url);
@@ -213,6 +219,10 @@ export class RoomDurableObject {
   private async ticket(request: Request): Promise<Response> {
     const now = Date.now();
     const tokenHash = await hashSecret(parseBearerToken(request.headers));
+    this.pruneTicketIssuances(now);
+    if ((this.ticketIssuances.get(tokenHash)?.length ?? 0) >= MAX_TICKET_ISSUANCE_ADMISSIONS_PER_WINDOW) {
+      throw new HttpProtocolError("RATE_LIMITED");
+    }
     const issued = await issueConnectionTicket(now);
     const result = await this.store.issueTicketLatest(
       tokenHash,
@@ -222,7 +232,21 @@ export class RoomDurableObject {
     if (result === "missing") throw new HttpProtocolError("ROOM_NOT_FOUND");
     if (result === "expired") throw new HttpProtocolError("ROOM_EXPIRED");
     if (result === "invalid-token") throw new HttpProtocolError("SEAT_TOKEN_INVALID");
+    if (result === "rate-limited") {
+      this.ticketIssuances.set(tokenHash, [...(this.ticketIssuances.get(tokenHash) ?? []), now]);
+      throw new HttpProtocolError("RATE_LIMITED");
+    }
+    this.ticketIssuances.set(tokenHash, [...(this.ticketIssuances.get(tokenHash) ?? []), now]);
     return jsonResponse({ ticket: issued.ticket, expiresInMs: 30_000 }, { status: 201 });
+  }
+
+  private pruneTicketIssuances(now: number): void {
+    const cutoff = now - TICKET_BURST_WINDOW_MS;
+    for (const [tokenHash, timestamps] of this.ticketIssuances) {
+      const current = timestamps.filter((timestamp) => timestamp > cutoff);
+      if (current.length === 0) this.ticketIssuances.delete(tokenHash);
+      else if (current.length !== timestamps.length) this.ticketIssuances.set(tokenHash, current);
+    }
   }
 
   private async upgrade(request: Request, url: URL): Promise<Response> {

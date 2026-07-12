@@ -1,6 +1,7 @@
 import React, { useState, type ReactNode } from "react";
 import { LocalGame } from "../App";
 import { OnlineLobby } from "../online/OnlineLobby";
+import { getDefaultSeatCredentialStore } from "../online/sessionStorage";
 import { translate, useI18n, type Locale } from "../ui/i18n";
 
 export type AppRoute = "entry" | "local" | "online";
@@ -88,7 +89,9 @@ export function AppRouterView({
 }
 
 export function AppRouter() {
-  const [route, setRoute] = useState<AppRoute>("entry");
+  const [route, setRoute] = useState<AppRoute>(() =>
+    getDefaultSeatCredentialStore().loadActive() ? "online" : "entry"
+  );
   const { locale, setLocale } = useI18n();
   return <AppRouterView route={route} onRouteChange={setRoute} locale={locale} onLocaleChange={setLocale} />;
 }
