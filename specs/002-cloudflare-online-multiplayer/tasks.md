@@ -3,7 +3,7 @@
 Feature: `002-cloudflare-online-multiplayer`
 Source specification: `spec.md`
 Technical plan: `plan.md`
-Status: T023 complete; T022 independent review and fresh final gate passed; branch-finishing decision pending
+Status: T022 and T023 complete; merged into local `main` with post-merge verification
 
 ## Execution Rules
 
@@ -514,7 +514,7 @@ Steps:
 - [x] Run the final gate: `pnpm test`, `pnpm test:worker`, `pnpm test:e2e`, `pnpm build`, `pnpm build:worker`, `pnpm smoke:worker`, `pnpm exec wrangler deploy --dry-run`, and `git diff --check`.
 - [x] Update task/checklist/spec status only after fresh evidence exists.
 - [x] Prepare the external handoff with production URL, architecture, verification, known anonymous-seat limitation, rollback, and remaining optional enhancements.
-- [ ] Use the finishing-branch workflow to offer merge/push/PR options.
+- [x] Use the finishing-branch workflow to offer merge/push/PR options; the user selected a local merge to `main`.
 
 ### Task 23 (T023) — Restore refreshed seats and bound connection tickets
 

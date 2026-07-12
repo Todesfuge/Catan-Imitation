@@ -61,6 +61,6 @@ Convergence independently verified: 2026-07-13
 - [x] The approved evidence-substitution waiver is explicit and is not described as a remote three-browser run.
 - [x] T022 independent implementation review passed with no remaining Critical, Important, or Minor findings.
 - [x] T022 fresh full final gate passed: main 312/312, Worker 97/97, browser 31/31, both builds, Worker smoke, Wrangler dry-run, content/link/matrix checks, and diff check.
-- [ ] T022 finishing-branch decision is pending controller execution.
+- [x] T022 finishing-branch decision completed: the user selected a local merge to `main`, and the merged result passed the post-merge gate.
 
-The specification-quality checks above remain a record of the approved requirements. The release is live and independently verified; only the user-owned branch-finishing decision remains open.
+The specification-quality checks above remain a record of the approved requirements. The release is live, independently verified, and merged into local `main`.

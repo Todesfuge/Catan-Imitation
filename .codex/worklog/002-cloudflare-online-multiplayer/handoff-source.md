@@ -1,7 +1,7 @@
 # Handoff Source: Cloudflare Online Multiplayer
 
 Date: 2026-07-13
-Current phase: T023 and the T022 controller gate verified; branch-finishing decision pending
+Current phase: merged into local `main`; post-merge verification passed
 Branch: `codex/online-multiplayer`
 
 ## Current State
@@ -35,5 +35,5 @@ The shared pure match transition owns rules for both modes. The authenticated ro
 
 ## Next Actions
 
-1. Present the finishing-branch merge/push/PR/keep options.
-2. Execute the user's selected branch-finishing action.
+1. No local integration work remains.
+2. Push local `main` when GitHub connectivity is available and the user requests remote publication.

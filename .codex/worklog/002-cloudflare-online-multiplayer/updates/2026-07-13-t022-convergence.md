@@ -57,8 +57,9 @@ Converge the released feature against every numbered requirement, preserve evide
 
 - Same-origin anonymous recovery remains intentionally unrecoverable after storage clearing or device change.
 - Remote three-browser and Cloudflare hibernation-callback evidence remain optional strengthening; neither is claimed here.
-- Independent review and the final full gate are complete; only the user-owned finishing-branch choice remains open.
+- Independent review and the final full gate are complete. The user selected a local merge to `main`; the merged result passed main 312/312, Worker 97/97, browser 31/31, and production builds embedded in those gates.
+- GitHub was unreachable on port 443 during the pre-merge fetch attempt. Local `main` and the last-known `origin/main` both pointed to `e07dcc3` before the fast-forward merge, but remote freshness could not be reconfirmed online.
 
 ## Handoff
 
-Use `specs/002-cloudflare-online-multiplayer/handoff.md`, `verification.md`, and the T023 review reports; controller proceeds to the finishing-branch options.
+Use `specs/002-cloudflare-online-multiplayer/handoff.md`, `verification.md`, and the T023 review reports. Local integration is complete; remote publication remains a separate future action.

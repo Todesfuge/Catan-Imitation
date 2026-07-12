@@ -134,4 +134,4 @@ Release: `https://catan-imitation.catan-imitation.workers.dev/`
 
 ## Convergence Result
 
-All 65 numbered requirements have concrete automated or approved combined/manual evidence. T023 closed the refresh-recovery and ticket-availability gaps found by the first whole-branch review. Independent T023 re-review and the repeated whole-branch review passed with no remaining Critical, Important, or Minor findings; the fresh T022 full final gate passed. Only the user-owned finishing-branch decision remains open.
+All 65 numbered requirements have concrete automated or approved combined/manual evidence. T023 closed the refresh-recovery and ticket-availability gaps found by the first whole-branch review. Independent T023 re-review and the repeated whole-branch review passed with no remaining Critical, Important, or Minor findings; the fresh T022 full final gate passed. The user selected a local merge to `main`; the merged result then passed main 312/312, Worker 97/97, browser 31/31, and the production build embedded in the Worker/browser gates.

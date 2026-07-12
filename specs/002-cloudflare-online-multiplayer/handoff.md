@@ -48,7 +48,7 @@ Browser
 - Workers Builds source: GitHub `main`; build `pnpm build:worker`; deploy `pnpm exec wrangler deploy`.
 - Preview uses `pnpm build:worker`, then `pnpm exec wrangler deploy --name catan-imitation-preview` because a separate Worker is required for the Durable Object preview.
 - GitHub Pages publishing is retired; the former Pages address returned HTTP 404 after production acceptance.
-- T022 mapped all 65 requirements, and its first whole-branch review found two Important implementation gaps. T023 fixed refresh restoration and ticket issuance bounds with focused RED/GREEN evidence. Independent T023 re-review and repeated whole-branch review passed with no findings. The fresh controller gate passed main 312/312, Worker 97/97, browser 31/31, both builds, Worker smoke, Wrangler dry-run, content/link/matrix checks, and diff check. Only the branch-finishing choice remains open.
+- T022 mapped all 65 requirements, and its first whole-branch review found two Important implementation gaps. T023 fixed refresh restoration and ticket issuance bounds with focused RED/GREEN evidence. Independent T023 re-review and repeated whole-branch review passed with no findings. The fresh controller gate passed main 312/312, Worker 97/97, browser 31/31, both builds, Worker smoke, Wrangler dry-run, content/link/matrix checks, and diff check. The user selected a local merge to `main`, and the post-merge main 312/312, Worker 97/97, browser 31/31 gate passed.
 
 ### Rollback
 
