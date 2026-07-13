@@ -10,6 +10,7 @@ import type {
   Resource,
   ResourceMap
 } from "../types";
+import type { MapSeed } from "../mapSeed";
 import type { RandomSource } from "./random";
 
 export interface DiceRoll {
@@ -27,12 +28,19 @@ export interface MatchState {
 
 export interface MatchExecutionContext {
   random: RandomSource;
+  nextMapSeed(): MapSeed;
   nextLogId(): string;
   now(): number;
 }
 
+export type MapRestartMode = "fresh" | "sameMap";
+
+export type MatchMapSelection =
+  | { readonly kind: "fresh" }
+  | { readonly kind: "seed"; readonly seed: MapSeed };
+
 export type MatchCommand =
-  | { type: "START_NEW_GAME" }
+  | { type: "START_NEW_GAME"; mode: MapRestartMode }
   | { type: "PLACE_SETUP_SETTLEMENT"; playerId: PlayerId; vertexId: string }
   | { type: "PLACE_SETUP_ROAD"; playerId: PlayerId; edgeId: string }
   | { type: "ROLL_DICE"; playerId: PlayerId }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { formatM1MapSeed } from "../../src/domain/mapSeed";
 import { createSetupMatch } from "../../src/domain/match/createMatch";
 import { DeterministicRandomSource } from "../../src/domain/match/random";
 import {
@@ -9,10 +10,13 @@ import {
 
 describe("complete local-game setup interaction", () => {
   it("completes a three-player setup using the generated snake order", () => {
+    const mapSeed = formatM1MapSeed(0x0123_4567, 0x89ab_cdef);
     const match = createSetupMatch(
       ["One", "Two", "Three"].map((nickname) => ({ nickname })),
+      { kind: "seed", seed: mapSeed },
       {
         random: new DeterministicRandomSource(Array.from({ length: 24 }, () => 0)),
+        nextMapSeed: () => mapSeed,
         nextLogId: () => "unused",
         now: () => 0
       }
@@ -48,7 +52,10 @@ describe("complete local-game setup interaction", () => {
   });
 
   it("starts a new game in setup and exposes the current legal placement targets", () => {
-    const state = gameReducer(createInitialAppState(), { type: "START_NEW_GAME" });
+    const state = gameReducer(createInitialAppState(), {
+      type: "START_NEW_GAME",
+      mode: "sameMap"
+    });
 
     expect(state.game.phase).toBe("setup");
     expect(state.game.setup?.stage).toBe("settlement");
@@ -71,7 +78,10 @@ describe("complete local-game setup interaction", () => {
   });
 
   it("completes every snake-order pair and enters the first normal turn", () => {
-    let state = gameReducer(createInitialAppState(), { type: "START_NEW_GAME" });
+    let state = gameReducer(createInitialAppState(), {
+      type: "START_NEW_GAME",
+      mode: "sameMap"
+    });
 
     while (state.game.phase === "setup") {
       if (state.game.setup?.stage === "settlement") {
@@ -107,7 +117,10 @@ describe("complete local-game setup interaction", () => {
       game: { ...initial.game, phase: "gameOver" as const, winnerId: "p1" }
     };
 
-    const restarted = gameReducer(completed, { type: "START_NEW_GAME" });
+    const restarted = gameReducer(completed, {
+      type: "START_NEW_GAME",
+      mode: "sameMap"
+    });
 
     expect(restarted.game.phase).toBe("setup");
     expect(restarted.game.winnerId).toBeUndefined();

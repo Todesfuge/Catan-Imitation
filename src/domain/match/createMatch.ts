@@ -1,5 +1,11 @@
 import { createCommerceGuild } from "../expansion/commerceGuild";
 import { createStandardBoardData } from "../board";
+import {
+  LEGACY_STANDARD_MAP_SEED,
+  parseMapSeed,
+  type MapSeed
+} from "../mapSeed";
+import { createBoardDataForSeed } from "../randomBoard";
 import { createDevelopmentDeck } from "../rules/developmentCards";
 import { createAwaitingRollTurnState } from "../rules/turnFlow";
 import {
@@ -9,7 +15,11 @@ import {
   type GameState,
   type Player
 } from "../types";
-import type { MatchExecutionContext, MatchState } from "./types";
+import type {
+  MatchExecutionContext,
+  MatchMapSelection,
+  MatchState
+} from "./types";
 
 export interface MatchSeat {
   nickname: string;
@@ -82,6 +92,7 @@ export function createDemoGame(): GameState {
   const p2RoadEdge = getEdgeTouchingVertex(edges, p2VertexId);
 
   return {
+    mapSeed: LEGACY_STANDARD_MAP_SEED,
     phase: "playing",
     players: createPlayers(defaultMatchSeats),
     activePlayerId: "p1",
@@ -133,12 +144,18 @@ export function createDemoGame(): GameState {
 
 function createSetupGameState(
   seats: readonly MatchSeat[],
+  mapSeed: MapSeed,
   developmentDeck: GameState["developmentDeck"]
 ): GameState {
-  const { board, edges, ports } = createStandardBoardData();
+  const { board, edges, ports } = createBoardDataForSeed(mapSeed);
   const playerIds = seats.map((_, index) => `p${index + 1}`);
+  const robberHexId = board.find((hex) => hex.terrain === "desert")?.id;
+  if (!robberHexId) {
+    throw new Error("A setup board requires exactly one robber starting hex.");
+  }
 
   return {
+    mapSeed,
     phase: "setup",
     players: createPlayers(seats),
     activePlayerId: "p1",
@@ -151,7 +168,7 @@ function createSetupGameState(
     ports,
     buildings: [],
     roads: [],
-    robberHexId: "desert",
+    robberHexId,
     bank: createBank(),
     developmentDeck,
     setup: {
@@ -180,14 +197,21 @@ function shuffleDevelopmentDeck(context: MatchExecutionContext) {
 
 export function createSetupMatch(
   seats: readonly MatchSeat[],
+  map: MatchMapSelection,
   context: MatchExecutionContext
 ): MatchState {
   if (seats.length !== 3 && seats.length !== 4) {
     throw new RangeError("A match requires three or four seats.");
   }
+  const mapSeed = parseMapSeed(
+    map.kind === "fresh" ? context.nextMapSeed() : map.seed
+  );
+  if (map.kind === "fresh" && mapSeed === LEGACY_STANDARD_MAP_SEED) {
+    throw new TypeError("A fresh setup requires an M1 map seed.");
+  }
 
   return {
-    game: createSetupGameState(seats, shuffleDevelopmentDeck(context)),
+    game: createSetupGameState(seats, mapSeed, shuffleDevelopmentDeck(context)),
     guild: createCommerceGuild(),
     lastDice: null
   };

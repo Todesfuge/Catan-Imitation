@@ -1,4 +1,5 @@
 import { applyMatchCommand } from "../../src/domain/match/applyMatchCommand";
+import { formatM1MapSeed } from "../../src/domain/mapSeed";
 import { DeterministicRandomSource } from "../../src/domain/match/random";
 import type {
   MatchCommand,
@@ -20,6 +21,7 @@ export type TestMatchCommand =
   | RobberCommand;
 
 let logCounter = 0;
+const testMapSeed = formatM1MapSeed(0x0123_4567, 0x89ab_cdef);
 
 export function executeMatchCommandForTest<T extends MatchState>(
   state: T,
@@ -33,6 +35,7 @@ export function executeMatchCommandForTest<T extends MatchState>(
         : [];
   const context: MatchExecutionContext = {
     random: new DeterministicRandomSource(randomValues),
+    nextMapSeed: () => testMapSeed,
     nextLogId: () => `test-log-${++logCounter}`,
     now: () => 1_700_000_000_000
   };

@@ -63,7 +63,12 @@ import {
 } from "../types";
 import { toUnitIntervalRandom } from "./random";
 import { createSetupMatch } from "./createMatch";
-import type { MatchCommand, MatchExecutionContext, MatchState } from "./types";
+import type {
+  MatchCommand,
+  MatchExecutionContext,
+  MatchMapSelection,
+  MatchState
+} from "./types";
 
 function log(
   context: MatchExecutionContext,
@@ -180,8 +185,17 @@ export function applyMatchCommand(
 ): MatchState {
   switch (command.type) {
     case "START_NEW_GAME": {
+      let map: MatchMapSelection;
+      if (command.mode === "fresh") {
+        map = { kind: "fresh" };
+      } else if (command.mode === "sameMap") {
+        map = { kind: "seed", seed: state.game.mapSeed };
+      } else {
+        throw new RangeError("Map restart mode must be fresh or sameMap.");
+      }
       const created = createSetupMatch(
         state.game.players.map((player) => ({ nickname: player.name })),
+        map,
         context
       );
       return {

@@ -1,3 +1,5 @@
+import type { MapSeed } from "./mapSeed";
+
 export const resources = ["wood", "brick", "wool", "grain", "ore"] as const;
 
 export type Resource = (typeof resources)[number];
@@ -166,6 +168,7 @@ export interface TurnState {
 }
 
 export interface GameState {
+  mapSeed: MapSeed;
   phase: GamePhase;
   players: Player[];
   activePlayerId: PlayerId;

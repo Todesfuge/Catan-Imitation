@@ -1,8 +1,18 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { createCommerceGuild } from "../../src/domain/expansion/commerceGuild";
+import {
+  LEGACY_STANDARD_MAP_SEED,
+  formatM1MapSeed,
+  type MapSeed
+} from "../../src/domain/mapSeed";
 import { applyMatchCommand } from "../../src/domain/match/applyMatchCommand";
 import { createSetupMatch } from "../../src/domain/match/createMatch";
-import { DeterministicRandomSource } from "../../src/domain/match/random";
+import {
+  DeterministicRandomSource,
+  type RandomSource
+} from "../../src/domain/match/random";
+import { createBoardDataForSeed } from "../../src/domain/randomBoard";
 import { createDevelopmentDeck } from "../../src/domain/rules/developmentCards";
 import { createDemoGame, createSetupGame } from "../../src/domain/setup";
 import type {
@@ -13,13 +23,55 @@ import type {
 } from "../../src/domain/match/types";
 import { emptyResources, type PlayerId, type ResourceMap } from "../../src/domain/types";
 
-function createContext(values: readonly number[] = []): MatchExecutionContext {
+const MAP_SEED_A = formatM1MapSeed(0x0123_4567, 0x89ab_cdef);
+const MAP_SEED_B = formatM1MapSeed(0x7654_3210, 0xfedc_ba98);
+const THREE_SEATS = ["One", "Two", "Three"].map((nickname) => ({ nickname }));
+const DECK_RANDOM_VALUES = Array.from({ length: 24 }, () => 0);
+
+interface TrackedContext {
+  context: MatchExecutionContext;
+  mapSeedCalls(): number;
+  randomCalls(): number;
+}
+
+function createTrackedContext(
+  values: readonly number[] = [],
+  mapSeeds: readonly MapSeed[] = [MAP_SEED_A]
+): TrackedContext {
   let nextLogNumber = 0;
-  return {
-    random: new DeterministicRandomSource(values),
-    nextLogId: () => `test-log-${++nextLogNumber}`,
-    now: () => 1_700_000_000_000
+  let mapSeedIndex = 0;
+  let randomCallCount = 0;
+  const hiddenRandom = new DeterministicRandomSource(values);
+  const random: RandomSource = {
+    nextInt(maxExclusive) {
+      randomCallCount += 1;
+      return hiddenRandom.nextInt(maxExclusive);
+    }
   };
+  return {
+    context: {
+      random,
+      nextMapSeed: () => {
+        const seed = mapSeeds[mapSeedIndex];
+        mapSeedIndex += 1;
+        if (!seed) {
+          throw new RangeError("Deterministic map-seed sequence is exhausted.");
+        }
+        return seed;
+      },
+      nextLogId: () => `test-log-${++nextLogNumber}`,
+      now: () => 1_700_000_000_000
+    },
+    mapSeedCalls: () => mapSeedIndex,
+    randomCalls: () => randomCallCount
+  };
+}
+
+function createContext(
+  values: readonly number[] = [],
+  mapSeeds: readonly MapSeed[] = [MAP_SEED_A]
+): MatchExecutionContext {
+  return createTrackedContext(values, mapSeeds).context;
 }
 
 function toMatchState(state = createInitialAppState()): MatchState {
@@ -58,6 +110,147 @@ function apply(
   return applyMatchCommand(state, command, context);
 }
 
+function createDirtyMatch(seed = MAP_SEED_A): MatchState {
+  const base = createSetupMatch(
+    THREE_SEATS,
+    { kind: "seed", seed },
+    createContext(DECK_RANDOM_VALUES)
+  );
+  const developmentCard = createDevelopmentDeck(["monopoly"])[0];
+  return {
+    game: {
+      ...base.game,
+      phase: "gameOver",
+      players: base.game.players.map((player, index) => ({
+        ...player,
+        resources: { wood: index + 1, brick: 2, wool: 3, grain: 4, ore: 5 },
+        guildTokens: index + 1,
+        vouchers: 2,
+        prizeCards: 3,
+        developmentCards: [{ ...developmentCard, id: `dirty-card-${player.id}` }],
+        knightsPlayed: 4
+      })),
+      activePlayerId: "p3",
+      turn: 9,
+      round: 4,
+      turnState: {
+        phase: "awaitingDevelopmentEffect",
+        pendingDiscards: { p2: 3 },
+        pendingRobber: {
+          source: "knight",
+          resumePhase: "action",
+          targetHexId: base.game.board[0].id,
+          eligibleVictimIds: ["p2"]
+        },
+        pendingDevelopmentEffect: {
+          kind: "monopoly",
+          playerId: "p3",
+          resumePhase: "action"
+        },
+        developmentCardPlayed: true
+      },
+      targetScore: 3,
+      buildings: [{
+        id: "dirty-building",
+        ownerId: "p2",
+        vertexId: base.game.board[0].vertexIds[0],
+        kind: "city"
+      }],
+      roads: [{ id: "dirty-road", ownerId: "p1", edgeId: base.game.edges[0].id }],
+      robberHexId: base.game.board[0].id,
+      bank: { resources: { wood: 1, brick: 2, wool: 3, grain: 4, ore: 5 } },
+      log: [{ id: "dirty-log", message: "Old match state" }],
+      developmentDeck: base.game.developmentDeck.slice(0, 2),
+      setup: undefined,
+      winnerId: "p3",
+      largestArmyOwnerId: "p2",
+      longestRoadOwnerId: "p1"
+    },
+    guild: {
+      ...base.guild,
+      usedTradePlayerIds: ["p1"],
+      gathering: {
+        phase: "auction",
+        redemptions: { p1: 2 },
+        auctionRound: 2,
+        auctionResults: [{ kind: "voucher" }],
+        lastAuctionSummary: "Old auction",
+        lastAuctionResult: {
+          winnerId: "p1",
+          winnerName: "One",
+          round: 1,
+          winningBid: 2,
+          outcome: { kind: "voucher" }
+        }
+      },
+      lastAutoGatheringRound: 3
+    },
+    lastDice: { first: 3, second: 4, total: 7 },
+    pendingPlayerTrade: {
+      proposerId: "p1",
+      offered: { ...emptyResources(), wood: 1 },
+      requested: { ...emptyResources(), grain: 1 }
+    }
+  };
+}
+
+function expectCompleteSetupReset(
+  match: MatchState,
+  seed: MapSeed,
+  expectedNames = ["One", "Two", "Three"]
+): void {
+  const boardData = createBoardDataForSeed(seed);
+  expect(match.game.mapSeed).toBe(seed);
+  expect({
+    board: match.game.board,
+    edges: match.game.edges,
+    ports: match.game.ports
+  }).toEqual(boardData);
+  expect(match.game).toMatchObject({
+    phase: "setup",
+    activePlayerId: "p1",
+    turn: 1,
+    round: 1,
+    targetScore: 10,
+    turnState: { phase: "awaitingRoll", pendingDiscards: {} },
+    buildings: [],
+    roads: [],
+    bank: { resources: { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 } },
+    setup: {
+      order: ["p1", "p2", "p3", "p3", "p2", "p1"],
+      placementIndex: 0,
+      stage: "settlement"
+    }
+  });
+  expect(match.game.players.map((player) => player.name)).toEqual(expectedNames);
+  for (const player of match.game.players) {
+    expect(player).toMatchObject({
+      resources: emptyResources(),
+      guildTokens: 0,
+      vouchers: 0,
+      prizeCards: 0,
+      developmentCards: [],
+      knightsPlayed: 0
+    });
+  }
+  expect(match.game.robberHexId).toBe(
+    match.game.board.find((hex) => hex.terrain === "desert")?.id
+  );
+  expect(match.game.developmentDeck).toHaveLength(25);
+  expect(match.game.developmentDeck).not.toEqual(createDevelopmentDeck());
+  expect(match.game.turnState).not.toHaveProperty("pendingRobber");
+  expect(match.game.turnState).not.toHaveProperty("pendingDevelopmentEffect");
+  expect(match.game.turnState.developmentCardPlayed).toBe(false);
+  expect(match.game.setup).not.toHaveProperty("pendingSettlement");
+  expect(match.game).not.toHaveProperty("winnerId");
+  expect(match.game).not.toHaveProperty("largestArmyOwnerId");
+  expect(match.game).not.toHaveProperty("longestRoadOwnerId");
+  expect(match.guild).toEqual(createCommerceGuild());
+  expect(match.lastDice).toBeNull();
+  expect(match).not.toHaveProperty("pendingPlayerTrade");
+  expect(match.game.log.map((entry) => entry.id)).not.toContain("dirty-log");
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -66,6 +259,7 @@ describe("match transition foundations", () => {
   it("creates stable three-player identities from caller nicknames in snake order", () => {
     const match = createSetupMatch(
       [{ nickname: "Ada" }, { nickname: "Grace" }, { nickname: "Linus" }],
+      { kind: "seed", seed: MAP_SEED_A },
       createContext(Array.from({ length: 24 }, () => 0))
     );
 
@@ -83,6 +277,7 @@ describe("match transition foundations", () => {
   it("creates the four-player snake order with the fourth stable identity", () => {
     const match = createSetupMatch(
       ["One", "Two", "Three", "Four"].map((nickname) => ({ nickname })),
+      { kind: "seed", seed: MAP_SEED_A },
       createContext(Array.from({ length: 24 }, () => 0))
     );
 
@@ -107,6 +302,7 @@ describe("match transition foundations", () => {
     const mathRandom = vi.spyOn(Math, "random");
     const match = createSetupMatch(
       ["One", "Two", "Three"].map((nickname) => ({ nickname })),
+      { kind: "seed", seed: MAP_SEED_A },
       createContext(Array.from({ length: 24 }, () => 0))
     );
 
@@ -120,11 +316,16 @@ describe("match transition foundations", () => {
     const context = createContext();
 
     expect(() =>
-      createSetupMatch(["One", "Two"].map((nickname) => ({ nickname })), context)
+      createSetupMatch(
+        ["One", "Two"].map((nickname) => ({ nickname })),
+        { kind: "fresh" },
+        context
+      )
     ).toThrow(/three or four/i);
     expect(() =>
       createSetupMatch(
         ["One", "Two", "Three", "Four", "Five"].map((nickname) => ({ nickname })),
+        { kind: "fresh" },
         context
       )
     ).toThrow(/three or four/i);
@@ -185,6 +386,7 @@ describe("match transition foundations", () => {
     let nextLogNumber = 0;
     const context: MatchExecutionContext = {
       random: new DeterministicRandomSource([2, 4]),
+      nextMapSeed: () => MAP_SEED_A,
       nextLogId: () => `test-log-${++nextLogNumber}`,
       now: () => 1_700_000_000_000
     };
@@ -203,10 +405,165 @@ describe("match transition foundations", () => {
     expect(() => new DeterministicRandomSource([0]).nextInt(0)).toThrow(RangeError);
   });
 
+  it("creates a complete empty setup from a supplied seed without consuming map entropy", () => {
+    const tracked = createTrackedContext(DECK_RANDOM_VALUES, [MAP_SEED_B]);
+
+    const match = createSetupMatch(
+      THREE_SEATS,
+      { kind: "seed", seed: MAP_SEED_A },
+      tracked.context
+    );
+
+    expectCompleteSetupReset(match, MAP_SEED_A);
+    expect(match.game.log.map((entry) => entry.messageKey)).toEqual(["setup.started"]);
+    expect(tracked.mapSeedCalls()).toBe(0);
+    expect(tracked.randomCalls()).toBe(24);
+  });
+
+  it("draws one map seed for a fresh setup while keeping board generation off hidden randomness", () => {
+    const tracked = createTrackedContext(DECK_RANDOM_VALUES, [MAP_SEED_A]);
+
+    const match = createSetupMatch(THREE_SEATS, { kind: "fresh" }, tracked.context);
+
+    expectCompleteSetupReset(match, MAP_SEED_A);
+    expect(tracked.mapSeedCalls()).toBe(1);
+    expect(tracked.randomCalls()).toBe(24);
+  });
+
+  it("rejects a legacy fixed-board seed from the fresh seed source", () => {
+    const tracked = createTrackedContext(DECK_RANDOM_VALUES, [LEGACY_STANDARD_MAP_SEED]);
+
+    expect(() =>
+      createSetupMatch(THREE_SEATS, { kind: "fresh" }, tracked.context)
+    ).toThrow(/fresh.*M1/i);
+    expect(tracked.mapSeedCalls()).toBe(1);
+    expect(tracked.randomCalls()).toBe(0);
+  });
+
+  it("restarts on the same map while retaining only roster and seed/layout", () => {
+    const dirty = createDirtyMatch();
+    const originalRoster = dirty.game.players.map(({ id, name, color }) => ({ id, name, color }));
+    const tracked = createTrackedContext(DECK_RANDOM_VALUES, [MAP_SEED_B]);
+
+    const restarted = apply(
+      dirty,
+      { type: "START_NEW_GAME", mode: "sameMap" },
+      tracked.context
+    );
+
+    expectCompleteSetupReset(restarted, MAP_SEED_A);
+    expect(restarted.game.players.map(({ id, name, color }) => ({ id, name, color }))).toEqual(
+      originalRoster
+    );
+    expect(restarted.game.log.map((entry) => entry.messageKey)).toEqual([
+      "setup.newGameStarted",
+      "setup.started"
+    ]);
+    expect(tracked.mapSeedCalls()).toBe(0);
+    expect(tracked.randomCalls()).toBe(24);
+  });
+
+  it("restarts on a fresh map while retaining only the roster", () => {
+    const dirty = createDirtyMatch();
+    const previousLayout = {
+      board: dirty.game.board,
+      edges: dirty.game.edges,
+      ports: dirty.game.ports
+    };
+    const originalRoster = dirty.game.players.map(({ id, name, color }) => ({ id, name, color }));
+    const tracked = createTrackedContext(DECK_RANDOM_VALUES, [MAP_SEED_B]);
+
+    const restarted = apply(
+      dirty,
+      { type: "START_NEW_GAME", mode: "fresh" },
+      tracked.context
+    );
+
+    expectCompleteSetupReset(restarted, MAP_SEED_B);
+    expect(restarted.game.players.map(({ id, name, color }) => ({ id, name, color }))).toEqual(
+      originalRoster
+    );
+    expect({
+      board: restarted.game.board,
+      edges: restarted.game.edges,
+      ports: restarted.game.ports
+    }).not.toEqual(previousLayout);
+    expect(tracked.mapSeedCalls()).toBe(1);
+    expect(tracked.randomCalls()).toBe(24);
+  });
+
+  it("keeps invalid-seat, malformed-seed, and hidden-random failures atomic", () => {
+    const dirty = createDirtyMatch();
+    const invalidRoster = {
+      ...dirty,
+      game: { ...dirty.game, players: dirty.game.players.slice(0, 2) }
+    };
+    const invalidRosterSnapshot = structuredClone(invalidRoster);
+    const invalidSeatsContext = createTrackedContext(DECK_RANDOM_VALUES, [MAP_SEED_B]);
+
+    expect(() =>
+      apply(
+        invalidRoster,
+        { type: "START_NEW_GAME", mode: "fresh" },
+        invalidSeatsContext.context
+      )
+    ).toThrow(/three or four/i);
+    expect(invalidRoster).toEqual(invalidRosterSnapshot);
+    expect(invalidSeatsContext.mapSeedCalls()).toBe(0);
+    expect(invalidSeatsContext.randomCalls()).toBe(0);
+
+    const malformedSeed = "M1-NOT-CANONICAL" as MapSeed;
+    const malformed = {
+      ...dirty,
+      game: { ...dirty.game, mapSeed: malformedSeed }
+    };
+    const malformedSnapshot = structuredClone(malformed);
+    const malformedContext = createTrackedContext(DECK_RANDOM_VALUES, [MAP_SEED_B]);
+
+    expect(() =>
+      apply(
+        malformed,
+        { type: "START_NEW_GAME", mode: "sameMap" },
+        malformedContext.context
+      )
+    ).toThrow(/map seed/i);
+    expect(malformed).toEqual(malformedSnapshot);
+    expect(malformedContext.mapSeedCalls()).toBe(0);
+    expect(malformedContext.randomCalls()).toBe(0);
+
+    const exhaustedSnapshot = structuredClone(dirty);
+    const exhaustedContext = createTrackedContext([], [MAP_SEED_B]);
+
+    expect(() =>
+      apply(
+        dirty,
+        { type: "START_NEW_GAME", mode: "sameMap" },
+        exhaustedContext.context
+      )
+    ).toThrow(/random sequence is exhausted/i);
+    expect(dirty).toEqual(exhaustedSnapshot);
+    expect(exhaustedContext.mapSeedCalls()).toBe(0);
+    expect(exhaustedContext.randomCalls()).toBe(1);
+  });
+
+  it("rejects a malformed explicitly selected seed before hidden deck randomness", () => {
+    const tracked = createTrackedContext(DECK_RANDOM_VALUES, [MAP_SEED_B]);
+
+    expect(() =>
+      createSetupMatch(
+        THREE_SEATS,
+        { kind: "seed", seed: "M1-LOWER-or-short" as MapSeed },
+        tracked.context
+      )
+    ).toThrow(/map seed/i);
+    expect(tracked.mapSeedCalls()).toBe(0);
+    expect(tracked.randomCalls()).toBe(0);
+  });
+
   it("starts setup and applies setup placements through the shared dispatcher", () => {
     const started = apply(
       toMatchState(),
-      { type: "START_NEW_GAME" },
+      { type: "START_NEW_GAME", mode: "fresh" },
       createContext(Array.from({ length: 24 }, () => 0))
     );
     const vertexId = started.game.board[0].vertexIds[0];
