@@ -301,6 +301,25 @@ describe("online game projection adapter", () => {
     }
   );
 
+  it("rejects a robber log hex reference outside the regenerated seed board", () => {
+    const snapshot = seededSnapshot();
+    const generatedHexIds = new Set(
+      createBoardDataForSeed(seededProjectionMapSeed).board.map(({ id }) => id)
+    );
+    const outsideHexId = createStandardBoardData().board.find(
+      ({ id }) => !generatedHexIds.has(id)
+    )!.id;
+    (snapshot.publicState.game as unknown as PublicGameView).log = [
+      {
+        id: "invalid-robber-log",
+        messageKey: "robber.moved",
+        params: { hexId: outsideHexId }
+      }
+    ];
+
+    expect(readOnlineGameProjection(snapshot)).toBeUndefined();
+  });
+
   it("accepts the completed three-round auction sentinel", () => {
     const snapshot = snapshotFor();
     const publicState = snapshot.publicState as unknown as PublicRoomState;

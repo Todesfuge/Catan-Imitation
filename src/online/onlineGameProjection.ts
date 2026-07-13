@@ -173,6 +173,19 @@ function privateState(value: unknown): value is PrivateSeatState {
   return decision.kind === "chooseYearOfPlentyResource" && exact(decision, ["kind", "remainingPicks"]) && nonNegativeInt(decision.remainingPicks, 2);
 }
 
+function publicLogEntry(value: unknown, boardIds: BoardIds): boolean {
+  if (!object(value) || !exact(value, ["id"], ["messageKey", "params"]) ||
+      !boundedString(value.id) ||
+      (value.messageKey !== undefined && !publicLogKeys.has(value.messageKey as string))) return false;
+  if (value.messageKey === "robber.moved") {
+    return object(value.params) && exact(value.params, ["hexId"]) &&
+      boardIds.hexIds.has(value.params.hexId as string);
+  }
+  return value.params === undefined || (object(value.params) && Object.keys(value.params).length <= 10 &&
+    Object.entries(value.params).every(([key, param]) =>
+      boundedString(key, 32) && (boundedString(param, 128) || nonNegativeInt(param))));
+}
+
 function publicGame(value: unknown, mapSeed: MapSeed, boardIds: BoardIds): value is PublicGameView {
   if (!object(value) || !exact(value,
     ["phase", "players", "activePlayerId", "turn", "round", "turnState", "targetScore", "mapSeed", "buildings", "roads", "robberHexId", "bank", "log", "developmentDeckCount", "lastDice"],
@@ -216,10 +229,8 @@ function publicGame(value: unknown, mapSeed: MapSeed, boardIds: BoardIds): value
             building.vertexId === pending.vertexId && building.kind === "settlement")) return false;
     }
   }
-  if (!Array.isArray(value.log) || value.log.length > 6 || !value.log.every((entry) => object(entry) && exact(entry, ["id"], ["messageKey", "params"]) &&
-      boundedString(entry.id) && (entry.messageKey === undefined || publicLogKeys.has(entry.messageKey as string)) &&
-      (entry.params === undefined || (object(entry.params) && Object.keys(entry.params).length <= 10 && Object.entries(entry.params).every(([key, param]) =>
-        boundedString(key, 32) && (boundedString(param, 128) || nonNegativeInt(param))))))) return false;
+  if (!Array.isArray(value.log) || value.log.length > 6 ||
+      !value.log.every((entry) => publicLogEntry(entry, boardIds))) return false;
   if (value.pendingPlayerTrade !== undefined && (!object(value.pendingPlayerTrade) || !exact(value.pendingPlayerTrade, ["proposerId", "offered", "requested"]) ||
       !playerIds.has(value.pendingPlayerTrade.proposerId as string) || !resourceMap(value.pendingPlayerTrade.offered) || !resourceMap(value.pendingPlayerTrade.requested))) return false;
   return [value.winnerId, value.largestArmyOwnerId, value.longestRoadOwnerId].every((id) => id === undefined || playerIds.has(id as string));

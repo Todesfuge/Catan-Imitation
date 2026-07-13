@@ -303,6 +303,41 @@ describe("caller-specific room projection privacy", () => {
     expect(() => projectRoomView(room, "seat-1")).toThrow("seed-derived board data");
   });
 
+  it.each([
+    ["M0", "NaN in a nullable number field", (room: ProjectableRoomState) => {
+      const desert = room.matchState!.game.board.find(({ diceNumber }) => diceNumber === null)!;
+      desert.diceNumber = Number.NaN;
+    }],
+    ["M0", "Infinity in a nullable number field", (room: ProjectableRoomState) => {
+      const desert = room.matchState!.game.board.find(({ diceNumber }) => diceNumber === null)!;
+      desert.diceNumber = Number.POSITIVE_INFINITY;
+    }],
+    ["M0", "omitted required field", (room: ProjectableRoomState) => {
+      delete (room.matchState!.game.board[0]! as unknown as Record<string, unknown>).q;
+    }],
+    ["M0", "extra undefined field", (room: ProjectableRoomState) => {
+      (room.matchState!.game.board[0] as unknown as Record<string, unknown>).unexpected = undefined;
+    }],
+    ["M1", "NaN in a nullable number field", (room: ProjectableRoomState) => {
+      const desert = room.matchState!.game.board.find(({ diceNumber }) => diceNumber === null)!;
+      desert.diceNumber = Number.NaN;
+    }],
+    ["M1", "Infinity in a nullable number field", (room: ProjectableRoomState) => {
+      const desert = room.matchState!.game.board.find(({ diceNumber }) => diceNumber === null)!;
+      desert.diceNumber = Number.POSITIVE_INFINITY;
+    }],
+    ["M1", "omitted required field", (room: ProjectableRoomState) => {
+      delete (room.matchState!.game.board[0]! as unknown as Record<string, unknown>).q;
+    }],
+    ["M1", "extra undefined field", (room: ProjectableRoomState) => {
+      (room.matchState!.game.board[0] as unknown as Record<string, unknown>).unexpected = undefined;
+    }]
+  ])("strictly rejects a %s static board with %s", (seedVersion, _case, mutate) => {
+    const room = seedVersion === "M0" ? createRoom() : createSeededRoom();
+    mutate(room);
+    expect(() => projectRoomView(room, "seat-1")).toThrow("seed-derived board data");
+  });
+
   it("projects public board, bank, counts, trade, guild result, and structured safe logs", () => {
     const room = createRoom();
     const view = projectRoomView(room, "seat-1");
