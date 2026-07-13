@@ -3,6 +3,7 @@ import {
   createInitialAppState
 } from "../../src/app/gameReducer";
 import { executeMatchCommandForTest as gameReducer } from "./matchCommandTestUtils";
+import { createScenarioAppState } from "../fixtures/createScenarioGame";
 import { createSetupGame } from "../../src/domain/setup";
 import { applyProduction } from "../../src/domain/rules/production";
 import {
@@ -178,7 +179,7 @@ describe("post-MVP core Catan rules", () => {
 
   it("updates bank resources during production and caps payout when the bank is short", () => {
     const game = {
-      ...createInitialAppState().game,
+      ...createScenarioAppState().game,
       bank: { resources: { wood: 19, brick: 19, wool: 1, grain: 19, ore: 19 } }
     };
 
@@ -194,9 +195,9 @@ describe("post-MVP core Catan rules", () => {
 
   it("enters game-over state when the active player reaches the target score", () => {
     const state = {
-      ...createInitialAppState(),
+      ...createScenarioAppState(),
       game: {
-        ...createInitialAppState().game,
+        ...createScenarioAppState().game,
         targetScore: 2
       }
     };

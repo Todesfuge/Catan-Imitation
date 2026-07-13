@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { gameReducer } from "../../src/app/gameReducer";
 import {
   createCommerceGuild,
   openGuildAuction,
@@ -7,7 +7,10 @@ import {
   startGuildGathering,
   type CommerceGuildState
 } from "../../src/domain/expansion/commerceGuild";
-import { createDemoGame } from "../../src/domain/setup";
+import {
+  createScenarioAppState,
+  createScenarioGame
+} from "../fixtures/createScenarioGame";
 import type { GameState } from "../../src/domain/types";
 import { translate } from "../../src/ui/i18n";
 
@@ -35,7 +38,7 @@ function gatheringGuild(auctionRound = 1): CommerceGuildState {
 
 describe("Commerce Guild auctions without bids", () => {
   it("completes immediately when no player owns a guild token", () => {
-    const game = withGuildTokens(createDemoGame(), {});
+    const game = withGuildTokens(createScenarioGame(), {});
 
     const guild = openGuildAuction(game, startGuildGathering(createCommerceGuild()));
 
@@ -44,7 +47,7 @@ describe("Commerce Guild auctions without bids", () => {
   });
 
   it("advances one eligible all-pass round without payment, reward, or randomness", () => {
-    const game = withGuildTokens(createDemoGame(), { p1: 2 });
+    const game = withGuildTokens(createScenarioGame(), { p1: 2 });
     const random = vi.fn(() => {
       throw new Error("random must not be called for an all-pass round");
     });
@@ -67,7 +70,7 @@ describe("Commerce Guild auctions without bids", () => {
   });
 
   it("completes gathering when everyone passes auction round three", () => {
-    const game = withGuildTokens(createDemoGame(), { p1: 2 });
+    const game = withGuildTokens(createScenarioGame(), { p1: 2 });
 
     const result = resolveAuctionRound(
       game,
@@ -83,7 +86,7 @@ describe("Commerce Guild auctions without bids", () => {
   });
 
   it("records structured local logs for no eligible bidders and all-pass rounds", () => {
-    const initial = createInitialAppState();
+    const initial = createScenarioAppState();
     const noEligibleState = {
       ...initial,
       game: withGuildTokens(initial.game, {}),

@@ -6,6 +6,18 @@ function read(path: string) {
 }
 
 describe("delivery readiness", () => {
+  it("keeps the prepared demo-game factory out of production source", () => {
+    const productionSources = import.meta.glob(
+      ["../../src/**/*.{ts,tsx}", "../../worker/**/*.ts"],
+      { eager: true, import: "default", query: "?raw" }
+    ) as Record<string, string>;
+    const offenders = Object.entries(productionSources)
+      .filter(([, source]) => source.includes("createDemoGame"))
+      .map(([path]) => path);
+
+    expect(offenders).toEqual([]);
+  });
+
   it("exposes CI, Worker deployment, and UI smoke commands", () => {
     const packageJson = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
     const ci = read(".github/workflows/ci.yml");

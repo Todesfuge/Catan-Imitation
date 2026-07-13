@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { gameReducer } from "../../src/app/gameReducer";
 import { buildSettlement, placeSetupSettlement } from "../../src/domain/rules/building";
 import { calculatePlayerScore } from "../../src/domain/rules/scoring";
-import { createDemoGame, createSetupGame } from "../../src/domain/setup";
+import { createSetupGame } from "../../src/domain/setup";
+import {
+  createScenarioAppState,
+  createScenarioGame
+} from "../fixtures/createScenarioGame";
 import { updateLongestRoadAward } from "../../src/domain/rules/longestRoad";
 import type { BoardEdge, GameState, PlayerId, ResourceMap } from "../../src/domain/types";
 
@@ -45,7 +49,7 @@ function gameWithRoadLengths(
     roadChain(playerId, length ?? 0, `chain-${index}-${playerId}`)
   );
   return {
-    ...createDemoGame(),
+    ...createScenarioGame(),
     edges: chains.flatMap((chain) => chain.edges),
     roads: chains.flatMap((chain) => chain.roads),
     buildings: [],
@@ -55,7 +59,7 @@ function gameWithRoadLengths(
 
 describe("core rule integrity", () => {
   it("requires a normal settlement to connect to one of the player's roads", () => {
-    const game = withPlayerResources(createDemoGame(), "p1", {
+    const game = withPlayerResources(createScenarioGame(), "p1", {
       wood: 1,
       brick: 1,
       wool: 1,
@@ -86,7 +90,7 @@ describe("core rule integrity", () => {
   });
 
   it("accepts a connected normal settlement and preserves the setup exemption", () => {
-    const demo = createDemoGame();
+    const demo = createScenarioGame();
     const p1Road = demo.roads.find((road) => road.ownerId === "p1");
     const p1Edge = demo.edges.find((edge) => edge.id === p1Road?.edgeId);
     const connectedVertexId = p1Edge?.vertexIds[0] ?? "";
@@ -105,7 +109,7 @@ describe("core rule integrity", () => {
   it("does not accept an opponent road or a dangling owned road as settlement connectivity", () => {
     const base = withPlayerResources(
       {
-        ...createDemoGame(),
+        ...createScenarioGame(),
         board: [
           {
             id: "custom",
@@ -168,7 +172,7 @@ describe("core rule integrity", () => {
       hexId: "custom",
       vertexIds: ["shared-vertex-3", "p2-branch"]
     };
-    const base = createInitialAppState();
+    const base = createScenarioAppState();
     const game = withPlayerResources(
       {
         ...base.game,
@@ -211,7 +215,7 @@ describe("core rule integrity", () => {
 
   it("recalculates a fifth road before winner detection in the reducer", () => {
     const chain = roadChain("p1", 5, "winning");
-    const base = createInitialAppState();
+    const base = createScenarioAppState();
     const game = withPlayerResources(
       {
         ...base.game,

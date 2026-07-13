@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseMapSeed } from "../../src/domain/mapSeed";
 import { createBoardDataForSeed } from "../../src/domain/randomBoard";
-import { createDemoGame } from "../../src/domain/setup";
+import { createScenarioGame } from "../fixtures/createScenarioGame";
 import { collectProduction } from "../../src/domain/rules/production";
 import type { ResourceMap } from "../../src/domain/types";
 
@@ -29,7 +29,7 @@ describe("dice production", () => {
     const generated = createBoardDataForSeed(productionSeed);
     const desert = generated.board.find((hex) => hex.terrain === "desert");
     const game = {
-      ...createDemoGame(),
+      ...createScenarioGame(),
       ...generated,
       buildings: [],
       robberHexId: desert?.id ?? ""
@@ -75,7 +75,7 @@ describe("dice production", () => {
   });
 
   it("gives one resource for settlements and two for cities adjacent to the rolled number", () => {
-    const game = createDemoGame();
+    const game = createScenarioGame();
 
     const production = collectProduction(game, 8);
 
@@ -116,7 +116,7 @@ describe("dice production", () => {
       throw new Error("Expected a productive generated coastal hex with an exclusive vertex.");
     }
     const game = {
-      ...createDemoGame(),
+      ...createScenarioGame(),
       ...generated,
       buildings: [
         {

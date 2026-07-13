@@ -6,7 +6,7 @@ import { LEGACY_STANDARD_MAP_SEED } from "./mapSeed";
 import { DeterministicRandomSource } from "./match/random";
 import type { GameState } from "./types";
 
-export { createDemoGame, defaultMatchSeats } from "./match/createMatch";
+export { defaultMatchSeats } from "./match/createMatch";
 
 export function createSetupGame(): GameState {
   if (arguments.length > 0) {

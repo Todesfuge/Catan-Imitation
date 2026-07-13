@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { parseMapSeed } from "../../src/domain/mapSeed";
 import { createBoardDataForSeed } from "../../src/domain/randomBoard";
 import { getMaritimeTradeRatio } from "../../src/domain/rules/maritimeTrade";
-import { createDemoGame, createSetupGame } from "../../src/domain/setup";
+import { createSetupGame } from "../../src/domain/setup";
+import { createScenarioGame } from "../fixtures/createScenarioGame";
 import { portProjection, vertexProjection } from "../../src/ui/boardGeometry";
 import { resources, type GameState, type MaritimePort } from "../../src/domain/types";
 
@@ -53,12 +54,12 @@ describe("standard playable ports", () => {
   });
 
   it("wires standard ports into both demo and setup games", () => {
-    expect(createDemoGame().ports).toHaveLength(9);
+    expect(createScenarioGame().ports).toHaveLength(9);
     expect(createSetupGame().ports).toHaveLength(9);
   });
 
   it("derives 4:1, 3:1, and 2:1 ratios from buildings on either real port endpoint", () => {
-    const base = { ...createDemoGame(), buildings: [] };
+    const base = { ...createScenarioGame(), buildings: [] };
     const generic = base.ports.find((port) => port.kind === "generic");
     const wood = base.ports.find(
       (port) => port.kind === "resource" && port.resource === "wood"

@@ -3,23 +3,35 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import App from "../../src/App";
-import { createInitialAppState } from "../../src/app/gameReducer";
 import { createLocalGameTableView } from "../../src/app/localGameState";
-import { createDemoGame } from "../../src/domain/setup";
 import { getLegalRoadEdgeIds } from "../../src/domain/rules/building";
 import {
   DevelopmentCardPanel,
   RoadBuildingTargets
 } from "../../src/ui/DevelopmentCardPanel";
+import { GameTable } from "../../src/ui/GameTable";
 import { TurnFlowPanel } from "../../src/ui/TurnFlowPanel";
+import {
+  createScenarioAppState,
+  createScenarioGame
+} from "../fixtures/createScenarioGame";
 
-function tableViewForGame(game: ReturnType<typeof createDemoGame>) {
-  return createLocalGameTableView({ ...createInitialAppState(), game });
+function tableViewForGame(game: ReturnType<typeof createScenarioGame>) {
+  return createLocalGameTableView({ ...createScenarioAppState(), game });
+}
+
+function renderScenarioTable(game = createScenarioGame()): string {
+  return renderToString(
+    createElement(GameTable, {
+      view: tableViewForGame(game),
+      dispatch: () => undefined
+    })
+  );
 }
 
 describe("product polish UI", () => {
   it("gates initial turn actions until the active player rolls", () => {
-    const html = renderToString(createElement(App));
+    const html = renderScenarioTable();
     const actionTag = (action: string) =>
       html.match(new RegExp(`<button[^>]*data-action="${action}"[^>]*>`))?.[0] ?? "";
 
@@ -31,8 +43,8 @@ describe("product polish UI", () => {
 
   it("renders player-selected seven-roll discard controls", () => {
     const game = {
-      ...createDemoGame(),
-      players: createDemoGame().players.map((player) =>
+      ...createScenarioGame(),
+      players: createScenarioGame().players.map((player) =>
         player.id === "p2"
           ? { ...player, resources: { ...player.resources, wood: 4, brick: 4 } }
           : player
@@ -57,7 +69,7 @@ describe("product polish UI", () => {
 
   it("renders robber placement guidance and eligible victim controls", () => {
     const placementGame = {
-      ...createDemoGame(),
+      ...createScenarioGame(),
       turnState: {
         phase: "awaitingRobberPlacement" as const,
         pendingDiscards: {},
@@ -102,10 +114,10 @@ describe("product polish UI", () => {
 
   it("renders active-player development card kinds and playable counts", () => {
     const game = {
-      ...createDemoGame(),
+      ...createScenarioGame(),
       turn: 2,
       turnState: { phase: "action" as const, pendingDiscards: {}, developmentCardPlayed: false },
-      players: createDemoGame().players.map((player) =>
+      players: createScenarioGame().players.map((player) =>
         player.id === "p1"
           ? {
               ...player,
@@ -138,7 +150,7 @@ describe("product polish UI", () => {
   });
 
   it("renders explicit Year of Plenty and Monopoly resource choices", () => {
-    const base = createDemoGame();
+    const base = createScenarioGame();
     const plentyGame = {
       ...base,
       bank: { resources: { wood: 1, brick: 0, wool: 0, grain: 0, ore: 0 } },
@@ -190,7 +202,7 @@ describe("product polish UI", () => {
   });
 
   it("renders accessible legal road targets during Road Building", () => {
-    const base = createDemoGame();
+    const base = createScenarioGame();
     const game = {
       ...base,
       turnState: {
@@ -261,7 +273,7 @@ describe("product polish UI", () => {
   });
 
   it("renders connected utility actions, phase guidance, and activity instead of fake chat", () => {
-    const html = renderToString(createElement(App));
+    const html = renderScenarioTable();
 
     expect(html).toContain('aria-label="Open settings"');
     expect(html).toContain('aria-label="Open rulebook"');
@@ -283,7 +295,7 @@ describe("product polish UI", () => {
   });
 
   it("formats fractional yield values for readable tables", () => {
-    const html = renderToString(createElement(App));
+    const html = renderScenarioTable();
 
     expect(html).toContain("Grain 0.11");
     expect(html).toContain("Wool 0.28");
@@ -292,8 +304,8 @@ describe("product polish UI", () => {
   });
 
   it("shows actual built roads without drawing every possible edge", () => {
-    const game = createDemoGame();
-    const html = renderToString(createElement(App));
+    const game = createScenarioGame();
+    const html = renderScenarioTable(game);
 
     expect(game.roads.length).toBeGreaterThan(0);
     expect(html).toContain("board-svg");

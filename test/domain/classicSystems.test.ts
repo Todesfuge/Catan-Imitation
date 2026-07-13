@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDemoGame } from "../../src/domain/setup";
+import { createScenarioGame } from "../fixtures/createScenarioGame";
 import {
   buyDevelopmentCard,
   createDevelopmentDeck,
@@ -32,7 +32,7 @@ describe("classic Catan systems", () => {
   it("buys a hidden development card from the deck and blocks same-turn non-victory play", () => {
     const game = withPlayerResources(
       {
-        ...createDemoGame(),
+        ...createScenarioGame(),
         turn: 3,
         developmentDeck: createDevelopmentDeck(["knight", "victoryPoint"])
       },
@@ -58,7 +58,7 @@ describe("classic Catan systems", () => {
     const initialPurchase = buyDevelopmentCard(
       withPlayerResources(
         {
-          ...createDemoGame(),
+          ...createScenarioGame(),
           turn: 2,
           developmentDeck: createDevelopmentDeck(["knight"])
         },
@@ -96,7 +96,7 @@ describe("classic Catan systems", () => {
       { id: "arm-c", hexId: "custom", vertexIds: ["center", "c"] }
     ];
     const branchedGame = {
-      ...createDemoGame(),
+      ...createScenarioGame(),
       edges: customEdges,
       buildings: [],
       roads: customEdges.map((edge) => ({
@@ -109,7 +109,7 @@ describe("classic Catan systems", () => {
     expect(calculateLongestRoadLength(branchedGame, "p1")).toBe(2);
 
     const chainGame = {
-      ...createDemoGame(),
+      ...createScenarioGame(),
       roads: ["forest-4-e0", "forest-4-e1", "forest-4-e2", "forest-4-e3", "forest-4-e4"].map(
         (edgeId) => ({
           id: `road-${edgeId}`,
@@ -125,9 +125,9 @@ describe("classic Catan systems", () => {
     expect(calculatePlayerScore(awarded, "p1")).toBe(4);
 
     const blockedGame = {
-      ...createDemoGame(),
+      ...createScenarioGame(),
       buildings: [
-        ...createDemoGame().buildings,
+        ...createScenarioGame().buildings,
         {
           id: "block-p2-forest-4-v1",
           ownerId: "p2",
@@ -146,7 +146,7 @@ describe("classic Catan systems", () => {
   });
 
   it("resolves maritime trades with default, generic port, and resource-specific port ratios", () => {
-    const demoGame = createDemoGame();
+    const demoGame = createScenarioGame();
     const p1PortVertexId = demoGame.buildings.find((building) => building.ownerId === "p1")?.vertexId ?? "";
     const defaultTrade = maritimeTrade(
       withPlayerResources(demoGame, "p1", { wood: 4 }),

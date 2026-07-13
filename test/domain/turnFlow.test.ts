@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  createInitialAppState,
-  type AppState
-} from "../../src/app/gameReducer";
+import type { AppState } from "../../src/app/gameReducer";
 import {
   executeMatchCommandForTest as gameReducer,
   type TestMatchCommand as GameCommand
@@ -10,6 +7,7 @@ import {
 import { placeSetupRoad, placeSetupSettlement } from "../../src/domain/rules/building";
 import { createSetupGame } from "../../src/domain/setup";
 import { emptyResources, type PlayerId, type ResourceMap } from "../../src/domain/types";
+import { createScenarioAppState } from "../fixtures/createScenarioGame";
 
 function withPlayerResources(
   state: AppState,
@@ -65,7 +63,7 @@ function withMultiplePlayerResources(
 }
 
 function rollSevenWithTwoDiscarders(): AppState {
-  const state = withMultiplePlayerResources(createInitialAppState(), {
+  const state = withMultiplePlayerResources(createScenarioAppState(), {
     p2: { wood: 4, brick: 4 },
     p3: { grain: 5, ore: 4 }
   });
@@ -82,7 +80,7 @@ function discardCommand(playerId: PlayerId, resources: Partial<ResourceMap>): Ga
 
 describe("strict turn flow", () => {
   it("rejects turn-owned actions from a non-active player", () => {
-    const state = createInitialAppState();
+    const state = createScenarioAppState();
     const commands: GameCommand[] = [
       rollCommand("p2", [3, 4]),
       endTurnCommand("p2"),
@@ -107,7 +105,7 @@ describe("strict turn flow", () => {
   });
 
   it("rejects normal actions before the active player rolls", () => {
-    const state = withPlayerResources(createInitialAppState(), "p1", {
+    const state = withPlayerResources(createScenarioAppState(), "p1", {
       wool: 1,
       grain: 1,
       ore: 1
@@ -119,20 +117,20 @@ describe("strict turn flow", () => {
   });
 
   it("rejects ending a turn before the active player rolls", () => {
-    const state = createInitialAppState();
+    const state = createScenarioAppState();
 
     expect(() => gameReducer(state, endTurnCommand("p1"))).toThrow(/roll/i);
   });
 
   it("allows exactly one dice roll per turn", () => {
-    const rolled = gameReducer(createInitialAppState(), rollCommand("p1", [3, 3]));
+    const rolled = gameReducer(createScenarioAppState(), rollCommand("p1", [3, 3]));
 
     expect(rolled.game.turnState.phase).toBe("action");
     expect(() => gameReducer(rolled, rollCommand("p1", [4, 4]))).toThrow(/already rolled/i);
   });
 
   it("allows normal actions after a non-seven roll", () => {
-    const funded = withPlayerResources(createInitialAppState(), "p1", {
+    const funded = withPlayerResources(createScenarioAppState(), "p1", {
       wool: 1,
       grain: 1,
       ore: 1
@@ -145,7 +143,7 @@ describe("strict turn flow", () => {
   });
 
   it("resets the next player to a fresh pre-roll turn", () => {
-    const rolled = gameReducer(createInitialAppState(), rollCommand("p1", [3, 3]));
+    const rolled = gameReducer(createScenarioAppState(), rollCommand("p1", [3, 3]));
     const ended = gameReducer(rolled, endTurnCommand("p1"));
 
     expect(ended.game.activePlayerId).toBe("p2");
@@ -225,7 +223,7 @@ describe("strict turn flow", () => {
   });
 
   it("requires a different robber hex and records eligible victims", () => {
-    const state = withMultiplePlayerResources(createInitialAppState(), { p2: { ore: 1 } });
+    const state = withMultiplePlayerResources(createScenarioAppState(), { p2: { ore: 1 } });
     const rolled = gameReducer(state, rollCommand("p1", [3, 4]));
 
     expect(turnState(rolled).phase).toBe("awaitingRobberPlacement");
@@ -249,7 +247,7 @@ describe("strict turn flow", () => {
   });
 
   it("steals one deterministic resource from the selected eligible victim", () => {
-    const state = withMultiplePlayerResources(createInitialAppState(), { p2: { ore: 1 } });
+    const state = withMultiplePlayerResources(createScenarioAppState(), { p2: { ore: 1 } });
     const rolled = gameReducer(state, rollCommand("p1", [3, 4]));
     const placed = gameReducer(
       rolled,
@@ -283,7 +281,7 @@ describe("strict turn flow", () => {
   });
 
   it("rejects an injected robber random value outside the supported range", () => {
-    const state = withMultiplePlayerResources(createInitialAppState(), { p2: { ore: 1 } });
+    const state = withMultiplePlayerResources(createScenarioAppState(), { p2: { ore: 1 } });
     const rolled = gameReducer(state, rollCommand("p1", [3, 4]));
     const placed = gameReducer(
       rolled,
@@ -306,7 +304,7 @@ describe("strict turn flow", () => {
   });
 
   it("finishes robber placement immediately when no adjacent opponent has resources", () => {
-    const rolled = gameReducer(createInitialAppState(), rollCommand("p1", [3, 4]));
+    const rolled = gameReducer(createScenarioAppState(), rollCommand("p1", [3, 4]));
     const placed = gameReducer(
       rolled,
       futureCommand({ type: "PLACE_ROBBER", playerId: "p1", hexId: "forest-4" })
@@ -317,7 +315,7 @@ describe("strict turn flow", () => {
   });
 
   it("uses the staged robber flow and resumes the phase from which a knight was played", () => {
-    const initial = createInitialAppState();
+    const initial = createScenarioAppState();
     const state = {
       ...initial,
       game: {

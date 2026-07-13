@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { gameReducer } from "../../src/app/gameReducer";
 import {
   createCommerceGuild,
   resolveAuctionRound,
   startGuildGathering,
   transferGuildTokens
 } from "../../src/domain/expansion/commerceGuild";
-import { createDemoGame } from "../../src/domain/setup";
+import {
+  createScenarioAppState,
+  createScenarioGame
+} from "../fixtures/createScenarioGame";
 import { createDevelopmentDeck } from "../../src/domain/rules/developmentCards";
 import type { GameState, Player } from "../../src/domain/types";
 
@@ -19,7 +22,7 @@ function withPlayer(game: GameState, playerId: string, update: (player: Player) 
 
 describe("Commerce Guild polish", () => {
   it("auto-starts a gathering after every six completed rounds and not before", () => {
-    const state = createInitialAppState();
+    const state = createScenarioAppState();
     const beforeInterval = {
       ...state,
       game: {
@@ -52,9 +55,9 @@ describe("Commerce Guild polish", () => {
 
   it("rejects invalid auction bids with player names and records a visible result summary", () => {
     const game = {
-      ...createDemoGame(),
+      ...createScenarioGame(),
       activePlayerId: "p2",
-      players: createDemoGame().players.map((player) => ({
+      players: createScenarioGame().players.map((player) => ({
         ...player,
         guildTokens: player.id === "p2" ? 4 : 0
       }))
@@ -79,7 +82,7 @@ describe("Commerce Guild polish", () => {
   it("draws Commerce Guild development-card rewards from the real deck and rejects empty decks", () => {
     const game = withPlayer(
       {
-        ...createDemoGame(),
+        ...createScenarioGame(),
         developmentDeck: createDevelopmentDeck(["monopoly", "knight"])
       },
       "p2",
@@ -108,9 +111,9 @@ describe("Commerce Guild polish", () => {
 
   it("uses display names in token transfer logs and rejects self transfers", () => {
     const state = {
-      ...createInitialAppState(),
+      ...createScenarioAppState(),
       game: {
-        ...withPlayer(createInitialAppState().game, "p1", (player) => ({
+        ...withPlayer(createScenarioAppState().game, "p1", (player) => ({
           ...player,
           guildTokens: 3
         })),

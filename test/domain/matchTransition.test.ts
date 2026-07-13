@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
-import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { gameReducer } from "../../src/app/gameReducer";
 import { createCommerceGuild } from "../../src/domain/expansion/commerceGuild";
 import {
   LEGACY_STANDARD_MAP_SEED,
@@ -14,7 +14,7 @@ import {
 } from "../../src/domain/match/random";
 import { createBoardDataForSeed } from "../../src/domain/randomBoard";
 import { createDevelopmentDeck } from "../../src/domain/rules/developmentCards";
-import { createDemoGame, createSetupGame } from "../../src/domain/setup";
+import { createSetupGame } from "../../src/domain/setup";
 import type {
   DiceRoll,
   MatchCommand,
@@ -22,6 +22,10 @@ import type {
   MatchState
 } from "../../src/domain/match/types";
 import { emptyResources, type PlayerId, type ResourceMap } from "../../src/domain/types";
+import {
+  createScenarioAppState,
+  createScenarioGame
+} from "../fixtures/createScenarioGame";
 
 const MAP_SEED_A = formatM1MapSeed(0x0123_4567, 0x89ab_cdef);
 const MAP_SEED_B = formatM1MapSeed(0x7654_3210, 0xfedc_ba98);
@@ -74,7 +78,7 @@ function createContext(
   return createTrackedContext(values, mapSeeds).context;
 }
 
-function toMatchState(state = createInitialAppState()): MatchState {
+function toMatchState(state = createScenarioAppState()): MatchState {
   return {
     game: state.game,
     guild: state.guild,
@@ -349,17 +353,17 @@ describe("match transition foundations", () => {
     ).toThrow(/does not accept arguments/i);
   });
 
-  it("does not parameterize the legacy demo-game helper", () => {
-    const unsafeCreateDemoGame = createDemoGame as unknown as (
+  it("does not parameterize the prepared scenario fixture", () => {
+    const unsafeCreateScenarioGame = createScenarioGame as unknown as (
       playerNames: readonly string[]
-    ) => ReturnType<typeof createDemoGame>;
+    ) => ReturnType<typeof createScenarioGame>;
 
-    expect(unsafeCreateDemoGame(["One", "Two", "Three"]).players.map((player) => player.name))
+    expect(unsafeCreateScenarioGame(["One", "Two", "Three"]).players.map((player) => player.name))
       .toEqual(["Voyage1969", "Loss", "Kay", "Amias"]);
   });
 
   it("keeps only synchronized gameplay fields in MatchState", () => {
-    const appState = createInitialAppState();
+    const appState = createScenarioAppState();
     const lastDice: DiceRoll = { first: 3, second: 5, total: 8 };
     const matchState: MatchState = {
       game: appState.game,
@@ -736,7 +740,7 @@ describe("match transition foundations", () => {
   });
 
   it("throws recoverable domain errors while the local adapter preserves UI state and notice", () => {
-    const state = createInitialAppState();
+    const state = createScenarioAppState();
     const match = toMatchState(state);
 
     expect(() =>

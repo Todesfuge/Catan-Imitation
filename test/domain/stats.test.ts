@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDemoGame } from "../../src/domain/setup";
+import { createScenarioGame } from "../fixtures/createScenarioGame";
 import {
   getDiceIncome,
   getExpectedIncomeMatrix,
@@ -8,7 +8,7 @@ import {
 
 describe("income statistics", () => {
   it("reports a player's resource gain and probability for each dice total", () => {
-    const game = createDemoGame();
+    const game = createScenarioGame();
 
     const rows = getPlayerIncome(game, "p1");
     const eight = rows.find((row) => row.diceTotal === 8);
@@ -21,7 +21,7 @@ describe("income statistics", () => {
   });
 
   it("reports all player gains for a selected dice total", () => {
-    const game = createDemoGame();
+    const game = createScenarioGame();
 
     const income = getDiceIncome(game, 8);
 
@@ -32,7 +32,7 @@ describe("income statistics", () => {
   });
 
   it("builds expected income totals per player and resource", () => {
-    const game = createDemoGame();
+    const game = createScenarioGame();
 
     const matrix = getExpectedIncomeMatrix(game);
 

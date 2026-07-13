@@ -1,15 +1,16 @@
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { gameReducer } from "../../src/app/gameReducer";
 import { createLocalGameTableView } from "../../src/app/localGameState";
 import { emptyResources } from "../../src/domain/types";
 import { PlayerTradePanel } from "../../src/ui/PlayerTradePanel";
 import { TradeHubPanel } from "../../src/ui/TradeHubPanel";
 import { executeMatchCommandForTest } from "./matchCommandTestUtils";
+import { createScenarioAppState } from "../fixtures/createScenarioGame";
 
 function createTradeState() {
-  const actionState = executeMatchCommandForTest(createInitialAppState(), {
+  const actionState = executeMatchCommandForTest(createScenarioAppState(), {
     type: "ROLL_DICE",
     playerId: "p1",
     dice: [4, 4]
@@ -43,7 +44,7 @@ describe("player trade UI", () => {
   it("renders a five-resource bundle editor and public offer summary", () => {
     const draftHtml = renderToString(
       createElement(PlayerTradePanel, {
-        state: createLocalGameTableView(createInitialAppState()),
+        state: createLocalGameTableView(createScenarioAppState()),
         dispatch: () => undefined
       })
     );
@@ -70,7 +71,7 @@ describe("player trade UI", () => {
   it("hosts Player Trade and Commerce Guild as separate tab panels", () => {
     const html = renderToString(
       createElement(TradeHubPanel, {
-        state: createLocalGameTableView(createInitialAppState()),
+        state: createLocalGameTableView(createScenarioAppState()),
         dispatch: () => undefined
       })
     );

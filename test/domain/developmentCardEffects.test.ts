@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  createInitialAppState,
-  type AppState
-} from "../../src/app/gameReducer";
+import type { AppState } from "../../src/app/gameReducer";
 import { executeMatchCommandForTest as gameReducer } from "./matchCommandTestUtils";
+import { createScenarioAppState } from "../fixtures/createScenarioGame";
 import { emptyResources, resources, type DevelopmentCardKind, type Resource } from "../../src/domain/types";
 
 function withCard(
@@ -12,7 +10,7 @@ function withCard(
   purchasedTurn = 0,
   additionalKinds: DevelopmentCardKind[] = []
 ): AppState {
-  const state = createInitialAppState();
+  const state = createScenarioAppState();
   const cards = [kind, ...additionalKinds].map((cardKind, index) => ({
     id: `test-${cardKind}-${index}`,
     kind: cardKind,

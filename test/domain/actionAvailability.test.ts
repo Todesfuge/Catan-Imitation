@@ -3,12 +3,12 @@ import {
   getActionAvailability,
   getActionAvailabilityFacts
 } from "../../src/app/actionAvailability";
-import { createInitialAppState } from "../../src/app/gameReducer";
+import { createScenarioAppState } from "../fixtures/createScenarioGame";
 import { emptyResources, type ResourceMap } from "../../src/domain/types";
 import { executeMatchCommandForTest } from "./matchCommandTestUtils";
 
 function withActiveResources(resources: Partial<ResourceMap>) {
-  const state = createInitialAppState();
+  const state = createScenarioAppState();
   return {
     ...state,
     game: {
@@ -94,7 +94,7 @@ describe("turn action availability", () => {
   });
 
   it("reports a required pre-roll development decision instead of claiming the dice were rolled", () => {
-    const state = createInitialAppState();
+    const state = createScenarioAppState();
     const playerId = state.game.activePlayerId;
     const facts = getActionAvailabilityFacts(
       {

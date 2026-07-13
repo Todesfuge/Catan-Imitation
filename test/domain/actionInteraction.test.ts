@@ -1,15 +1,15 @@
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { createInitialAppState } from "../../src/app/gameReducer";
 import { createLocalGameTableView } from "../../src/app/localGameState";
 import { emptyResources } from "../../src/domain/types";
 import { ActionDock } from "../../src/ui/ActionDock";
 import { BoardActionTargets } from "../../src/ui/BoardActionTargets";
 import { executeMatchCommandForTest } from "./matchCommandTestUtils";
+import { createScenarioAppState } from "../fixtures/createScenarioGame";
 
 function createFundedActionState() {
-  const initial = createInitialAppState();
+  const initial = createScenarioAppState();
   const funded = {
     ...initial,
     game: {

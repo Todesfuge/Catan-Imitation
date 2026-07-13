@@ -2,11 +2,13 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { gameReducer } from "../../src/app/gameReducer";
 import {
   createInitialAppState,
   createLocalGameTableController,
   createLocalGameTableView
 } from "../../src/app/localGameState";
+import { parseMapSeed } from "../../src/domain/mapSeed";
 import { GameTable, type GameTableView } from "../../src/ui/GameTable";
 
 const noResources = { wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 } as const;
@@ -74,6 +76,73 @@ function callerOnlyFixture(): GameTableView {
 }
 
 describe("shared game-table presentation boundary", () => {
+  it("boots Local Game directly into an empty four-seat setup on a canonical M1 map", () => {
+    const state = createInitialAppState();
+
+    expect(state.game.phase).toBe("setup");
+    expect(state.game.players.map((player) => player.name)).toEqual([
+      "Voyage1969",
+      "Loss",
+      "Kay",
+      "Amias"
+    ]);
+    expect(state.game.mapSeed).toMatch(/^M1-[0-9A-F]{16}$/);
+    expect(parseMapSeed(state.game.mapSeed)).toBe(state.game.mapSeed);
+    expect(state.game.buildings).toEqual([]);
+    expect(state.game.roads).toEqual([]);
+    expect(
+      state.game.players.every(
+        (player) =>
+          Object.values(player.resources).every((amount) => amount === 0) &&
+          player.developmentCards.length === 0
+      )
+    ).toBe(true);
+    expect(state.pendingPlayerTrade).toBeUndefined();
+    expect(state.game.turnState).toEqual({
+      phase: "awaitingRoll",
+      pendingDiscards: {},
+      developmentCardPlayed: false
+    });
+  });
+
+  it.each(["fresh", "sameMap"] as const)(
+    "applies a mode-bearing %s Local restart and resets transient UI state",
+    (mode) => {
+      const initial = createInitialAppState();
+      const restarted = gameReducer(
+        {
+          ...initial,
+          selectedDiceTotal: 6,
+          selectedPlayerId: "p3",
+          notice: "Previous notice"
+        },
+        { type: "START_NEW_GAME", mode }
+      );
+
+      expect(restarted.game.phase).toBe("setup");
+      expect(restarted.game.buildings).toEqual([]);
+      expect(restarted.game.roads).toEqual([]);
+      expect(restarted.game.mapSeed).toMatch(/^M1-[0-9A-F]{16}$/);
+      expect(restarted.game.mapSeed === initial.game.mapSeed).toBe(mode === "sameMap");
+      expect(restarted.selectedDiceTotal).toBe(8);
+      expect(restarted.selectedPlayerId).toBe("p1");
+      expect(restarted.notice).toBeNull();
+    }
+  );
+
+  it("maps the existing Local new-game intent to an explicit fresh restart", () => {
+    const state = createInitialAppState();
+    const commands: unknown[] = [];
+    const controller = createLocalGameTableController(
+      () => state,
+      (command) => commands.push(command)
+    );
+
+    controller.dispatch({ type: "game.new" });
+
+    expect(commands).toEqual([{ type: "START_NEW_GAME", mode: "fresh" }]);
+  });
+
   it("renders the existing local table from an explicit local view adapter", () => {
     const state = createInitialAppState();
     const view = createLocalGameTableView(state);

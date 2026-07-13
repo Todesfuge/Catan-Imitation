@@ -1,16 +1,16 @@
-import { createCommerceGuild } from "../domain/expansion/commerceGuild";
 import {
   formatAvailabilityReason,
   getActionAvailability,
   getActionAvailabilityFacts
 } from "./actionAvailability";
+import { formatM1MapSeed } from "../domain/mapSeed";
+import { createSetupMatch, defaultMatchSeats } from "../domain/match/createMatch";
 import type { MatchCommand, MatchExecutionContext, MatchState } from "../domain/match/types";
 import type { RandomSource } from "../domain/match/random";
 import { calculatePlayerScore } from "../domain/rules/scoring";
 import {
   getPlayerTradeAcceptanceReason
 } from "../domain/rules/playerTrade";
-import { createDemoGame, defaultMatchSeats } from "../domain/setup";
 import {
   getDiceIncome,
   getExpectedIncomeMatrix,
@@ -51,6 +51,10 @@ export const localMatchSeats = defaultMatchSeats;
 
 export const localMatchExecutionContext: MatchExecutionContext = {
   random: new LocalRandomSource(),
+  nextMapSeed: () => {
+    const words = crypto.getRandomValues(new Uint32Array(2));
+    return formatM1MapSeed(words[0], words[1]);
+  },
   nextLogId: () => `log-${++logCounter}`,
   now: () => Date.now()
 };
@@ -64,12 +68,14 @@ export function createUiState(selectedPlayerId: PlayerId): UiState {
 }
 
 export function createInitialAppState(): AppState {
-  const game = createDemoGame();
+  const match = createSetupMatch(
+    localMatchSeats,
+    { kind: "fresh" },
+    localMatchExecutionContext
+  );
   return {
-    game,
-    guild: createCommerceGuild(),
-    lastDice: null,
-    ...createUiState(game.activePlayerId)
+    ...match,
+    ...createUiState(match.game.activePlayerId)
   };
 }
 
@@ -378,7 +384,7 @@ export function createLocalGameTableController(
         case "game.new":
           auctionKey = "";
           auctionBids = {};
-          dispatchCommand({ type: "START_NEW_GAME" });
+          dispatchCommand({ type: "START_NEW_GAME", mode: "fresh" });
           return;
         case "turn.roll": dispatchCommand({ type: "ROLL_DICE", playerId: active() }); return;
         case "turn.end": dispatchCommand({ type: "END_TURN", playerId: active() }); return;

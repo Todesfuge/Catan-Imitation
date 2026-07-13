@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDemoGame } from "../../src/domain/setup";
+import { createScenarioGame } from "../fixtures/createScenarioGame";
 import {
   completeTradeSlot,
   createCommerceGuild,
@@ -27,7 +27,7 @@ function withPlayerResources(game: GameState, playerId: string, resources: Parti
 
 describe("Commerce Guild", () => {
   it("starts with three trade slots and refreshes a used slot after a once-per-turn trade", () => {
-    const game = withPlayerResources(createDemoGame(), "p1", { wood: 2, brick: 1 });
+    const game = withPlayerResources(createScenarioGame(), "p1", { wood: 2, brick: 1 });
     const guild = createCommerceGuild([
       { id: "slot-a", requires: { wood: 2 }, tokenReward: 3 },
       { id: "slot-b", requires: { brick: 1 }, tokenReward: 1 },
@@ -50,8 +50,8 @@ describe("Commerce Guild", () => {
 
   it("transfers tokens and caps guild gathering resource redemption at four per player", () => {
     const game = {
-      ...createDemoGame(),
-      players: createDemoGame().players.map((player) =>
+      ...createScenarioGame(),
+      players: createScenarioGame().players.map((player) =>
         player.id === "p1" ? { ...player, guildTokens: 6 } : player
       )
     };
@@ -77,9 +77,9 @@ describe("Commerce Guild", () => {
 
   it("resolves auctions by active turn-order ties and redeems three vouchers into a prize card", () => {
     const game = {
-      ...createDemoGame(),
+      ...createScenarioGame(),
       activePlayerId: "p2",
-      players: createDemoGame().players.map((player) => ({
+      players: createScenarioGame().players.map((player) => ({
         ...player,
         guildTokens: player.id === "p2" || player.id === "p3" ? 4 : 0,
         vouchers: player.id === "p2" ? 2 : 0

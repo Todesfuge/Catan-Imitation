@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  createInitialAppState,
   gameReducer,
   type AppState
 } from "../../src/app/gameReducer";
 import { executeMatchCommandForTest } from "./matchCommandTestUtils";
+import { createScenarioAppState } from "../fixtures/createScenarioGame";
 import {
   acceptPlayerTrade,
   createPlayerTradeOffer
@@ -16,7 +16,7 @@ function bundle(values: Partial<ResourceMap>): ResourceMap {
 }
 
 function createActionState(): AppState {
-  const rolled = executeMatchCommandForTest(createInitialAppState(), {
+  const rolled = executeMatchCommandForTest(createScenarioAppState(), {
     type: "ROLL_DICE",
     playerId: "p1",
     dice: [1, 1]
@@ -79,7 +79,7 @@ describe("public player resource trade", () => {
     expect(() => createPlayerTradeOffer(state.game, "p1", bundle({ wood: 4 }), validRequested)).toThrow(/cannot afford/i);
     expect(() => createPlayerTradeOffer(state.game, "p2", validOffered, validRequested)).toThrow(/active player/i);
 
-    const awaitingRoll = createInitialAppState();
+    const awaitingRoll = createScenarioAppState();
     expect(() => createPlayerTradeOffer(awaitingRoll.game, "p1", validOffered, validRequested)).toThrow(/action phase/i);
   });
 

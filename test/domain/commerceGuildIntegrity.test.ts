@@ -8,7 +8,7 @@ import {
   transferGuildTokens,
   type CommerceGuildState
 } from "../../src/domain/expansion/commerceGuild";
-import { createDemoGame } from "../../src/domain/setup";
+import { createScenarioGame } from "../fixtures/createScenarioGame";
 import { resources, type GameState, type Player, type PlayerId, type Resource } from "../../src/domain/types";
 
 function withPlayer(game: GameState, playerId: PlayerId, update: (player: Player) => Player): GameState {
@@ -48,7 +48,7 @@ function sequenceRandom(values: number[]): () => number {
 describe("Commerce Guild resource integrity", () => {
   it("returns every kind of completed trade-slot resource to the bank", () => {
     for (const resource of resources) {
-      const game = withPlayer(createDemoGame(), "p1", (player) => ({
+      const game = withPlayer(createScenarioGame(), "p1", (player) => ({
         ...player,
         resources: { ...player.resources, [resource]: 2 }
       }));
@@ -72,8 +72,8 @@ describe("Commerce Guild resource integrity", () => {
     for (const resource of resources) {
       const game = withPlayer(
         {
-          ...createDemoGame(),
-          bank: { resources: { ...createDemoGame().bank.resources, [resource]: 1 } }
+          ...createScenarioGame(),
+          bank: { resources: { ...createScenarioGame().bank.resources, [resource]: 1 } }
         },
         "p1",
         (player) => ({ ...player, guildTokens: 2 })
@@ -98,8 +98,8 @@ describe("Commerce Guild resource integrity", () => {
   it("caps resource blind boxes by bank stock and reports the actual award", () => {
     const game = withPlayer(
       {
-        ...createDemoGame(),
-        bank: { resources: { ...createDemoGame().bank.resources, wood: 1 } }
+        ...createScenarioGame(),
+        bank: { resources: { ...createScenarioGame().bank.resources, wood: 1 } }
       },
       "p2",
       (player) => ({ ...player, guildTokens: 2 })
@@ -130,9 +130,9 @@ describe("Commerce Guild resource integrity", () => {
     for (const [resourceIndex, resource] of resources.entries()) {
       const game = withPlayer(
         {
-          ...createDemoGame(),
+          ...createScenarioGame(),
           bank: {
-            resources: { ...createDemoGame().bank.resources, [resource]: 1 }
+            resources: { ...createScenarioGame().bank.resources, [resource]: 1 }
           }
         },
         "p2",
@@ -162,7 +162,7 @@ describe("Commerce Guild resource integrity", () => {
   it("reports an explicit zero award when the bank fully truncates a resource blind box", () => {
     const game = withPlayer(
       {
-        ...createDemoGame(),
+        ...createScenarioGame(),
         bank: {
           resources: { wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 }
         }
@@ -182,7 +182,7 @@ describe("Commerce Guild resource integrity", () => {
   });
 
   it("rejects redemption when no positive transfer is possible", () => {
-    const noTokensGame = createDemoGame();
+    const noTokensGame = createScenarioGame();
     const guild = startGuildGathering(createCommerceGuild());
     expect(() => redeemGatheringResources(noTokensGame, guild, "p1", { wood: 1 })).toThrow(
       /token/i
@@ -202,7 +202,7 @@ describe("Commerce Guild resource integrity", () => {
   });
 
   it("rejects invalid blind-box random samples before charging or rewarding", () => {
-    const game = withPlayer(createDemoGame(), "p2", (player) => ({ ...player, guildTokens: 2 }));
+    const game = withPlayer(createScenarioGame(), "p2", (player) => ({ ...player, guildTokens: 2 }));
     const guild = auctionGuild();
     const beforeGame = structuredClone(game);
     const beforeGuild = structuredClone(guild);
@@ -220,7 +220,7 @@ describe("Commerce Guild resource integrity", () => {
   });
 
   it("rejects fractional and non-finite token, redemption, and auction quantities", () => {
-    const game = withPlayer(createDemoGame(), "p1", (player) => ({
+    const game = withPlayer(createScenarioGame(), "p1", (player) => ({
       ...player,
       guildTokens: 4
     }));

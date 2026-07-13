@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { createInitialAppState, createLocalGameTableView } from "../../src/app/localGameState";
+import { createLocalGameTableView } from "../../src/app/localGameState";
 import { createStandardBoardData } from "../../src/domain/board";
 import { resources } from "../../src/domain/types";
 import type { OnlineAllowedActions } from "../../src/online/allowedActions";
@@ -15,6 +15,7 @@ import { MAX_WIRE_BYTES, parseServerWebSocketMessage, type ClientWebSocketMessag
 import type { PrivateSeatState, PublicGameView, PublicGuildView, PublicRoomState } from "../../src/online/view";
 import { projectRoomView } from "../../src/online/projectRoomView";
 import { I18nProvider } from "../../src/ui/i18n";
+import { createScenarioAppState } from "../fixtures/createScenarioGame";
 
 const zero = { wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 } as const;
 const callerResources = { wood: 7, brick: 2, wool: 3, grain: 4, ore: 5 } as const;
@@ -66,7 +67,7 @@ function actions(overrides: Partial<OnlineAllowedActions> = {}): OnlineAllowedAc
 }
 
 function publicGame(): PublicGameView {
-  const local = createLocalGameTableView(createInitialAppState()).game;
+  const local = createLocalGameTableView(createScenarioAppState()).game;
   return {
     phase: local.phase,
     players: [
@@ -191,7 +192,7 @@ describe("online game projection adapter", () => {
   });
 
   it("bounds recent sanitized logs so a real projected snapshot stays within 16 KiB", () => {
-    const local = createInitialAppState();
+    const local = createScenarioAppState();
     const seats = local.game.players.map((player, index) => ({ seatId: `seat-${index + 1}`, playerId: player.id, nickname: player.name, ready: true }));
     const log = [...local.game.log, ...Array.from({ length: 20 }, (_, index) => ({
       id: `bounded-log-${index}`, message: "safe", messageKey: "dice.rolled" as const,
@@ -211,7 +212,7 @@ describe("online game projection adapter", () => {
   });
 
   it("keeps a legal high-water board, hand, targets, and log snapshot within 16 KiB", () => {
-    const local = createInitialAppState();
+    const local = createScenarioAppState();
     const longNames = ["甲".repeat(20), "乙".repeat(20), "丙".repeat(20), "丁".repeat(20)];
     const players = local.game.players.map((player, index) => ({
       ...player,
@@ -252,7 +253,7 @@ describe("online game projection adapter", () => {
   });
 
   it("keeps a conservative early-game target superset within 16 KiB", () => {
-    const local = createInitialAppState();
+    const local = createScenarioAppState();
     const seats = local.game.players.map((player, index) => ({ seatId: `10000000-0000-4000-8000-00000000000${index}`, playerId: player.id, nickname: "界".repeat(20), ready: true }));
     const projected = projectRoomView({ roomCode: "234567", lifecycle: "playing", roomVersion: 1000000, seats,
       matchState: { game: local.game, guild: local.guild, lastDice: null } }, seats[0]!.seatId,
@@ -611,7 +612,7 @@ describe("online game projection adapter", () => {
   });
 
   it("labels only the exact deterministic standard-v1 geometry", () => {
-    const local = createInitialAppState();
+    const local = createScenarioAppState();
     expect({ board: local.game.board, edges: local.game.edges, ports: local.game.ports }).toEqual(createStandardBoardData());
     const seats = local.game.players.map((player, index) => ({ seatId: `seat-${index + 1}`, playerId: player.id, nickname: player.name, ready: true }));
     const nonstandard = { ...local.game, board: local.game.board.map((hex, index) => index === 0 ? { ...hex, id: "different-hex" } : hex) };

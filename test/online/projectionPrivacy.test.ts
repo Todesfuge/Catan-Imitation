@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { createCommerceGuild } from "../../src/domain/expansion/commerceGuild";
-import { createDemoGame } from "../../src/domain/match/createMatch";
 import type { MatchState } from "../../src/domain/match/types";
 import { calculatePlayerScore } from "../../src/domain/rules/scoring";
 import {
@@ -15,6 +14,7 @@ import {
   type ProjectableRoomState
 } from "../../src/online/projectRoomView";
 import { executeMatchCommandForTest } from "../domain/matchCommandTestUtils";
+import { createScenarioGame } from "../fixtures/createScenarioGame";
 
 const ownCard: DevelopmentCard = {
   id: "own-card-id",
@@ -60,7 +60,7 @@ const cardsByPlayerId: Record<string, DevelopmentCard[]> = {
 };
 
 function createMatchState(phase: GameState["phase"] = "playing"): MatchState {
-  const base = createDemoGame();
+  const base = createScenarioGame();
   const game: GameState = {
     ...base,
     phase,

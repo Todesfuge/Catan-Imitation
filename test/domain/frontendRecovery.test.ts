@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { gameReducer } from "../../src/app/gameReducer";
 import { getLegalRoadEdgeIds } from "../../src/domain/rules/building";
 import { executeMatchCommandForTest } from "./matchCommandTestUtils";
+import { createScenarioAppState } from "../fixtures/createScenarioGame";
 
 describe("frontend command recovery", () => {
   it("preserves application data and exposes a notice when a command is rejected", () => {
-    const initial = createInitialAppState();
+    const initial = createScenarioAppState();
     const actionState = executeMatchCommandForTest(initial, {
       type: "ROLL_DICE",
       playerId: initial.game.activePlayerId,
@@ -28,7 +29,7 @@ describe("frontend command recovery", () => {
   });
 
   it("clears an earlier notice after a successful command", () => {
-    const initial = createInitialAppState();
+    const initial = createScenarioAppState();
     const actionState = executeMatchCommandForTest(initial, {
       type: "ROLL_DICE",
       playerId: initial.game.activePlayerId,
@@ -51,7 +52,7 @@ describe("frontend command recovery", () => {
   });
 
   it("rethrows unexpected implementation faults instead of presenting them as rule notices", () => {
-    const initial = createInitialAppState();
+    const initial = createScenarioAppState();
     const actionState = executeMatchCommandForTest(initial, {
       type: "ROLL_DICE",
       playerId: initial.game.activePlayerId,
