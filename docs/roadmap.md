@@ -45,8 +45,9 @@ Status: Complete
 
 Status: Ready for implementation
 
-- Generalized board generation beyond the current fixed 19-hex shared topology.
-- Optional persistence or real-time multiplayer layer.
+- Optional accounts, public matchmaking, and cross-device seat recovery.
+- Long-term saved games and resumed-room lifecycle controls.
+- AI players and non-standard board sizes or topologies beyond the standard 19-hex map.
 
 ## Milestone 5: Core Rule Integrity Hardening
 
@@ -91,3 +92,14 @@ Status: Complete
 - Complete reciprocal English and Chinese README documents.
 - Production-preview browser coverage for contrast, scrolling, trade, locale, and responsive containment.
 - Verification: 120 Vitest checks, 17 production-preview Playwright flows, production/Pages builds, bundle smoke, rendered English/Chinese 1280 and mobile 390 review, and converged independent code review.
+
+## Milestone 9: Seeded Random Maps
+
+Status: Complete
+
+- Deterministic randomized standard 19-hex maps with fixed terrain, number-token, and port multisets plus bounded red-token and coastal-port constraints.
+- Canonical public `M1-` seeds that reconstruct identical stable geometry in Local Game, the Worker, and every connected browser.
+- Real empty Local setup and shared same-map/new-map restart transitions that clear gameplay and Commerce Guild state atomically.
+- Public bilingual seed/copy controls with a selectable manual fallback, explicit confirmation, host-only Online restart authority, and converged room-version broadcasts.
+- Storage schema v2 and protocol v2 with exact fixed-board v1 migration through reserved `M0-STANDARD`; new games never emit the compatibility seed.
+- Verification: 1,000-seed invariants, golden layouts, Local/Worker/protocol/migration/restart suites, three-context Playwright convergence, responsive screenshots, and the release evidence recorded in the seeded-map handoff.

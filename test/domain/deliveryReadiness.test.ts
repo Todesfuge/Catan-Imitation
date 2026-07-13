@@ -23,6 +23,7 @@ describe("delivery readiness", () => {
     const ci = read(".github/workflows/ci.yml");
     const readme = read("README.md");
     const quickstart = read("specs/002-cloudflare-online-multiplayer/quickstart.md");
+    const workerSmoke = read("scripts/smoke-worker.mjs");
     const workspace = read("pnpm-workspace.yaml");
 
     expect(packageJson.scripts["smoke:ui"]).toBe("node scripts/smoke-ui.mjs");
@@ -36,13 +37,16 @@ describe("delivery readiness", () => {
     expect(ci).toContain("pnpm build");
     expect(ci).toContain("pnpm smoke:ui");
     expect(existsSync(".github/workflows/pages.yml")).toBe(false);
-    expect(readme).toContain("https://catan-imitation.catan-imitation.workers.dev/");
+    expect(readme).toContain("https://catan-imitation.workers.dev");
+    expect(readme).not.toContain("https://catan-imitation.catan-imitation.workers.dev/");
     expect(readme).toContain("pnpm build:worker");
     expect(readme).toContain("pnpm exec wrangler deploy");
     expect(readme).toContain("pnpm exec wrangler deploy --name catan-imitation-preview");
     expect(readme).not.toContain("pnpm exec wrangler versions upload");
     expect(quickstart).toContain("pnpm exec wrangler deploy --name catan-imitation-preview");
     expect(quickstart).not.toContain("pnpm exec wrangler versions upload");
+    expect(workerSmoke).toContain("healthBody.schemaVersion !== 2");
+    expect(workerSmoke).not.toContain("healthBody.schemaVersion !== 1");
   });
 
   it("keeps collaboration templates and roadmap visible to reviewers", () => {
@@ -55,5 +59,34 @@ describe("delivery readiness", () => {
     expect(read("README.md")).toContain("Roadmap");
     expect(read("README.md")).not.toContain("https://todesfuge.github.io/Catan-Imitation/");
     expect(read("docs/roadmap.md")).toContain("Delivery Automation");
+  });
+
+  it("publishes the seeded-map release and migration contract", () => {
+    const english = read("README.md");
+    const chinese = read("README.zh-CN.md");
+    const roadmap = read("docs/roadmap.md");
+    const quickstart = read("specs/003-seeded-random-maps/quickstart.md");
+    const verification = read("specs/003-seeded-random-maps/verification.md");
+    const handoff = read("specs/003-seeded-random-maps/handoff.md");
+
+    for (const readme of [english, chinese]) {
+      expect(readme).toContain("https://catan-imitation.workers.dev");
+      expect(readme).toContain("M1-");
+      expect(readme).toContain("M0-STANDARD");
+      expect(readme).toContain("specs/003-seeded-random-maps/quickstart.md");
+      expect(readme).toContain("specs/003-seeded-random-maps/verification.md");
+    }
+    expect(english).toContain("schema v2");
+    expect(english).toContain("protocol v2");
+    expect(chinese).toContain("存储架构 v2");
+    expect(chinese).toContain("联机协议 v2");
+    expect(roadmap).toContain("## Milestone 9: Seeded Random Maps");
+    expect(roadmap).not.toContain("Generalized board generation beyond the current fixed 19-hex shared topology.");
+    expect(quickstart).toContain("Status: Verified");
+    expect(english).toContain("never roll back to a schema-v1 binary");
+    expect(chinese).toContain("不得回滚到架构 v1 二进制");
+    expect(handoff).toContain("never roll back to a schema-v1 binary");
+    expect(verification).toContain("operator-confirmed under the approved evidence-substitution path");
+    expect(verification).toContain("could not remotely reverify the live target");
   });
 });

@@ -113,4 +113,30 @@ describe("English and Simplified Chinese localization", () => {
       expect(chineseReadme).toContain(heading);
     }
   });
+
+  it("keeps the seeded-map release behavior explicit in both README languages", () => {
+    const englishReadme = readFileSync("README.md", "utf8");
+    const chineseReadme = readFileSync("README.zh-CN.md", "utf8");
+
+    for (const claim of [
+      "Every new game uses a randomized standard 19-hex map",
+      "Local Game opens in a real empty setup",
+      "The seed stays selectable as a manual copy fallback",
+      "Only the Online host can restart",
+      "`M0-STANDARD` is migration-only",
+      "storage schema v2 and wire protocol v2"
+    ]) {
+      expect(englishReadme).toContain(claim);
+    }
+    for (const claim of [
+      "每局新游戏都使用随机化的标准 19 地块地图",
+      "本地游戏会直接进入真实的空白开局设置",
+      "种子仍可选中，作为手动复制的后备方式",
+      "只有联机房主可以重开",
+      "`M0-STANDARD` 仅用于迁移",
+      "存储架构 v2 和联机协议 v2"
+    ]) {
+      expect(chineseReadme).toContain(claim);
+    }
+  });
 });

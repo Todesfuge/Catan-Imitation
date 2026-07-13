@@ -1,6 +1,6 @@
 # Quickstart: Seeded Random Maps Verification
 
-Status: Planned manual verification path
+Status: Verified automated and manual verification path
 
 ## Prerequisites
 
@@ -71,4 +71,4 @@ pnpm exec wrangler deploy --dry-run --config wrangler.jsonc
 git diff --check
 ```
 
-Before handoff, verify `rg -n "createDemoGame" src worker` returns no matches and `rg -n "boardLayout.*standard-v1" src worker test` returns no active production/protocol matches.
+Before handoff, verify `rg -n "createDemoGame" src worker` and `rg -n "boardLayout.*standard-v1" src worker` both return no active production/protocol matches.
