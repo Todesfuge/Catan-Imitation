@@ -249,11 +249,6 @@ export function ActionDock({
           ? `${state.lastDice.first} + ${state.lastDice.second} = ${state.lastDice.total}`
           : t("action.noRoll")}
       </div>
-      {state.game.phase === "gameOver" ? (
-        <button data-action="new-game" disabled={state.newGameEnabled === false} onClick={() => dispatch({ type: "game.new" })} type="button">
-          {t("action.newGame")}
-        </button>
-      ) : null}
       <div className="sr-only">
         <span id="roll-unavailable-reason">{translateRuleText(locale, availability.roll.reason)}</span>
         <span id="road-unavailable-reason">{translateRuleText(locale, availability.road.reason)}</span>

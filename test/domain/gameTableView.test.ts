@@ -17,6 +17,7 @@ const unavailable = { enabled: false, reason: "Unavailable", targets: [] } as co
 function callerOnlyFixture(): GameTableView {
   return {
     game: {
+      mapSeed: parseMapSeed("M1-0123456789ABCDEF"),
       phase: "playing",
       players: [
         { id: "public-caller", name: "Caller", color: "#fff", visibleScore: 2, resourceCardCount: 1, developmentCardCount: 0, guildTokens: 0, vouchers: 0, prizeCards: 0, knightsPlayed: 0 },
@@ -130,18 +131,26 @@ describe("shared game-table presentation boundary", () => {
     }
   );
 
-  it("maps the existing Local new-game intent to an explicit fresh restart", () => {
-    const state = createInitialAppState();
-    const commands: unknown[] = [];
-    const controller = createLocalGameTableController(
-      () => state,
-      (command) => commands.push(command)
-    );
+  it.each(["fresh", "sameMap"] as const)(
+    "projects and dispatches the Local %s restart mode without confirmation",
+    (mode) => {
+      const state = createInitialAppState();
+      const commands: unknown[] = [];
+      const view = createLocalGameTableView(state) as GameTableView & {
+        restart?: { enabled: boolean; requiresConfirmation: boolean };
+      };
+      const controller = createLocalGameTableController(
+        () => state,
+        (command) => commands.push(command)
+      );
 
-    controller.dispatch({ type: "game.new" });
+      controller.dispatch({ type: "game.restart", mode } as never);
 
-    expect(commands).toEqual([{ type: "START_NEW_GAME", mode: "fresh" }]);
-  });
+      expect(view.game.mapSeed).toBe(state.game.mapSeed);
+      expect(view.restart).toEqual({ enabled: true, requiresConfirmation: false });
+      expect(commands).toEqual([{ type: "START_NEW_GAME", mode }]);
+    }
+  );
 
   it("renders the existing local table from an explicit local view adapter", () => {
     const state = createInitialAppState();
@@ -238,7 +247,7 @@ describe("shared game-table presentation boundary", () => {
     const controls = createLocalGameTableView(state).controlledPlayers;
 
     controller.dispatch({ type: "auction.submitBid", controlId: controls[0]!.controlId, bid: 1 });
-    controller.dispatch({ type: "game.new" });
+    controller.dispatch({ type: "game.restart", mode: "fresh" } as never);
     commands.length = 0;
     for (const control of controls.slice(1)) {
       controller.dispatch({ type: "auction.submitBid", controlId: control.controlId, bid: 0 });

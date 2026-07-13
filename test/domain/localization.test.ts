@@ -76,6 +76,31 @@ describe("English and Simplified Chinese localization", () => {
     ).toBe("Loss 以 3 枚代币赢得第 2 轮拍卖：资源：木材 2, 粮食 1。");
   });
 
+  it("keeps every seed and restart message complete with English as the default locale", () => {
+    const keys = [
+      "settings.mapSeed",
+      "settings.copySeed",
+      "settings.copySeedSuccess",
+      "settings.copySeedFailed",
+      "settings.newRandomMap",
+      "settings.replayCurrentMap",
+      "settings.restartConfirmFresh",
+      "settings.restartConfirmSameMap",
+      "settings.restartConfirm",
+      "settings.restartCancel"
+    ] as const;
+
+    for (const key of keys) {
+      const english = translate("en", key as Parameters<typeof translate>[1]);
+      const chinese = translate("zh-CN", key as Parameters<typeof translate>[1]);
+      expect(english, key).toBeTruthy();
+      expect(chinese, key).toBeTruthy();
+      expect(chinese, key).not.toBe(english);
+    }
+    expect(translate("en", "settings.copySeed" as Parameters<typeof translate>[1])).toBe("Copy Seed");
+    expect(readStoredLocale(undefined)).toBe("en");
+  });
+
   it("links complete English and Chinese README documents reciprocally", () => {
     const englishReadme = readFileSync("README.md", "utf8");
     const chineseReadme = readFileSync("README.zh-CN.md", "utf8");

@@ -12,6 +12,8 @@ import {
   Warehouse
 } from "lucide-react";
 import { resources } from "../domain/types";
+import type { MapSeed } from "../domain/mapSeed";
+import type { MapRestartMode } from "../domain/match/types";
 import {
   boardViewBox,
   edgeProjection,
@@ -72,6 +74,7 @@ export interface GameTablePlayerView {
 }
 
 export interface GameTableGameView {
+  readonly mapSeed: MapSeed;
   readonly phase: "setup" | "playing" | "gameOver";
   readonly players: readonly GameTablePlayerView[];
   readonly activePlayerId: string;
@@ -197,13 +200,16 @@ export interface GameTableView {
     readonly submitted: boolean;
     readonly reason?: string;
   };
-  readonly newGameEnabled?: boolean;
+  readonly restart?: {
+    readonly enabled: boolean;
+    readonly requiresConfirmation: boolean;
+  };
 }
 
 export type GameTableIntent =
   | { readonly type: "ui.selectDiceTotal"; readonly diceTotal: number }
   | { readonly type: "ui.selectPlayer"; readonly playerId: string }
-  | { readonly type: "game.new" }
+  | { readonly type: "game.restart"; readonly mode: MapRestartMode }
   | { readonly type: "turn.roll" }
   | { readonly type: "turn.end" }
   | { readonly type: "build.road"; readonly edgeId: string }
@@ -806,8 +812,8 @@ export function GameTable({
         panel={utilityPanel}
         state={state}
         onClose={() => setUtilityPanel(null)}
-        onNewGame={() => {
-          dispatch({ type: "game.new" });
+        onRestart={(mode) => {
+          dispatch({ type: "game.restart", mode });
           setUtilityPanel(null);
         }}
       />

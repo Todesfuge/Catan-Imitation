@@ -185,6 +185,7 @@ export function createLocalGameTableView(state: AppState): GameTableView {
   const tableActions = projectLocalActions(state);
   return {
     game: {
+      mapSeed: state.game.mapSeed,
       phase: state.game.phase,
       players: players.map((player) => ({
         id: player.id,
@@ -358,7 +359,8 @@ export function createLocalGameTableView(state: AppState): GameTableView {
         ? { publishReason: formatAvailabilityReason(actionFacts.publicTrade.publish.disabledReason) }
         : {}),
       maxOfferResources: cloneResources(actionFacts.publicTrade.publish.maxOfferResources)
-    }
+    },
+    restart: { enabled: true, requiresConfirmation: false }
   };
 }
 
@@ -381,10 +383,10 @@ export function createLocalGameTableController(
       switch (intent.type) {
         case "ui.selectDiceTotal": dispatchCommand({ type: "SELECT_DICE_TOTAL", diceTotal: intent.diceTotal }); return;
         case "ui.selectPlayer": dispatchCommand({ type: "SELECT_PLAYER", playerId: intent.playerId }); return;
-        case "game.new":
+        case "game.restart":
           auctionKey = "";
           auctionBids = {};
-          dispatchCommand({ type: "START_NEW_GAME", mode: "fresh" });
+          dispatchCommand({ type: "START_NEW_GAME", mode: intent.mode });
           return;
         case "turn.roll": dispatchCommand({ type: "ROLL_DICE", playerId: active() }); return;
         case "turn.end": dispatchCommand({ type: "END_TURN", playerId: active() }); return;

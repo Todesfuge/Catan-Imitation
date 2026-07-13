@@ -1,25 +1,62 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+import type { MapRestartMode } from "../domain/match/types";
 import type { GameTableView } from "./GameTable";
 import { useI18n } from "./i18n";
 
 export type UtilityPanel = "settings" | "rulebook" | "info" | null;
 
+type SeedClipboard = Pick<Clipboard, "writeText">;
+
+export async function copyMapSeed(
+  seed: string,
+  clipboard: SeedClipboard | undefined
+): Promise<boolean> {
+  if (!clipboard?.writeText) return false;
+  try {
+    await clipboard.writeText(seed);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+type RestartConfirmationAction =
+  | { readonly type: "request"; readonly mode: MapRestartMode }
+  | { readonly type: "cancel" }
+  | { readonly type: "confirm" };
+
+export function transitionRestartConfirmation(
+  pending: MapRestartMode | null,
+  action: RestartConfirmationAction
+): { readonly pending: MapRestartMode | null; readonly confirmedMode?: MapRestartMode } {
+  if (action.type === "request") return { pending: action.mode };
+  if (action.type === "confirm" && pending) return { pending: null, confirmedMode: pending };
+  return { pending: null };
+}
+
 export function UtilityDialog({
   panel,
   state,
-  onNewGame,
+  onRestart,
   onClose
 }: {
   panel: UtilityPanel;
   state: GameTableView;
-  onNewGame: () => void;
+  onRestart: (mode: MapRestartMode) => void;
   onClose: () => void;
 }) {
   const { locale, setLocale, t } = useI18n();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
+  const restartOriginRef = useRef<HTMLButtonElement | null>(null);
+  const restartCancelRef = useRef<HTMLButtonElement>(null);
+  const [pendingRestart, setPendingRestart] = useState<MapRestartMode | null>(null);
+  const [copyStatus, setCopyStatus] = useState<{
+    readonly kind: "success" | "failure";
+    readonly attempt: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!panel) {
@@ -43,6 +80,10 @@ export function UtilityDialog({
     };
   }, [panel]);
 
+  useEffect(() => {
+    if (pendingRestart) restartCancelRef.current?.focus();
+  }, [pendingRestart]);
+
   if (!panel) {
     return null;
   }
@@ -52,6 +93,35 @@ export function UtilityDialog({
   const activePlayer = state.game.players.find(
     (player) => player.id === state.game.activePlayerId
   );
+
+  function requestRestart(mode: MapRestartMode, origin: HTMLButtonElement) {
+    if (!state.restart?.requiresConfirmation) {
+      onRestart(mode);
+      return;
+    }
+    restartOriginRef.current = origin;
+    setPendingRestart(transitionRestartConfirmation(pendingRestart, { type: "request", mode }).pending);
+  }
+
+  function cancelRestart() {
+    setPendingRestart(transitionRestartConfirmation(pendingRestart, { type: "cancel" }).pending);
+    queueMicrotask(() => restartOriginRef.current?.focus());
+  }
+
+  function confirmRestart() {
+    const transition = transitionRestartConfirmation(pendingRestart, { type: "confirm" });
+    setPendingRestart(transition.pending);
+    if (transition.confirmedMode) onRestart(transition.confirmedMode);
+  }
+
+  async function handleCopySeed() {
+    const clipboard = typeof navigator === "undefined" ? undefined : navigator.clipboard;
+    const copied = await copyMapSeed(state.game.mapSeed, clipboard);
+    setCopyStatus((current) => ({
+      kind: copied ? "success" : "failure",
+      attempt: (current?.attempt ?? 0) + 1
+    }));
+  }
 
   return (
     <dialog
@@ -111,10 +181,75 @@ export function UtilityDialog({
                 <dd>{t(`commerce.phase.${state.guild.gathering.phase}`)}</dd>
               </div>
             </dl>
+            <section className="map-seed-setting" aria-labelledby="map-seed-label">
+              <label id="map-seed-label" htmlFor="map-seed-value">{t("settings.mapSeed")}</label>
+              <div className="map-seed-row">
+                <input
+                  className="map-seed-value"
+                  data-map-seed
+                  id="map-seed-value"
+                  readOnly
+                  value={state.game.mapSeed}
+                />
+                <button
+                  aria-label={t("settings.copySeed")}
+                  onClick={() => void handleCopySeed()}
+                  type="button"
+                >
+                  {t("settings.copySeed")}
+                </button>
+              </div>
+              <p
+                aria-live="polite"
+                className={`map-seed-copy-status${copyStatus ? ` map-seed-copy-status--${copyStatus.kind}` : ""}`}
+                data-copy-attempt={copyStatus?.attempt}
+                role="status"
+              >
+                {copyStatus
+                  ? t(copyStatus.kind === "success" ? "settings.copySeedSuccess" : "settings.copySeedFailed")
+                  : ""}
+              </p>
+            </section>
             <p>
               {t("dialog.recovery")}
             </p>
-            <button onClick={onNewGame} type="button">{t("dialog.startNewGame")}</button>
+            {state.restart ? (
+              <section className="restart-settings" aria-labelledby="restart-settings-title">
+                <h3 id="restart-settings-title">{t("settings.restartTitle")}</h3>
+                <p>{t("settings.restartDescription")}</p>
+                <div className="restart-actions">
+                  <button
+                    disabled={!state.restart.enabled || pendingRestart !== null}
+                    onClick={(event) => requestRestart("fresh", event.currentTarget)}
+                    type="button"
+                  >
+                    {t("settings.newRandomMap")}
+                  </button>
+                  <button
+                    disabled={!state.restart.enabled || pendingRestart !== null}
+                    onClick={(event) => requestRestart("sameMap", event.currentTarget)}
+                    type="button"
+                  >
+                    {t("settings.replayCurrentMap")}
+                  </button>
+                </div>
+                {pendingRestart ? (
+                  <div className="restart-confirmation" role="group" aria-labelledby="restart-confirmation-message">
+                    <p id="restart-confirmation-message">
+                      {t(pendingRestart === "fresh" ? "settings.restartConfirmFresh" : "settings.restartConfirmSameMap")}
+                    </p>
+                    <div>
+                      <button onClick={cancelRestart} ref={restartCancelRef} type="button">
+                        {t("settings.restartCancel")}
+                      </button>
+                      <button className="danger-button" onClick={confirmRestart} type="button">
+                        {t("settings.restartConfirm")}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
           </div>
         ) : null}
         {panel === "rulebook" ? (

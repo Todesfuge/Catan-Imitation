@@ -68,14 +68,16 @@ export function createOnlineGameTableView(state: OnlineClientState): GameTableVi
   const { publicState, privateState, allowedActions } = projected;
   const game = publicState.game!;
   const guild = publicState.guild!;
-  const connected = state.status === "connected" && state.snapshot?.lifecycle === "playing";
+  const connected = state.status === "connected";
+  const gameplayConnected = connected && state.snapshot?.lifecycle === "playing";
   const ownPlayer = game.players.find((player) => player.playerId === privateState.playerId)!;
   const ownSeat = publicState.seats.find((seat) => seat.seatId === privateState.seatId)!;
-  const tableActions = projectActions(allowedActions, connected, privateState, game);
+  const tableActions = projectActions(allowedActions, gameplayConnected, privateState, game);
   const required = privateState.requiredDecision;
   const boardData = projected.boardData;
   return {
     game: {
+      mapSeed: game.mapSeed,
       phase: game.phase,
       players: game.players.map((player) => ({ id: player.playerId,
         name: publicState.seats.find((seat) => seat.playerId === player.playerId)?.nickname ?? player.playerId,
@@ -134,28 +136,33 @@ export function createOnlineGameTableView(state: OnlineClientState): GameTableVi
       freeRoadEdgeIds: [...allowedActions.decisions.freeRoad.targets]
     },
     decisionPolicy: {
-      discard: { ...availability(allowedActions.decisions.discard, connected), exactCount: allowedActions.decisions.discard.exactCount,
+      discard: { ...availability(allowedActions.decisions.discard, gameplayConnected), exactCount: allowedActions.decisions.discard.exactCount,
         maxByResource: { ...allowedActions.decisions.discard.maxByResource } },
-      robberHex: availability(allowedActions.decisions.robberHex, connected),
-      robberVictim: availability(allowedActions.decisions.robberVictim, connected),
-      freeRoad: { ...availability(allowedActions.decisions.freeRoad, connected), remainingRoads: allowedActions.decisions.freeRoad.remainingRoads },
-      yearOfPlenty: { ...availability(allowedActions.decisions.yearOfPlenty, connected), remainingPicks: allowedActions.decisions.yearOfPlenty.remainingPicks },
-      monopoly: availability(allowedActions.decisions.monopoly, connected)
+      robberHex: availability(allowedActions.decisions.robberHex, gameplayConnected),
+      robberVictim: availability(allowedActions.decisions.robberVictim, gameplayConnected),
+      freeRoad: { ...availability(allowedActions.decisions.freeRoad, gameplayConnected), remainingRoads: allowedActions.decisions.freeRoad.remainingRoads },
+      yearOfPlenty: { ...availability(allowedActions.decisions.yearOfPlenty, gameplayConnected), remainingPicks: allowedActions.decisions.yearOfPlenty.remainingPicks },
+      monopoly: availability(allowedActions.decisions.monopoly, gameplayConnected)
     },
     tradePolicy: {
-      publishEnabled: connected && allowedActions.publicTrade.publish.enabled,
-      ...(connected ? (reason(allowedActions.publicTrade.publish.disabledReason) ? { publishReason: reason(allowedActions.publicTrade.publish.disabledReason) } : {}) : { publishReason: disconnectedReason }),
+      publishEnabled: gameplayConnected && allowedActions.publicTrade.publish.enabled,
+      ...(gameplayConnected ? (reason(allowedActions.publicTrade.publish.disabledReason) ? { publishReason: reason(allowedActions.publicTrade.publish.disabledReason) } : {}) : { publishReason: disconnectedReason }),
       maxOfferResources: { ...allowedActions.publicTrade.publish.maxOfferResources }
     },
     sealedAuction: {
       viewerSeatId: privateState.seatId,
       seats: publicState.seats.map((seat) => ({ seatId: seat.seatId, nickname: seat.nickname, submitted: publicState.submittedBidSeatIds.includes(seat.seatId) })),
       ...(privateState.ownPendingBid !== undefined ? { ownPendingBid: privateState.ownPendingBid } : {}),
-      enabled: connected && allowedActions.sealedBid.enabled,
+      enabled: gameplayConnected && allowedActions.sealedBid.enabled,
       maxAmount: allowedActions.sealedBid.maxAmount, submitted: allowedActions.sealedBid.submitted,
-      ...(connected ? (reason(allowedActions.sealedBid.disabledReason) ? { reason: reason(allowedActions.sealedBid.disabledReason) } : {}) : { reason: disconnectedReason })
+      ...(gameplayConnected ? (reason(allowedActions.sealedBid.disabledReason) ? { reason: reason(allowedActions.sealedBid.disabledReason) } : {}) : { reason: disconnectedReason })
     },
-    newGameEnabled: false
+    ...(privateState.canRestartMatch ? {
+      restart: {
+        enabled: connected && (state.snapshot?.lifecycle === "playing" || state.snapshot?.lifecycle === "finished"),
+        requiresConfirmation: true
+      }
+    } : {})
   };
 }
 
@@ -197,8 +204,18 @@ export function createOnlineGameTableController(
     dispatch(intent) {
       const state = getState();
       const projected = readOnlineGameProjection(state.snapshot);
-      if (state.status !== "connected" || state.snapshot?.lifecycle !== "playing" || !projected) return false;
-      if (intent.type === "ui.selectDiceTotal" || intent.type === "ui.selectPlayer" || intent.type === "game.new") return false;
+      if (state.status !== "connected" || !state.snapshot || !projected) return false;
+      if (intent.type === "game.restart") {
+        if ((state.snapshot.lifecycle !== "playing" && state.snapshot.lifecycle !== "finished") || !projected.privateState.canRestartMatch) return false;
+        return send({
+          type: "room.restart",
+          commandId: createCommandId(),
+          expectedVersion: state.snapshot.roomVersion,
+          mode: intent.mode
+        });
+      }
+      if (state.snapshot.lifecycle !== "playing") return false;
+      if (intent.type === "ui.selectDiceTotal" || intent.type === "ui.selectPlayer") return false;
       const commandId = createCommandId();
       if (intent.type === "auction.submitBid") {
         return send({ type: "auction.submitBid", commandId, expectedVersion: state.snapshot.roomVersion, amount: intent.bid });

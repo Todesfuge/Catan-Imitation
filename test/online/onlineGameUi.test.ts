@@ -19,6 +19,7 @@ import { MAX_WIRE_BYTES, parseServerWebSocketMessage, type ClientWebSocketMessag
 import type { PrivateSeatState, PublicGameView, PublicGuildView, PublicRoomState } from "../../src/online/view";
 import { projectRoomView } from "../../src/online/projectRoomView";
 import { I18nProvider } from "../../src/ui/i18n";
+import { UtilityDialog } from "../../src/ui/UtilityDialog";
 import { createScenarioAppState } from "../fixtures/createScenarioGame";
 
 const zero = { wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 } as const;
@@ -551,6 +552,66 @@ describe("online game projection adapter", () => {
     expect(offline.tradePolicy.publishEnabled).toBe(false);
   });
 
+  it("projects canonical seed and host-only restart policy across playing and finished rooms", () => {
+    const playingHost = createOnlineGameTableView(state(snapshotFor(0)));
+    const finishedHost = createOnlineGameTableView(state(snapshotFor(0, { lifecycle: "finished" })));
+    const participant = createOnlineGameTableView(state(snapshotFor(1)));
+    const reconnectingHost = createOnlineGameTableView(state(snapshotFor(0), "reconnecting"));
+
+    expect(playingHost.game.mapSeed).toBe(publicGame().mapSeed);
+    expect(playingHost.restart).toEqual({ enabled: true, requiresConfirmation: true });
+    expect(finishedHost.restart).toEqual({ enabled: true, requiresConfirmation: true });
+    expect(finishedHost.legality.actions.roll.enabled).toBe(false);
+    expect(reconnectingHost.restart).toEqual({ enabled: false, requiresConfirmation: true });
+    expect(participant.restart).toBeUndefined();
+
+    const participantSettings = renderToStaticMarkup(React.createElement(I18nProvider, null,
+      React.createElement(UtilityDialog as never, {
+        panel: "settings", state: participant, onClose: vi.fn(), onRestart: vi.fn()
+      })
+    ));
+    expect(participantSettings).toContain(publicGame().mapSeed);
+    expect(participantSettings).toContain("Copy Seed");
+    expect(participantSettings).not.toContain("New Random Map");
+    expect(participantSettings).not.toContain("Replay Current Map");
+  });
+
+  it.each(["fresh", "sameMap"] as const)(
+    "sends an exact host-authorized %s room restart from playing or finished",
+    (mode) => {
+      for (const lifecycle of ["playing", "finished"] as const) {
+        const sent: ClientWebSocketMessage[] = [];
+        const clientState = state(snapshotFor(0, { lifecycle }));
+        const controller = createOnlineGameTableController(
+          () => clientState,
+          (message) => { sent.push(message); return true; },
+          () => "11111111-1111-4111-8111-111111111111"
+        );
+
+        expect(controller.dispatch({ type: "game.restart", mode } as never)).toBe(true);
+        expect(sent).toEqual([{
+          type: "room.restart",
+          commandId: "11111111-1111-4111-8111-111111111111",
+          expectedVersion: 41,
+          mode
+        }]);
+      }
+    }
+  );
+
+  it("refuses restart for participants or disconnected hosts", () => {
+    for (const clientState of [state(snapshotFor(1)), state(snapshotFor(0), "reconnecting")]) {
+      const send = vi.fn(() => true);
+      const controller = createOnlineGameTableController(
+        () => clientState,
+        send,
+        () => "11111111-1111-4111-8111-111111111111"
+      );
+      expect(controller.dispatch({ type: "game.restart", mode: "fresh" } as never)).toBe(false);
+      expect(send).not.toHaveBeenCalled();
+    }
+  });
+
   it("maps every actorless table intent to versioned protocol commands without local mutation", () => {
     const sent: ClientWebSocketMessage[] = [];
     const getState = () => state();
@@ -634,7 +695,7 @@ describe("online game projection adapter", () => {
     expect(html).toContain("North submitted");
     expect(html).not.toContain("North bid");
     expect(html).toContain("Caller won the game");
-    expect(html).toMatch(/data-action="new-game"[^>]*disabled/);
+    expect(createOnlineGameTableView(state(snapshot)).restart).toEqual({ enabled: true, requiresConfirmation: true });
     const waitingSnapshot = snapshotFor(0, { game: { turnState: { phase: "awaitingDiscards", awaitedPlayerIds: ["p3"] } } });
     const waitingHtml = renderToStaticMarkup(React.createElement(I18nProvider, null,
       React.createElement(OnlineGame, { roomCode: "234567", state: state(waitingSnapshot), dispatch: vi.fn(), reconnect: vi.fn(), onExit: vi.fn(), createCommandId: crypto.randomUUID })

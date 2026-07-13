@@ -1319,6 +1319,83 @@ button.primary {
   font-weight: 900;
 }
 
+.map-seed-setting,
+.restart-settings {
+  display: grid;
+  gap: 8px;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff8ea;
+}
+
+.map-seed-setting > label,
+.restart-settings h3 {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.map-seed-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.map-seed-value {
+  width: 100%;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+}
+
+.map-seed-copy-status {
+  min-height: 1.35em;
+  margin: 0;
+  color: var(--muted-ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.map-seed-copy-status--failure {
+  color: var(--danger);
+}
+
+.restart-settings > p,
+.restart-confirmation p {
+  margin: 0;
+}
+
+.restart-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.restart-actions button {
+  min-height: 44px;
+}
+
+.restart-confirmation {
+  display: grid;
+  gap: 8px;
+  padding: 0.65rem;
+  border-left: 4px solid var(--danger);
+  background: var(--panel);
+}
+
+.restart-confirmation > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.restart-confirmation button:focus-visible {
+  outline: 3px solid rgba(31, 122, 72, 0.35);
+  outline-offset: 2px;
+}
+
 @media (min-width: 1181px) and (max-width: 1400px) {
   .action-bar {
     grid-template-columns: minmax(220px, 1fr) repeat(5, minmax(0, 1fr));
@@ -1493,6 +1570,12 @@ button.primary {
 
   .modal-card {
     width: 100%;
+  }
+
+  .map-seed-row,
+  .restart-actions,
+  .restart-confirmation > div {
+    grid-template-columns: 1fr;
   }
 }
 
