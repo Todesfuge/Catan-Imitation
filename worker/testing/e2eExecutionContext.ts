@@ -30,6 +30,7 @@ export function prepareE2EExecutionContext(now: number) {
     );
     let sixSidedDraw = 0;
     let generalDraw = 0;
+    let logSequence = 0;
     return {
       random: {
         nextInt(maxExclusive) {
@@ -44,7 +45,7 @@ export function prepareE2EExecutionContext(now: number) {
         }
       },
       nextMapSeed: () => mapSeed,
-      nextLogId: () => crypto.randomUUID(),
+      nextLogId: () => `e2e-log-${roomVersion}-${++logSequence}`,
       now: () => now
     };
   };

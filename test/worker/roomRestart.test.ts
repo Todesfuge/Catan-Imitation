@@ -211,8 +211,13 @@ function restartCommand(commandId: string, expectedVersion: number, mode: "fresh
   return JSON.stringify({ type: "room.restart", commandId, expectedVersion, mode });
 }
 
+function restartAttemptId(index: number): string {
+  return `10000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
+}
+
 class MemoryCommandStore implements CommandMutationStore {
   commits = 0;
+  calls = 0;
 
   constructor(public room: PersistedRoom | null) {}
 
@@ -220,6 +225,7 @@ class MemoryCommandStore implements CommandMutationStore {
     _now: number,
     mutation: (room: PersistedRoom) => LatestRoomMutation<T>
   ): Promise<LatestRoomMutationResult<T>> {
+    this.calls += 1;
     if (this.room === null) return { kind: "missing" };
     const result = mutation(structuredClone(this.room));
     if (result.kind === "updated") {
@@ -246,6 +252,29 @@ class SerializedCommandStore extends MemoryCommandStore {
     } finally {
       release();
     }
+  }
+}
+
+class RetryingCommandStore extends MemoryCommandStore {
+  readonly candidates: PersistedRoom[] = [];
+
+  override async mutateLatest<T>(
+    _now: number,
+    mutation: (room: PersistedRoom) => LatestRoomMutation<T>
+  ): Promise<LatestRoomMutationResult<T>> {
+    if (this.room === null) return { kind: "missing" };
+    const current = structuredClone(this.room);
+    const first = mutation(structuredClone(current));
+    if (first.kind === "unchanged") {
+      return { kind: "active", room: structuredClone(this.room), value: first.value };
+    }
+
+    const second = mutation(structuredClone(current));
+    if (second.kind !== "updated") throw new Error("retry changed the mutation kind");
+    this.candidates.push(structuredClone(first.room), structuredClone(second.room));
+    this.room = structuredClone(second.room);
+    this.commits += 1;
+    return { kind: "active", room: structuredClone(this.room), value: second.value };
   }
 }
 
@@ -407,14 +436,45 @@ describe("room restart command pipeline", () => {
       recipients: peers.recipients
     });
 
-    expect(store.room!.roomVersion).toBe(room.roomVersion);
-    expect(store.room!.matchState).toEqual(room.matchState);
+    expect(store.commits).toBe(0);
+    expect(store.room).toEqual(room);
     expect(peers.messages.get("seat-1")?.[0]).toMatchObject({
       type: "command.rejected",
       error: { code: "VERSION_CONFLICT" },
       snapshot: { roomVersion: room.roomVersion }
     });
     expect(peers.messages.has("seat-2")).toBe(false);
+  });
+
+  it("rate-limits failed restarts without persisting room admission state", async () => {
+    const room = scenarioRoom("normal play");
+    const original = structuredClone(room);
+    const store = new MemoryCommandStore(structuredClone(room));
+    const peers = recipientSet("seat-1", "seat-2");
+    const pipeline = createCommandPipeline({
+      store,
+      audit: vi.fn(),
+      rateLimit: { maximum: 3, windowMs: 2_000 },
+      prepareExecutionContext: () => () => executionContext(MAP_B)
+    });
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await pipeline.handle({
+        seatId: "seat-2",
+        rawMessage: restartCommand(restartAttemptId(attempt), room.roomVersion, "fresh"),
+        now: 50_000 + attempt,
+        presence: NO_PRESENCE,
+        recipients: peers.recipients
+      });
+
+      expect(store.commits).toBe(0);
+      expect(store.room).toEqual(original);
+      expect(peers.messages.get("seat-2")?.at(-1)).toMatchObject({
+        type: "command.rejected",
+        error: { code: attempt < 3 ? "COMMAND_NOT_ALLOWED" : "RATE_LIMITED" }
+      });
+      expect(peers.messages.has("seat-1")).toBe(false);
+    }
   });
 
   it("serializes two concurrent host restarts so only one reset and seed commit", async () => {
@@ -459,6 +519,41 @@ describe("room restart command pipeline", () => {
       message.acknowledgedCommandId !== undefined)).toHaveLength(3);
     expect(allMessages.filter((message) => message.type === "command.rejected" &&
       message.error.code === "VERSION_CONFLICT")).toHaveLength(1);
+  });
+
+  it("retries the real E2E execution context with byte-equivalent candidates", async () => {
+    const room = scenarioRoom("normal play");
+    const store = new RetryingCommandStore(room);
+    const peers = recipientSet("seat-1", "seat-2", "seat-3");
+    const pipeline = createCommandPipeline({
+      store,
+      audit: vi.fn(),
+      rateLimit: { maximum: 1, windowMs: 2_000 },
+      prepareExecutionContextForRoom: prepareE2EExecutionContext
+    });
+
+    await pipeline.handle({
+      seatId: "seat-1",
+      rawMessage: restartCommand(COMMAND_IDS[0], room.roomVersion, "fresh"),
+      now: 50_000,
+      presence: NO_PRESENCE,
+      recipients: peers.recipients
+    });
+
+    expect(store.candidates).toHaveLength(2);
+    expect(store.candidates[0]).toEqual(store.candidates[1]);
+    expect(store.room!.matchState).toMatchObject({
+      game: {
+        mapSeed: `M1-000000000000000${room.roomVersion}`,
+        phase: "setup",
+        log: [
+          { id: `e2e-log-${room.roomVersion}-1`, messageKey: "setup.newGameStarted" },
+          { id: "log-setup", messageKey: "setup.started" }
+        ]
+      }
+    });
+    expect(store.commits).toBe(1);
+    expect([...peers.messages.values()].flat()).toHaveLength(3);
   });
 
   it("broadcasts one complete caller-specific v2 setup snapshot per live seat and audits room.restart", async () => {
@@ -561,6 +656,46 @@ describe("room restart command pipeline", () => {
       error: { code: "INTERNAL_ERROR", params: {} }
     });
     expect(peers.messages.has("seat-2")).toBe(false);
+  });
+
+  it("contains preparation failures after authentication without persistence or broadcast", async () => {
+    const room = scenarioRoom("normal play");
+    const store = new MemoryCommandStore(structuredClone(room));
+    const peers = recipientSet("seat-1", "seat-2");
+    const audit = vi.fn();
+    const secret = "private preparation entropy detail";
+    const pipeline = createCommandPipeline({
+      store,
+      audit,
+      prepareExecutionContext() { throw new Error(secret); }
+    });
+
+    await expect(pipeline.handle({
+      seatId: "seat-1",
+      rawMessage: restartCommand(COMMAND_IDS[0], room.roomVersion, "fresh"),
+      now: 50_000,
+      presence: NO_PRESENCE,
+      recipients: peers.recipients
+    })).resolves.toBeUndefined();
+
+    expect(store.calls).toBe(1);
+    expect(store.commits).toBe(0);
+    expect(store.room).toEqual(room);
+    expect(peers.messages.get("seat-1")).toEqual([{
+      type: "command.rejected",
+      commandId: COMMAND_IDS[0],
+      error: { code: "INTERNAL_ERROR", params: {}, retryable: true }
+    }]);
+    expect(peers.messages.has("seat-2")).toBe(false);
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({
+      commandType: "room.restart",
+      roomVersion: room.roomVersion,
+      errorCode: "INTERNAL_ERROR"
+    }));
+    expect(JSON.stringify({
+      messages: peers.messages.get("seat-1"),
+      audit: audit.mock.calls
+    })).not.toContain(secret);
   });
 
   it.each([

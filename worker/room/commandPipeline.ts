@@ -318,6 +318,20 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
   const project = dependencies.projectRoom ?? projectRoomView;
   const rateLimit = dependencies.rateLimit ?? { maximum: 10, windowMs: 2_000 };
   const audit = dependencies.audit ?? ((record: CommandAuditRecord) => console.log(record));
+  const restartAttemptTimestamps = new Map<string, number[]>();
+
+  function restartRateLimited(roomCode: string, seatId: string, now: number): boolean {
+    const key = `${roomCode}\0${seatId}`;
+    const recent = (restartAttemptTimestamps.get(key) ?? [])
+      .filter((timestamp) => timestamp > now - rateLimit.windowMs);
+    if (recent.length >= rateLimit.maximum) {
+      restartAttemptTimestamps.set(key, recent);
+      return true;
+    }
+    recent.push(now);
+    restartAttemptTimestamps.set(key, recent.slice(-rateLimit.maximum));
+    return false;
+  }
 
   async function emitAudit(
     roomCode: string,
@@ -395,26 +409,51 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
       if (parsed.type === "connection.heartbeat") return;
       const auditStartedAt = performance.now();
       const commandType = parsed.type === "match.command" ? parsed.command.type : parsed.type;
-      const prepareRandom = prepareBufferedCryptoRandomSource();
-      const preparedMapSeed = prepareCryptographicM1MapSeed();
-      const logIds = Array.from({ length: 128 }, () => crypto.randomUUID());
-      const preparedContext = dependencies.prepareExecutionContext?.(input.now) ?? (() => {
-        if (dependencies.createExecutionContext !== undefined) {
-          return dependencies.createExecutionContext(input.now);
+      let preparedContext: () => MatchExecutionContext;
+      let contextForRoomVersion: ((roomVersion: number) => MatchExecutionContext) | undefined;
+      try {
+        const prepareRandom = prepareBufferedCryptoRandomSource();
+        const preparedMapSeed = prepareCryptographicM1MapSeed();
+        const logIds = Array.from({ length: 128 }, () => crypto.randomUUID());
+        preparedContext = dependencies.prepareExecutionContext?.(input.now) ?? (() => {
+          if (dependencies.createExecutionContext !== undefined) {
+            return dependencies.createExecutionContext(input.now);
+          }
+          let logIndex = 0;
+          return {
+            random: prepareRandom(),
+            nextMapSeed: () => preparedMapSeed,
+            nextLogId: () => {
+              const id = logIds[logIndex++];
+              if (id === undefined) throw new RangeError("The buffered log ID source is exhausted.");
+              return id;
+            },
+            now: () => input.now
+          };
+        });
+        contextForRoomVersion = dependencies.prepareExecutionContextForRoom?.(input.now);
+      } catch {
+        if (authenticated.kind === "active") {
+          await emitAudit(
+            authenticated.value.roomCode,
+            authenticated.value.roomVersion,
+            commandType,
+            auditStartedAt,
+            "INTERNAL_ERROR"
+          );
         }
-        let logIndex = 0;
-        return {
-          random: prepareRandom(),
-          nextMapSeed: () => preparedMapSeed,
-          nextLogId: () => {
-            const id = logIds[logIndex++];
-            if (id === undefined) throw new RangeError("The buffered log ID source is exhausted.");
-            return id;
-          },
-          now: () => input.now
-        };
-      });
-      const contextForRoomVersion = dependencies.prepareExecutionContextForRoom?.(input.now);
+        for (const recipient of input.recipients) {
+          if (recipient.seatId === input.seatId) {
+            safeSend(recipient, {
+              type: "command.rejected",
+              commandId: parsed.commandId,
+              error: error("INTERNAL_ERROR")
+            });
+          }
+        }
+        return;
+      }
+      let restartLimited: boolean | undefined;
 
       let mutation: LatestRoomMutationResult<MutationOutcome>;
       try {
@@ -429,21 +468,37 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
           if (seat.acceptedCommandIds.some((entry) => entry.commandId === parsed.commandId)) {
             return { kind: "unchanged", value: { kind: "duplicate", commandId: parsed.commandId } };
           }
-          const recent = seat.commandAttemptTimestamps
-            .filter((timestamp) => timestamp > input.now - rateLimit.windowMs);
-          const limited = recent.length >= rateLimit.maximum;
+          const restart = parsed.type === "room.restart";
+          const recent = restart
+            ? []
+            : seat.commandAttemptTimestamps
+                .filter((timestamp) => timestamp > input.now - rateLimit.windowMs);
+          const limited = restart
+            ? (restartLimited ??= restartRateLimited(room.roomCode, seat.seatId, input.now))
+            : recent.length >= rateLimit.maximum;
           if (limited) {
             return {
               kind: "unchanged",
               value: { kind: "rejected", commandId: parsed.commandId, code: "RATE_LIMITED" }
             };
           }
-          const admittedRoom = withAttemptTimestamps(
-            room,
-            seat.seatId,
-            [...recent, input.now].sort((left, right) => left - right)
-          );
+          const admittedRoom = restart
+            ? room
+            : withAttemptTimestamps(
+                room,
+                seat.seatId,
+                [...recent, input.now].sort((left, right) => left - right)
+              );
           if (parsed.expectedVersion !== room.roomVersion) {
+            if (parsed.type === "room.restart") {
+              return {
+                kind: "unchanged",
+                value: {
+                  kind: "rejected", commandId: parsed.commandId,
+                  code: "VERSION_CONFLICT", includeSnapshot: true
+                }
+              };
+            }
             return {
               kind: "updated",
               room: admittedRoom,
