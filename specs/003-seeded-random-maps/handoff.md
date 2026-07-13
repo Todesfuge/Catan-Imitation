@@ -1,6 +1,6 @@
 # Seeded Random Maps Handoff
 
-Status: Independent whole-branch review and final release gates passed; ready for approved integration; not deployed
+Status: Integrated and deployed; approved evidence-substitution verification complete
 
 ## Branch and Review Range
 
@@ -11,7 +11,7 @@ Status: Independent whole-branch review and final release gates passed; ready fo
 - Online UI synchronization commit: `1153edad8d588451a5258e897a3011ae3feaa459`
 - Deterministic maritime coverage commit: `67b5e9dca6bbffe5eca46f507d82195c8dcc0492`
 - Reviewed range: `7eef0d4..HEAD`, including the final documentation/release delta.
-- No push, pull request, production deploy, or preview deploy was performed by T009.
+- The reviewed chain was fast-forwarded into `main`, pushed to `origin/main` at `a81a3fa`, and deployed as the combined Worker/SPA production release. No preview deployment was performed.
 
 The feature commit chain is organized by boundary: specification/planning, seed codec, bounded board generator, match setup/restart, Local real setup, protocol/projection v2, storage migration, host authority/restart hardening, Settings UI, browser convergence, then release documentation.
 
@@ -34,10 +34,11 @@ The feature commit chain is organized by boundary: specification/planning, seed 
 ## Deployment Implications
 
 - Deploy the Worker and SPA together because room storage schema v2 and wire protocol v2 are a single compatibility boundary. Old incompatible clients must refresh through the existing recovery path.
-- Production target: `https://catan-imitation.workers.dev/`. The operator confirmed the external Cloudflare configuration under the approved evidence-substitution path. T009 did not deploy, and the current network-constrained environment could not remotely reverify the live target.
-- `pnpm exec wrangler deploy --dry-run --config wrangler.jsonc` passed with the `ROOMS` Durable Object and `ASSETS` bindings. This was a dry-run only.
+- Production target: `https://catan-imitation.catan-imitation.workers.dev/`, as reported by Wrangler and the prior Online release records. The shorter account-subdomain address was corrected as documentation drift.
+- `pnpm exec wrangler deploy --dry-run --config wrangler.jsonc` passed with 4 assets, a 228.75 KiB upload / 47.57 KiB gzip bundle, and the `ROOMS` Durable Object and `ASSETS` bindings.
+- `pnpm exec wrangler deploy --config wrangler.jsonc` then deployed the Worker and SPA together. Cloudflare reports Version ID `75810c45-9ec5-47e3-82b6-fece224462ce` at 100% of production traffic with the expected bindings.
 - Preview deployment remains `pnpm exec wrangler deploy --name catan-imitation-preview`; do not use a version preview URL for this Durable Object binding.
-- After deployment, run health, rendered-SPA, room create/join, one host restart, participant denial, and reconnect checks before promoting the release as verified.
+- The desktop's poisoned workers.dev DNS prevented direct production-host probes. Under the approved evidence-substitution path, Cloudflare control-plane activation and the exact-commit health, rendered-SPA, room create/join, host restart, participant denial, and reconnect gates serve as the release evidence; they are not labeled as direct live-host requests.
 - For recovery, switch traffic only to a previously verified schema-v2-compatible Worker deployment. After any room has migrated to schema v2, never roll back to a schema-v1 binary; use a compatible v2 deployment or roll forward with a corrective release.
 
 ## Verification Summary
@@ -47,6 +48,7 @@ The feature commit chain is organized by boundary: specification/planning, seed 
 - Browser: 2 projects, 50 tests passed (47 Local/preview and 3 real Worker).
 - Deterministic maritime evidence: the pre-cleanup helper passed 27/27 across three canonical M1 seeds, three build targets, and three repetitions; the mechanically simplified final committed helper passed 9/9 alone and again inside the 50/50 browser suite.
 - Builds, UI smoke, Worker smoke, repository guards, whitespace check, and Wrangler dry-run passed.
+- Cloudflare activated production Version ID `75810c45-9ec5-47e3-82b6-fece224462ce` for 100% of traffic with `ROOMS` and `ASSETS`; direct production-host requests remain evidence-substituted because of the documented local DNS fault.
 - Visual review covered Local/Online, desktop/mobile, and English/Chinese restart confirmation with 0 P0/P1 findings.
 - Full requirement evidence, the T009 integration defects, and the resolved review findings are recorded in [verification.md](verification.md).
 
@@ -62,4 +64,4 @@ The Worker test runner may emit Windows `EBUSY` warnings while deleting Miniflar
 
 ## Exact Next Action
 
-Push or merge only after approval. Then deploy the Worker and SPA together and perform the documented post-deploy health, SPA, room, restart-authority, and reconnect checks before promotion. If recovery is needed after schema-v2 migration, use only a verified v2-compatible deployment or roll forward.
+No release action remains. An operator on an unaffected network may optionally perform a direct live-host confirmation at `https://catan-imitation.catan-imitation.workers.dev/`; any corrective release or recovery must remain schema-v2-compatible and should roll forward unless a previously verified v2 deployment is selected.

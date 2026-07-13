@@ -45,7 +45,7 @@ The app is designed for `http://127.0.0.1:5173/` during local development.
 
 ## Play Online
 
-[Open the production game](https://catan-imitation.workers.dev). The mode selector starts either Local Game or Online Game. English is the default interface language; Settings can switch the current browser session to Simplified Chinese.
+[Open the production game](https://catan-imitation.catan-imitation.workers.dev/). The mode selector starts either Local Game or Online Game. English is the default interface language; Settings can switch the current browser session to Simplified Chinese.
 
 Online rooms are private and anonymous. A host creates a six-character room code, and three or four players join by code before starting. There are no user accounts or public matchmaking. Each seat is protected by an origin-local bearer credential stored by the browser, so reopening the room on the same browser origin can reconnect to the latest server state. Clearing site storage loses that seat credential, and the anonymous first version does not support cross-device seat recovery. Inactive rooms expire after 24 hours; active connections defer expiry.
 

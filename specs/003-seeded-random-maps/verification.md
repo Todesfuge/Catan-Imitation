@@ -1,8 +1,8 @@
 # Seeded Random Maps Verification
 
-Status: Whole-branch review and final release gates passed; not deployed
+Status: Whole-branch review and final release gates passed; integrated and deployed with approved evidence substitution
 
-Verified on 2026-07-14 from `codex/seeded-random-maps`. The reviewed feature range starts at merge base `7eef0d4` and includes browser convergence `dd29d0d`, release-boundary hardening `0d8f2b5`, Online UI synchronization `1153eda`, deterministic maritime coverage `67b5e9d`, and the documentation/release delta described below.
+Verified on 2026-07-14 from `main` at `a81a3fa`. The reviewed feature range starts at merge base `7eef0d4` and includes browser convergence `dd29d0d`, release-boundary hardening `0d8f2b5`, Online UI synchronization `1153eda`, deterministic maritime coverage `67b5e9d`, and the documentation/release delta described below.
 
 ## Release Gate Results
 
@@ -21,17 +21,19 @@ Verified on 2026-07-14 from `codex/seeded-random-maps`. The reviewed feature ran
 | UI smoke | `pnpm smoke:ui`: built preview exposed board, trade, localization, scrolling, and responsive CSS. |
 | Worker smoke | `pnpm smoke:worker`: security/cache headers, rendered SPA, room API, single-use ticket, and WebSocket snapshot passed against health schema 2. |
 | Deployment dry-run | `pnpm exec wrangler deploy --dry-run --config wrangler.jsonc`: 4 asset files, 228.75 KiB upload / 47.57 KiB gzip; `ROOMS` Durable Object and `ASSETS` bindings resolved; no deployment performed. |
+| Production deployment | `pnpm exec wrangler deploy --config wrangler.jsonc` uploaded the Worker and SPA together. Cloudflare activated Version ID `75810c45-9ec5-47e3-82b6-fece224462ce` for 100% of production traffic with the `ROOMS` and `ASSETS` bindings. |
 | Production demo guard | `rg -n "createDemoGame" src worker`: no matches. |
 | Legacy projection guard | `rg -n "boardLayout.*standard-v1" src worker`: no matches. |
 | Whitespace | `git diff --check`: passed. |
 
-The full-suite counts above were rerun from committed HEAD `67b5e9d` after all review corrections. No push, merge, preview deployment, or production deployment was performed.
+The full-suite counts above were rerun after all review corrections. Integration then reran `pnpm test` (437/437), `pnpm test:worker` (247/247), and the production build from committed `main` at `a81a3fa` before that exact runtime tree was pushed and deployed. The deployment-record correction below changes documentation and its delivery assertion only.
 
 ## Production Address Evidence
 
-- The production target is `https://catan-imitation.workers.dev/`.
-- That address and its external Cloudflare configuration were operator-confirmed under the approved evidence-substitution path before T009.
-- T009 performed no production or preview deployment. The current environment was network-constrained and could not remotely reverify the live target, so repository string checks and the Wrangler dry-run are not presented as proof of a live deployment.
+- The production route reported by Wrangler is `https://catan-imitation.catan-imitation.workers.dev/`. This agrees with the released 001/002 handoff records; the shorter account-subdomain address introduced in `bb32248` was documentation drift and has been removed from both READMEs and the delivery guard.
+- Production deployment completed on 2026-07-14 (Asia/Shanghai). Cloudflare's deployment control plane reports Version ID `75810c45-9ec5-47e3-82b6-fece224462ce` at 100% of production traffic with the expected fetch handler, compatibility date, Durable Object, and asset binding.
+- The current desktop resolved the workers.dev host to anomalous non-Cloudflare addresses, and both terminal and application-browser requests timed out. It therefore could not directly probe the live target after deployment.
+- Under the previously approved evidence-substitution path, post-deploy behavioral confidence comes from Cloudflare control-plane activation plus the exact-commit domain, Worker, browser, build, smoke, and dry-run evidence above. Health, rendered-SPA, room create/join, host restart, participant denial, and reconnect are covered by those gates, but are not misrepresented as direct requests to the production hostname from this machine.
 
 ## Browser and Visual Evidence
 

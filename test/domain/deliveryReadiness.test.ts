@@ -37,8 +37,8 @@ describe("delivery readiness", () => {
     expect(ci).toContain("pnpm build");
     expect(ci).toContain("pnpm smoke:ui");
     expect(existsSync(".github/workflows/pages.yml")).toBe(false);
-    expect(readme).toContain("https://catan-imitation.workers.dev");
-    expect(readme).not.toContain("https://catan-imitation.catan-imitation.workers.dev/");
+    expect(readme).toContain("https://catan-imitation.catan-imitation.workers.dev/");
+    expect(readme).not.toContain("https://catan-imitation.workers.dev");
     expect(readme).toContain("pnpm build:worker");
     expect(readme).toContain("pnpm exec wrangler deploy");
     expect(readme).toContain("pnpm exec wrangler deploy --name catan-imitation-preview");
@@ -70,7 +70,8 @@ describe("delivery readiness", () => {
     const handoff = read("specs/003-seeded-random-maps/handoff.md");
 
     for (const readme of [english, chinese]) {
-      expect(readme).toContain("https://catan-imitation.workers.dev");
+      expect(readme).toContain("https://catan-imitation.catan-imitation.workers.dev/");
+      expect(readme).not.toContain("https://catan-imitation.workers.dev");
       expect(readme).toContain("M1-");
       expect(readme).toContain("M0-STANDARD");
       expect(readme).toContain("specs/003-seeded-random-maps/quickstart.md");
@@ -86,7 +87,11 @@ describe("delivery readiness", () => {
     expect(english).toContain("never roll back to a schema-v1 binary");
     expect(chinese).toContain("不得回滚到架构 v1 二进制");
     expect(handoff).toContain("never roll back to a schema-v1 binary");
-    expect(verification).toContain("operator-confirmed under the approved evidence-substitution path");
-    expect(verification).toContain("could not remotely reverify the live target");
+    expect(verification).toContain("Version ID `75810c45-9ec5-47e3-82b6-fece224462ce`");
+    expect(verification).toContain("100% of production traffic");
+    expect(verification).toContain("approved evidence-substitution path");
+    expect(verification).toContain("could not directly probe the live target");
+    expect(handoff).toContain("Status: Integrated and deployed");
+    expect(handoff).toContain("https://catan-imitation.catan-imitation.workers.dev/");
   });
 });
