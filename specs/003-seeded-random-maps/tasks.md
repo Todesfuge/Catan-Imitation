@@ -4,7 +4,7 @@ Status: Ready for implementation
 Plan: `specs/003-seeded-random-maps/plan.md`
 Execution rule: complete tasks in order; every task ends with passing focused tests and one reviewable commit.
 
-## T001 — Canonical Map Seed and Frozen Random Stream
+## Task 1 — T001: Canonical Map Seed and Frozen Random Stream
 
 Requirements: RM-007, RM-009, RM-010, RM-029
 Review boundary: seed syntax and deterministic integer stream only; no board or UI changes.
@@ -26,7 +26,7 @@ Steps:
 - [ ] Run `pnpm build`; expect TypeScript and Vite build success without a new dependency.
 - [ ] Review the public API against `contracts/map-seed.md`, then commit `feat: add versioned map seed codec`.
 
-## T002 — Bounded Deterministic Board Generator
+## Task 2 — T002: Bounded Deterministic Board Generator
 
 Requirements: RM-001–RM-008, RM-033
 Review boundary: pure seed-to-board behavior and fixed-board compatibility.
@@ -55,7 +55,7 @@ Steps:
 - [ ] Run `pnpm test`; expect the pre-integration suite GREEN with no seed-dependent test flakes.
 - [ ] Review golden output changes as a compatibility contract, then commit `feat: generate bounded seeded boards`.
 
-## T003 — Seed-aware Match Creation and Restart Semantics
+## Task 3 — T003: Seed-aware Match Creation and Restart Semantics
 
 Requirements: RM-010–RM-016, RM-031, RM-033
 Review boundary: shared match state and transitions; Local UI and online room authority remain unchanged.
@@ -89,7 +89,7 @@ Steps:
 - [ ] Run `pnpm test`; expect all main tests GREEN before removing the demo fixture.
 - [ ] Commit `feat: add seeded match setup and restart`.
 
-## T004 — Clean Local Boot and Test-only Scenario Fixture
+## Task 4 — T004: Clean Local Boot and Test-only Scenario Fixture
 
 Requirements: RM-011–RM-013, RM-017, RM-033
 Review boundary: production demo deletion and Local composition only; no online schema changes.
@@ -132,7 +132,7 @@ Steps:
 - [ ] Run `pnpm test` and `pnpm build`; expect GREEN.
 - [ ] Commit `refactor: start local games in real setup`.
 
-## T005 — Protocol v2 and Seed-derived Online Projection
+## Task 5 — T005: Protocol v2 and Seed-derived Online Projection
 
 Requirements: RM-007, RM-018, RM-021, RM-023, RM-030, RM-033
 Review boundary: wire and privacy projection only; Worker storage remains schema v1 until T006.
@@ -168,7 +168,7 @@ Steps:
 - [ ] Run `pnpm test` and `pnpm build`; expect GREEN.
 - [ ] Commit `feat: project seeded maps over protocol v2`.
 
-## T006 — Persisted Room Schema v2 and Safe Legacy Migration
+## Task 6 — T006: Persisted Room Schema v2 and Safe Legacy Migration
 
 Requirements: RM-027–RM-031, RM-033
 Review boundary: storage validation/migration only; no restart command behavior.
@@ -201,7 +201,7 @@ Steps:
 - [ ] Run `pnpm test:worker` and `pnpm build:worker`; expect all Worker tests/build GREEN.
 - [ ] Commit `feat: migrate rooms to seeded schema v2`.
 
-## T007 — Authoritative Host Restart and Concurrency
+## Task 7 — T007: Authoritative Host Restart and Concurrency
 
 Requirements: RM-014–RM-016, RM-022–RM-026, RM-031, RM-033
 Review boundary: room authority, atomicity, idempotency, and broadcast; no settings presentation.
@@ -234,7 +234,7 @@ Steps:
 - [ ] Run `pnpm test:worker`, `pnpm test`, and `pnpm build:worker`; expect GREEN.
 - [ ] Commit `feat: authorize atomic host restarts`.
 
-## T008 — Shared Seed, Copy, Restart, Confirmation, and i18n UI
+## Task 8 — T008: Shared Seed, Copy, Restart, Confirmation, and i18n UI
 
 Requirements: RM-018–RM-023, RM-032–RM-034
 Review boundary: shared presentation/controller behavior and accessibility.
@@ -270,7 +270,7 @@ Steps:
 - [ ] Manually inspect Settings at desktop/tablet/mobile widths in both languages before committing.
 - [ ] Commit `feat: add seed and restart settings`.
 
-## T009 — Browser Convergence, Documentation, and Release Gates
+## Task 9 — T009: Browser Convergence, Documentation, and Release Gates
 
 Requirements: RM-011, RM-018–RM-035
 Review boundary: end-to-end evidence and documentation; production behavior changes only for defects proven by these tests.
