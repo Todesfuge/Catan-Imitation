@@ -14,7 +14,7 @@ Artifact: `specs/003-seeded-random-maps/spec.md`
 
 - [x] Standard terrain, number-token, and port distributions are exact and testable.
 - [x] Desert, 6/8 adjacency, port adjacency, and topology constraints are explicit.
-- [x] Stable content-neutral geometry identities are required.
+- [x] Stable content-neutral geometry identities are required for M1, with an explicit M0 legacy-reference compatibility exception.
 - [x] Every supported seed must terminate with a valid map.
 - [x] Seed versioning, canonical bounds, entropy, and cross-runtime determinism are explicit.
 
@@ -51,4 +51,4 @@ Artifact: `specs/003-seeded-random-maps/spec.md`
 
 ## Result
 
-The approved design is represented as a testable Spec Kit feature specification. It is ready for user review before technical planning and task generation.
+The approved design is represented as a testable Spec Kit specification with complete technical planning and task generation.

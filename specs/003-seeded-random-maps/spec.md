@@ -1,8 +1,8 @@
 # Feature Specification: Seeded Random Maps and Clean Local Start
 
 Created: 2026-07-13
-Status: Design approved; specification awaiting user review
-Workflow phase: Feature specification
+Status: Approved
+Workflow phase: Technical planning
 
 ## Problem
 
@@ -111,7 +111,7 @@ Independent acceptance:
 - RM-003: Every generated map must contain one each of 2 and 12 and two each of 3, 4, 5, 6, 8, 9, 10, and 11; the desert must contain no number.
 - RM-004: None of the four 6/8 tokens may occupy adjacent hexes.
 - RM-005: Every generated map must contain nine ports on nine non-adjacent coastal edges: four generic ports and one resource port for each resource.
-- RM-006: Hex, vertex, edge, and port identities must be stable geometry identities and must not encode the current terrain, number, or port type.
+- RM-006: Every new `M1` map must use stable geometry identities for hexes, vertices, edges, and ports that do not encode the current terrain, number, or port type. Migrated `M0-STANDARD` rooms retain their released legacy identities so live references remain valid.
 - RM-007: A canonical, bounded, versioned `M1` seed must reproduce the complete public layout identically in browser, Worker, and deterministic tests.
 - RM-008: Every syntactically valid supported seed must produce a valid board; generation must not depend on an unbounded retry loop.
 - RM-009: New seeds must contain enough entropy to make accidental repetition negligible for this product, while remaining short enough to display and copy.
@@ -183,7 +183,7 @@ Clients never submit an arbitrary seed in this release. The online host submits 
 
 ### Compatibility
 
-The room storage migration recognizes only the exact released fixed layout when upgrading seedless records. It adds `M0-STANDARD` without changing buildings, roads, hands, phase, pending state, or room version beyond the migration's established persistence semantics. Unknown shapes remain untouched and incompatible.
+The room storage migration recognizes only the exact released fixed layout when upgrading seedless records. It adds `M0-STANDARD` without changing legacy geometry identities, buildings, roads, hands, phase, pending state, or room version beyond the migration's established persistence semantics. New `M1` maps use content-neutral identities; the retained M0 identities are a compatibility-only exception. Unknown shapes remain untouched and incompatible.
 
 ## Edge Cases
 
