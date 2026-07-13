@@ -1,3 +1,4 @@
+import { formatM1MapSeed } from "../../src/domain/mapSeed";
 import type { MatchExecutionContext } from "../../src/domain/match/types";
 
 const DICE_TOTALS = [4, 5, 6, 8, 9, 10, 11, 3, 12, 2, 7] as const;
@@ -23,6 +24,10 @@ const ZERO_BASED_DICE: Record<(typeof DICE_TOTALS)[number], readonly [number, nu
 export function prepareE2EExecutionContext(now: number) {
   return (roomVersion: number): MatchExecutionContext => {
     const dice = ZERO_BASED_DICE[DICE_TOTALS[roomVersion % DICE_TOTALS.length]];
+    const mapSeed = formatM1MapSeed(
+      Math.floor(roomVersion / UINT32_RANGE),
+      roomVersion % UINT32_RANGE
+    );
     let sixSidedDraw = 0;
     let generalDraw = 0;
     return {
@@ -38,6 +43,7 @@ export function prepareE2EExecutionContext(now: number) {
           return (roomVersion + generalDraw++) % maxExclusive;
         }
       },
+      nextMapSeed: () => mapSeed,
       nextLogId: () => crypto.randomUUID(),
       now: () => now
     };

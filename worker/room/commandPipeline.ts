@@ -15,9 +15,12 @@ import {
 } from "../../src/online/protocol";
 import { projectRoomView } from "../../src/online/projectRoomView";
 import type { OnlineAvailabilityContext } from "../../src/online/allowedActions";
-import { prepareBufferedCryptoRandomSource } from "../crypto";
-import { hashSecret } from "../crypto";
-import { RoomLifecycleError, setLobbyReady, startLobby } from "./roomLifecycle";
+import {
+  hashSecret,
+  prepareBufferedCryptoRandomSource,
+  prepareCryptographicM1MapSeed
+} from "../crypto";
+import { RoomLifecycleError, restartRoom, setLobbyReady, startLobby } from "./roomLifecycle";
 import type { LatestRoomMutation, LatestRoomMutationResult } from "./roomStore";
 import type { PersistedRoom, PersistedSeat } from "./roomTypes";
 
@@ -255,6 +258,8 @@ function executeMessage(
       return setLobbyReady(room, seat.seatId, message.ready, now);
     case "room.start":
       return startLobby(room, seat.seatId, context, now);
+    case "room.restart":
+      return restartRoom(room, seat.seatId, message.mode, context, now);
     case "match.command":
       return acceptedMatchRoom(room, seat, message, context, execute, now);
     case "auction.submitBid":
@@ -391,6 +396,7 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
       const auditStartedAt = performance.now();
       const commandType = parsed.type === "match.command" ? parsed.command.type : parsed.type;
       const prepareRandom = prepareBufferedCryptoRandomSource();
+      const preparedMapSeed = prepareCryptographicM1MapSeed();
       const logIds = Array.from({ length: 128 }, () => crypto.randomUUID());
       const preparedContext = dependencies.prepareExecutionContext?.(input.now) ?? (() => {
         if (dependencies.createExecutionContext !== undefined) {
@@ -399,6 +405,7 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
         let logIndex = 0;
         return {
           random: prepareRandom(),
+          nextMapSeed: () => preparedMapSeed,
           nextLogId: () => {
             const id = logIds[logIndex++];
             if (id === undefined) throw new RangeError("The buffered log ID source is exhausted.");
@@ -468,10 +475,18 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
             }
             return { kind: "updated", room: next, value: { kind: "accepted", commandId: parsed.commandId } };
           } catch (caught) {
+            const rejected = {
+              kind: "rejected" as const,
+              commandId: parsed.commandId,
+              code: rejectionCode(caught)
+            };
+            if (parsed.type === "room.restart") {
+              return { kind: "unchanged", value: rejected };
+            }
             return {
               kind: "updated",
               room: admittedRoom,
-              value: { kind: "rejected", commandId: parsed.commandId, code: rejectionCode(caught) }
+              value: rejected
             };
           }
         });

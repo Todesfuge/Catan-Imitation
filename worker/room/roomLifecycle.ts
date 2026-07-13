@@ -1,5 +1,6 @@
+import { applyMatchCommand } from "../../src/domain/match/applyMatchCommand";
 import { createSetupMatch } from "../../src/domain/match/createMatch";
-import type { MatchExecutionContext } from "../../src/domain/match/types";
+import type { MapRestartMode, MatchExecutionContext } from "../../src/domain/match/types";
 import type { PersistedRoom, PersistedSeat } from "./roomTypes";
 
 export const ROOM_RETENTION_MS = 86_400_000;
@@ -201,6 +202,34 @@ export function startLobby(
     playerId: matchState.game.players[index].id
   }));
   return acceptedActivity({ ...room, lifecycle: "playing", seats: lockedSeats, matchState }, now);
+}
+
+export function restartRoom(
+  room: PersistedRoom,
+  requestingSeatId: string,
+  mode: MapRestartMode,
+  context: MatchExecutionContext,
+  now: number
+): PersistedRoom {
+  if (!room.seats.some((seat) => seat.seatId === requestingSeatId)) {
+    throw new RoomLifecycleError("SEAT_NOT_FOUND");
+  }
+  if (requestingSeatId !== room.hostSeatId) throw new RoomLifecycleError("HOST_ONLY");
+  if (
+    (room.lifecycle !== "playing" && room.lifecycle !== "finished") ||
+    room.matchState === undefined
+  ) {
+    throw new RoomLifecycleError("ROOM_ALREADY_STARTED");
+  }
+
+  const matchState = applyMatchCommand(room.matchState, { type: "START_NEW_GAME", mode }, context);
+  const { pendingAuction: _obsoleteAuction, ...withoutAuction } = room;
+  return acceptedActivity({
+    ...withoutAuction,
+    lifecycle: "playing",
+    seats: room.seats.map((seat) => ({ ...seat, acceptedCommandIds: [] })),
+    matchState
+  }, now);
 }
 
 export function refreshRoomActivity(room: PersistedRoom, now: number): PersistedRoom {

@@ -1,3 +1,5 @@
+import { formatM1MapSeed, type MapSeed } from "../src/domain/mapSeed";
+
 const SECRET_BYTE_LENGTH = 32;
 const SHA256_BASE64URL_LENGTH = 43;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -6,6 +8,16 @@ const UINT32_RANGE = 0x1_0000_0000;
 export const CONNECTION_TICKET_TTL_MS = 30_000;
 
 export type RandomBytesSource = (target: Uint8Array) => void;
+
+/** Captures a fresh public-map seed through a dedicated cryptographic draw. */
+export function prepareCryptographicM1MapSeed(
+  randomBytes: RandomBytesSource = secureRandomBytes
+): MapSeed {
+  const bytes = new Uint8Array(8);
+  randomBytes(bytes);
+  const words = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return formatM1MapSeed(words.getUint32(0), words.getUint32(4));
+}
 
 /**
  * A finite cryptographic random source whose entropy is collected before a

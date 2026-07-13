@@ -560,7 +560,7 @@ describe("authoritative room command pipeline", () => {
     expect(messages).toHaveLength(2);
   });
 
-  it("replays the same execution context across a transaction retry and commits and broadcasts once", async () => {
+  it("replays the same restart context across a transaction retry and commits and broadcasts once", async () => {
     let room = playingRoom();
     const store = new class extends MemoryCommandStore {
       retriedUpdates = 0;
@@ -591,30 +591,27 @@ describe("authoritative room command pipeline", () => {
         nextLogId: () => "retry-log",
         now: () => 100
       }),
-      executeMatchCommand(state, _command, execution) {
-        const first = execution.random.nextInt(6) + 1;
-        const second = execution.random.nextInt(6) + 1;
-        return {
-          ...state,
-          lastDice: { first, second, total: first + second },
-          game: {
-            ...state.game,
-            log: [{ id: execution.nextLogId(), message: "retry proof" }, ...state.game.log]
-          }
-        };
-      }
     });
     await pipeline.handle({
       seatId: "seat-1",
       rawMessage: JSON.stringify({
-        type: "match.command", commandId: ids[0], expectedVersion: room.roomVersion,
-        command: { type: "ROLL_DICE" }
+        type: "room.restart", commandId: ids[0], expectedVersion: room.roomVersion,
+        mode: "fresh"
       }),
       now: 100, presence: noPresence, recipients: peers.recipients
     });
 
     expect(store.retriedUpdates).toBe(1);
     expect(store.commits).toBe(1);
+    expect(store.room!.matchState).toMatchObject({
+      game: { mapSeed: parseMapSeed("M1-0000000000000003"), phase: "setup" },
+      lastDice: null
+    });
+    expect(store.room!.seats.map((seat) => seat.acceptedCommandIds)).toEqual([
+      [{ commandId: ids[0], resultingVersion: room.roomVersion + 1 }],
+      [],
+      []
+    ]);
     expect([...peers.messages.values()].flat()).toHaveLength(3);
   });
 
