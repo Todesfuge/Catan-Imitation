@@ -1,8 +1,8 @@
 # Seeded Random Maps Verification
 
-Status: Whole-branch review converged; final root release-gate rerun pending; not deployed
+Status: Whole-branch review and final release gates passed; not deployed
 
-Verified on 2026-07-13 from `codex/seeded-random-maps`. The reviewed feature range starts at merge base `7eef0d4` and includes browser-convergence commit `dd29d0d`, review-convergence commit `0d8f2b5`, and the documentation/release delta described below.
+Verified on 2026-07-14 from `codex/seeded-random-maps`. The reviewed feature range starts at merge base `7eef0d4` and includes browser convergence `dd29d0d`, release-boundary hardening `0d8f2b5`, Online UI synchronization `1153eda`, deterministic maritime coverage `67b5e9d`, and the documentation/release delta described below.
 
 ## Release Gate Results
 
@@ -10,22 +10,22 @@ Verified on 2026-07-13 from `codex/seeded-random-maps`. The reviewed feature ran
 | --- | --- |
 | Documentation/localization focus | `pnpm exec vitest run test/domain/deliveryReadiness.test.ts test/domain/localization.test.ts`: 2 files, 10 tests passed. |
 | React discard regression focus | `pnpm exec vitest run test/domain/productPolish.test.ts`: 1 file, 20 tests passed. |
-| Domain/client suite | `pnpm test`: 34 files, 432 tests passed. The 1,000-seed invariant case passed. |
-| Worker suite | `pnpm test:worker`: 7 files, 242 tests passed. The command exited 0; Miniflare emitted non-failing temporary-directory cleanup warnings after shutdown. |
-| Browser suite | `pnpm test:e2e`: 2 projects, 42 tests passed in 1.1 minutes: 39 `local-preview` and 3 `online-worker`. |
-| Random-map browser stress | `pnpm exec playwright test --project=local-preview --grep "explicit maritime choices fund" --repeat-each=3`: 9/9 passed (Road, Settlement, and City each 3/3) in 28.3 seconds. `pnpm exec playwright test --project=local-preview --grep "robber guidance stays readable" --repeat-each=3`: 3/3 passed in 16.5 seconds after the React event-lifetime fix. |
+| Domain/client suite | `pnpm test`: 34 files, 437 tests passed. The 1,000-seed invariant case passed. |
+| Worker suite | `pnpm test:worker`: 7 files, 247 tests passed. The command exited 0; Miniflare emitted non-failing temporary-directory cleanup warnings after shutdown. |
+| Browser suite | `pnpm test:e2e`: 2 projects, 50 tests passed in 2.3 minutes: 47 `local-preview` and 3 `online-worker`. |
+| Random-map browser stress | Before mechanical helper cleanup, after a fresh `pnpm build`, `pnpm exec playwright test --project=local-preview --grep "explicit maritime choices fund" --repeat-each=3 --workers=1`: 27/27 passed in 4.8 minutes. This covered Road, Settlement, and City on each of three canonical M1 seeds, repeated three times. The mechanically simplified final committed helper then passed its single-run 9/9 gate in 1.7 minutes and all nine cases passed again inside the final 50/50 browser suite. `pnpm exec playwright test --project=local-preview --grep "robber guidance stays readable" --repeat-each=3`: 3/3 passed in 16.5 seconds after the React event-lifetime fix. |
 | Review-convergence domain focus | `pnpm exec vitest run test/domain/randomBoard.test.ts test/online/protocol.test.ts test/online/onlineGameUi.test.ts`: 3 files, 146/146 tests passed. `pnpm exec vitest run test/domain/productPolish.test.ts`: 1 file, 20/20 tests passed. |
 | Review-convergence Worker focus | `pnpm exec vitest run --config vitest.worker.config.ts test/worker/roomMigration.test.ts`: 1 file, 120/120 tests passed. The command exited 0; Miniflare emitted non-failing shutdown cleanup warnings. |
 | SPA build | `pnpm build`: TypeScript passed; Vite transformed 1,624 modules and emitted the production bundle. |
 | Worker build | `pnpm build:worker`: SPA build and `tsc -p tsconfig.worker.json` passed. |
 | UI smoke | `pnpm smoke:ui`: built preview exposed board, trade, localization, scrolling, and responsive CSS. |
 | Worker smoke | `pnpm smoke:worker`: security/cache headers, rendered SPA, room API, single-use ticket, and WebSocket snapshot passed against health schema 2. |
-| Deployment dry-run | `pnpm exec wrangler deploy --dry-run --config wrangler.jsonc`: 4 asset files, 228.22 KiB upload / 47.46 KiB gzip; `ROOMS` Durable Object and `ASSETS` bindings resolved; no deployment performed. |
+| Deployment dry-run | `pnpm exec wrangler deploy --dry-run --config wrangler.jsonc`: 4 asset files, 228.75 KiB upload / 47.57 KiB gzip; `ROOMS` Durable Object and `ASSETS` bindings resolved; no deployment performed. |
 | Production demo guard | `rg -n "createDemoGame" src worker`: no matches. |
 | Legacy projection guard | `rg -n "boardLayout.*standard-v1" src worker`: no matches. |
 | Whitespace | `git diff --check`: passed. |
 
-The full-suite counts above were recorded before the final review corrections. The focused post-review commands cover every changed production boundary and pass. The root agent must rerun the complete release gates on the committed branch before push, merge, or deployment and record any changed aggregate counts if necessary.
+The full-suite counts above were rerun from committed HEAD `67b5e9d` after all review corrections. No push, merge, preview deployment, or production deployment was performed.
 
 ## Production Address Evidence
 
@@ -83,6 +83,6 @@ The full-suite counts above were recorded before the final review corrections. T
 | RM-030 | Pass | Protocol v2 carries public seed and caller restart capability; incompatible schema paths return the existing recovery response. |
 | RM-031 | Pass | Transition construction, migration validation, projection preflight, and failed restart tests prove atomic no-partial-write/no-broadcast behavior. |
 | RM-032 | Pass | Unit UI plus real clipboard-denial browser coverage verifies localized failure and selectable manual fallback. |
-| RM-033 | Pass | Focused map, transition, protocol, migration, authority, concurrency, and privacy suites are included in the 432 + 242 passing tests. |
-| RM-034 | Pass | Local and three-isolated-context Online Playwright evidence is included in the 42-test browser gate. |
-| RM-035 | Pass | Independent whole-branch review completed. Confirmed findings were resolved in `0d8f2b5` with focused RED/GREEN evidence for ordinal board identity, M1 storage strictness, presence/projection identity, discard convergence, and random-map maritime Road/Settlement/City behavior. A final complete root gate rerun remains required before push or deployment. |
+| RM-033 | Pass | Focused map, transition, protocol, migration, authority, concurrency, and privacy suites are included in the 437 + 247 passing tests. |
+| RM-034 | Pass | Local and three-isolated-context Online Playwright evidence is included in the 50-test browser gate. |
+| RM-035 | Pass | Independent whole-branch review completed. Findings were resolved in `0d8f2b5`, `1153eda`, and `67b5e9d` with RED/GREEN evidence for ordinal board identity, M1 storage strictness, presence/projection identity, discard convergence, Online UI/version synchronization, and deterministic maritime Road/Settlement/City behavior. The final root release-gate rerun passed before handoff. |

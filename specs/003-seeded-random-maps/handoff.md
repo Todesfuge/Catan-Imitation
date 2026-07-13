@@ -1,6 +1,6 @@
 # Seeded Random Maps Handoff
 
-Status: Independent whole-branch review converged; final root release-gate rerun pending; not deployed
+Status: Independent whole-branch review and final release gates passed; ready for approved integration; not deployed
 
 ## Branch and Review Range
 
@@ -8,7 +8,9 @@ Status: Independent whole-branch review converged; final root release-gate rerun
 - Merge base with `main`: `7eef0d4aa718b1b17ca5f2e6f89cf43ed850cc93`
 - Browser convergence commit: `dd29d0d8fc197e4e18b2337b402e54c522c8cf01`
 - Review convergence commit: `0d8f2b5b30eb202d7f187d31a2a652d6d7209e6f`
-- Reviewed range before the final documentation commit: `7eef0d4..HEAD` plus the working-tree documentation/release delta.
+- Online UI synchronization commit: `1153edad8d588451a5258e897a3011ae3feaa459`
+- Deterministic maritime coverage commit: `67b5e9dca6bbffe5eca46f507d82195c8dcc0492`
+- Reviewed range: `7eef0d4..HEAD`, including the final documentation/release delta.
 - No push, pull request, production deploy, or preview deploy was performed by T009.
 
 The feature commit chain is organized by boundary: specification/planning, seed codec, bounded board generator, match setup/restart, Local real setup, protocol/projection v2, storage migration, host authority/restart hardening, Settings UI, browser convergence, then release documentation.
@@ -40,9 +42,10 @@ The feature commit chain is organized by boundary: specification/planning, seed 
 
 ## Verification Summary
 
-- Domain/client: 34 files, 432 tests passed.
-- Worker: 7 files, 242 tests passed.
-- Browser: 2 projects, 42 tests passed (39 Local/preview and 3 real Worker).
+- Domain/client: 34 files, 437 tests passed.
+- Worker: 7 files, 247 tests passed.
+- Browser: 2 projects, 50 tests passed (47 Local/preview and 3 real Worker).
+- Deterministic maritime evidence: the pre-cleanup helper passed 27/27 across three canonical M1 seeds, three build targets, and three repetitions; the mechanically simplified final committed helper passed 9/9 alone and again inside the 50/50 browser suite.
 - Builds, UI smoke, Worker smoke, repository guards, whitespace check, and Wrangler dry-run passed.
 - Visual review covered Local/Online, desktop/mobile, and English/Chinese restart confirmation with 0 P0/P1 findings.
 - Full requirement evidence, the T009 integration defects, and the resolved review findings are recorded in [verification.md](verification.md).
@@ -55,8 +58,8 @@ The feature commit chain is organized by boundary: specification/planning, seed 
 - Non-standard board sizes/topologies and arbitrary custom map editors.
 - Exact proprietary artwork or rules text.
 
-The Worker test runner may emit Windows `EBUSY` warnings while deleting Miniflare temporary directories after all 242 tests pass; the command exits 0 and no repository files are affected.
+The Worker test runner may emit Windows `EBUSY` warnings while deleting Miniflare temporary directories after all 247 tests pass; the command exits 0 and no repository files are affected.
 
 ## Exact Next Action
 
-The root agent reruns the complete release gates from the committed branch and records any changed aggregate counts. If every gate passes, push or merge only after approval, then deploy the Worker and SPA together and perform the documented post-deploy health, SPA, room, restart-authority, and reconnect checks. If recovery is needed after schema-v2 migration, use only a verified v2-compatible deployment or roll forward.
+Push or merge only after approval. Then deploy the Worker and SPA together and perform the documented post-deploy health, SPA, room, restart-authority, and reconnect checks before promotion. If recovery is needed after schema-v2 migration, use only a verified v2-compatible deployment or roll forward.
