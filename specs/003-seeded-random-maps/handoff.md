@@ -7,7 +7,7 @@ Status: Independent whole-branch review converged; final root release-gate rerun
 - Branch: `codex/seeded-random-maps`
 - Merge base with `main`: `7eef0d4aa718b1b17ca5f2e6f89cf43ed850cc93`
 - Browser convergence commit: `dd29d0d8fc197e4e18b2337b402e54c522c8cf01`
-- Review convergence commit: `0d8f2b5a`
+- Review convergence commit: `0d8f2b5b30eb202d7f187d31a2a652d6d7209e6f`
 - Reviewed range before the final documentation commit: `7eef0d4..HEAD` plus the working-tree documentation/release delta.
 - No push, pull request, production deploy, or preview deploy was performed by T009.
 
