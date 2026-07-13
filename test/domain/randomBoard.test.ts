@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   STANDARD_HEX_COORDINATES,
+  compareOrdinalIds,
   createStandardBoardData,
   type StandardBoardData
 } from "../../src/domain/board";
@@ -101,14 +102,14 @@ function identifyCoastalEdgeOrder(data: StandardBoardData) {
     }
   }
 
-  const startVertex = [...byVertex.keys()].sort()[0];
+  const startVertex = [...byVertex.keys()].sort(compareOrdinalIds)[0];
   const ordered: typeof coastal = [];
   let currentVertex = startVertex;
   let previousEdgeId: string | undefined;
   do {
     const edge = (byVertex.get(currentVertex) ?? [])
       .filter((candidate) => candidate.id !== previousEdgeId)
-      .sort((left, right) => left.id.localeCompare(right.id))[0];
+      .sort((left, right) => compareOrdinalIds(left.id, right.id))[0];
     if (!edge) {
       throw new Error("Expected the standard coast to form one closed cycle.");
     }
@@ -119,6 +120,12 @@ function identifyCoastalEdgeOrder(data: StandardBoardData) {
 
   return ordered;
 }
+
+describe("ordinal board identifiers", () => {
+  it("uses a locale-independent code-unit ordering contract", () => {
+    expect(["ä", "z", "a", "A"].sort(compareOrdinalIds)).toEqual(["A", "a", "z", "ä"]);
+  });
+});
 
 function assertM1Invariants(seed: MapSeed): void {
   const data = createBoardDataForSeed(seed);

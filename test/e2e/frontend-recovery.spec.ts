@@ -707,6 +707,27 @@ async function setDeterministicTotal(page: Page, total: number) {
   }, total);
 }
 
+async function completePendingLocalDiscards(page: Page) {
+  for (let player = 0; player < 4; player += 1) {
+    const panel = page.locator('[data-turn-flow="discard"]');
+    if (await panel.count() === 0) return;
+    const requiredMatch = (await panel.locator("strong").textContent())?.match(/discard (\d+)/i);
+    const required = Number(requiredMatch?.[1]);
+    expect(required).toBeGreaterThan(0);
+    let remaining = required;
+    const inputs = panel.locator('input[type="number"]');
+    for (let index = 0; index < await inputs.count(); index += 1) {
+      const input = inputs.nth(index);
+      const amount = Math.min(remaining, Number(await input.getAttribute("max")));
+      await input.fill(String(amount));
+      remaining -= amount;
+    }
+    expect(remaining).toBe(0);
+    await panel.getByRole("button", { name: "Submit Discard" }).click();
+  }
+  await expect(page.locator('[data-turn-flow="discard"]')).toHaveCount(0);
+}
+
 const playerTradeResources = [
   { key: "wood", short: "Wd", label: "Wood" },
   { key: "brick", short: "Br", label: "Brick" },
@@ -722,6 +743,205 @@ async function readPlayerResources(page: Page, playerIndex: number): Promise<Map
     const [short, amount] = text.trim().split(/\s+/);
     return [short, Number(amount)] as const;
   }));
+}
+
+type BuildResource = (typeof playerTradeResources)[number]["key"];
+type MaritimeBuildKind = "Road" | "Settlement" | "City";
+
+const maritimeBuildCosts: Record<MaritimeBuildKind, Record<BuildResource, number>> = {
+  Road: { wood: 1, brick: 1, wool: 0, grain: 0, ore: 0 },
+  Settlement: { wood: 1, brick: 1, wool: 1, grain: 1, ore: 0 },
+  City: { wood: 0, brick: 0, wool: 0, grain: 2, ore: 3 }
+};
+
+async function completeUsefulMaritimeTrade(
+  page: Page,
+  cost: Record<BuildResource, number>
+): Promise<boolean> {
+  const give = page.getByLabel("Maritime give resource");
+  const receive = page.getByLabel("Maritime receive resource");
+  const inventory = await readPlayerResources(page, 0);
+  const missing = playerTradeResources
+    .filter(({ key, short }) => (inventory.get(short) ?? 0) < cost[key])
+    .map(({ key }) => key);
+  const options = await give.locator("option:not([disabled])").evaluateAll((entries) => entries
+    .map((entry) => ({
+      value: (entry as HTMLOptionElement).value,
+      text: entry.textContent ?? ""
+    }))
+    .filter((entry) => entry.value));
+  const candidate = options.find((option) => {
+    const resource = playerTradeResources.find(({ key }) => key === option.value);
+    const ratio = Number(option.text.match(/(\d+):1/)?.[1]);
+    return resource !== undefined && Number.isInteger(ratio) &&
+      (inventory.get(resource.short) ?? 0) - ratio >= cost[resource.key];
+  });
+  if (!candidate) return false;
+
+  await give.selectOption(candidate.value);
+  const receiveOptions = await receive.locator("option:not([disabled])").evaluateAll((entries) => entries
+    .map((entry) => (entry as HTMLOptionElement).value)
+    .filter(Boolean));
+  const receiveResource = missing.find((resource) =>
+    resource !== candidate.value && receiveOptions.includes(resource)
+  ) ?? receiveOptions.find((resource) => resource !== candidate.value);
+  if (!receiveResource) return false;
+
+  await receive.selectOption(receiveResource);
+  await page.getByRole("button", { name: "Maritime" }).click();
+  await expect(page.getByRole("log")).toContainText("A maritime trade was completed.");
+  return true;
+}
+
+async function chooseRoadExtensionTarget(page: Page) {
+  const targets = page.locator('[data-board-visible-target="road"]');
+  const extensionIndex = await targets.evaluateAll((entries) => {
+    const key = (x: number, y: number) => `${x.toFixed(1)},${y.toFixed(1)}`;
+    const adjacency = new Map<string, Set<string>>();
+    for (const polygon of document.querySelectorAll<SVGPolygonElement>(".board-hex")) {
+      const vertices = (polygon.getAttribute("points") ?? "").trim().split(/\s+/).map((point) => {
+        const [x, y] = point.split(",").map(Number);
+        return key(x, y);
+      });
+      for (let index = 0; index < vertices.length; index += 1) {
+        const left = vertices[index]!;
+        const right = vertices[(index + 1) % vertices.length]!;
+        adjacency.set(left, new Set([...(adjacency.get(left) ?? []), right]));
+        adjacency.set(right, new Set([...(adjacency.get(right) ?? []), left]));
+      }
+    }
+    const occupied = new Set([...document.querySelectorAll<SVGRectElement>(".building-marker")]
+      .map((entry) => key(
+        Number(entry.getAttribute("x")) + Number(entry.getAttribute("width")) / 2,
+        Number(entry.getAttribute("y")) + Number(entry.getAttribute("height")) / 2
+      )));
+    const hasLegalSettlementEndpoint = (entry: Element) => {
+      const endpoints = [
+        key(Number(entry.getAttribute("x1")), Number(entry.getAttribute("y1"))),
+        key(Number(entry.getAttribute("x2")), Number(entry.getAttribute("y2")))
+      ];
+      return endpoints.some((endpoint) => !occupied.has(endpoint) &&
+        [...(adjacency.get(endpoint) ?? [])].every((neighbor) => !occupied.has(neighbor))
+      );
+    };
+    return entries.findIndex(hasLegalSettlementEndpoint);
+  });
+  expect(extensionIndex, "Expected a road target that opens a legal settlement vertex").toBeGreaterThanOrEqual(0);
+  await targets.nth(extensionIndex).click();
+}
+
+async function readVoyageProductiveTotals(page: Page): Promise<number[]> {
+  return page.evaluate(() => {
+    const centers = [...document.querySelectorAll<SVGRectElement>(".building-marker")]
+      .filter((entry) => entry.querySelector("title")?.textContent?.startsWith("Voyage1969 "))
+      .map((entry) => ({
+        x: Number(entry.getAttribute("x")) + Number(entry.getAttribute("width")) / 2,
+        y: Number(entry.getAttribute("y")) + Number(entry.getAttribute("height")) / 2
+      }));
+    const totals = [...document.querySelectorAll<SVGGElement>(".hex-tile")].flatMap((hex) => {
+      const points = (hex.querySelector(".board-hex")?.getAttribute("points") ?? "")
+        .trim().split(/\s+/).map((point) => {
+          const [x, y] = point.split(",").map(Number);
+          return { x, y };
+        });
+      if (!points.some((point) => centers.some((center) =>
+        Math.abs(point.x - center.x) < 0.5 && Math.abs(point.y - center.y) < 0.5
+      ))) return [];
+      const total = Number(hex.querySelector(".dice-number")?.textContent);
+      return Number.isInteger(total) ? [total] : [];
+    });
+    return [...new Set(totals)].sort((left, right) => left - right);
+  });
+}
+
+async function fundAndBuildWithMaritime(
+  page: Page,
+  kind: MaritimeBuildKind,
+  options: { preferRoadExtension?: boolean; maxRounds?: number } = {}
+): Promise<number> {
+  const button = page.getByRole("button", { name: kind, exact: true });
+  const targetKind = kind.toLowerCase();
+  const marker = kind === "Road" ? ".road-marker" : `.building-marker.${targetKind}`;
+  const initialMarkerCount = await page.locator(marker).count();
+  const totals = await readVoyageProductiveTotals(page);
+  expect(totals.length, "Voyage1969 must have at least one productive setup hex").toBeGreaterThan(0);
+  const maxRounds = options.maxRounds ?? 40;
+  let tradeCount = 0;
+
+  for (let attempt = 0; attempt < maxRounds; attempt += 1) {
+    await setDeterministicTotal(page, totals[attempt % totals.length]);
+    await page.getByRole("button", { name: "Roll Dice" }).click();
+    for (let tradeAttempt = 0; tradeAttempt < 5; tradeAttempt += 1) {
+      if (tradeCount > 0 && await button.isEnabled()) break;
+      if (!await completeUsefulMaritimeTrade(page, maritimeBuildCosts[kind])) break;
+      tradeCount += 1;
+    }
+    if (tradeCount > 0 && await button.isEnabled()) {
+      await button.click();
+      await expect(button).toHaveAttribute("aria-pressed", "true");
+      const targets = page.locator(`[data-board-action-target="${targetKind}"]`);
+      expect(await targets.count()).toBeGreaterThan(0);
+      if (kind === "Road" && options.preferRoadExtension) {
+        await chooseRoadExtensionTarget(page);
+      } else {
+        await page.locator(`[data-board-visible-target="${targetKind}"]`).first().click();
+      }
+      await expect(page.locator(`[data-board-action-target="${targetKind}"]`)).toHaveCount(0);
+      await expect(page.locator(marker)).toHaveCount(initialMarkerCount + 1);
+      return tradeCount;
+    }
+    if (attempt < maxRounds - 1) await advanceBackToFirstPlayer(page);
+  }
+  throw new Error(`${kind} did not become buildable after ${maxRounds} deterministic rounds`);
+}
+
+async function fundAndBuildSettlementWithMaritime(page: Page): Promise<number> {
+  const settlement = page.getByRole("button", { name: "Settlement", exact: true });
+  const road = page.getByRole("button", { name: "Road", exact: true });
+  const totals = await readVoyageProductiveTotals(page);
+  expect(totals.length, "Voyage1969 must have at least one productive setup hex").toBeGreaterThan(0);
+  const initialSettlementCount = await page.locator(".building-marker.settlement").count();
+  let tradeCount = 0;
+  let roadsBuilt = 0;
+
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    await setDeterministicTotal(page, totals[attempt % totals.length]);
+    await page.getByRole("button", { name: "Roll Dice" }).click();
+    for (let tradeAttempt = 0; tradeAttempt < 5; tradeAttempt += 1) {
+      if (await settlement.isEnabled()) {
+        if (tradeCount > 0) {
+          await settlement.click();
+          const targets = page.locator('[data-board-action-target="settlement"]');
+          expect(await targets.count()).toBeGreaterThan(0);
+          await page.locator('[data-board-visible-target="settlement"]').first().click();
+          await expect(targets).toHaveCount(0);
+          await expect(page.locator(".building-marker.settlement")).toHaveCount(initialSettlementCount + 1);
+          return tradeCount;
+        }
+      } else if (await settlement.getAttribute("title") === "No legal target is available.") {
+        break;
+      }
+      if (!await completeUsefulMaritimeTrade(page, maritimeBuildCosts.Settlement)) break;
+      tradeCount += 1;
+    }
+
+    if (await settlement.getAttribute("title") === "No legal target is available.") {
+      if (roadsBuilt >= 3) {
+        throw new Error(`Settlement route still has no legal target after ${roadsBuilt} outward roads`);
+      }
+      await expect(road).toBeEnabled();
+      const initialRoadCount = await page.locator(".road-marker").count();
+      await road.click();
+      expect(await page.locator('[data-board-action-target="road"]').count()).toBeGreaterThan(0);
+      await chooseRoadExtensionTarget(page);
+      await expect(page.locator(".road-marker")).toHaveCount(initialRoadCount + 1);
+      roadsBuilt += 1;
+    }
+    if (attempt < 59) await advanceBackToFirstPlayer(page);
+  }
+
+  const inventory = Object.fromEntries(await readPlayerResources(page, 0));
+  throw new Error(`Settlement did not converge: roads=${roadsBuilt}, resources=${JSON.stringify(inventory)}`);
 }
 
 async function prepareAffordablePublicTrade(page: Page): Promise<{
@@ -864,53 +1084,21 @@ test("explicit maritime choices fund a selected Road target on any seeded map", 
   test.setTimeout(90_000);
   await openLocal(page);
   await completeLocalSetup(page);
-  const give = page.getByLabel("Maritime give resource");
-  const receive = page.getByLabel("Maritime receive resource");
-  const road = page.getByRole("button", { name: "Road", exact: true });
-  const totals = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12];
-  let traded = false;
-  for (let attempt = 0; attempt < 30 && !(traded && await road.isEnabled()); attempt += 1) {
-    await setDeterministicTotal(page, totals[attempt % totals.length]);
-    await page.getByRole("button", { name: "Roll Dice" }).click();
-    const giveOptions = await give.locator("option:not([disabled])").evaluateAll((options) =>
-      options.map((option) => (option as HTMLOptionElement).value).filter(Boolean)
-    );
-    if (!traded && giveOptions.length > 0) {
-      const giveResource = giveOptions[0];
-      await give.selectOption(giveResource);
-      const inventory = await readPlayerResources(page, 0);
-      const missingRoadResource = (inventory.get("Wd") ?? 0) < 1
-        ? "wood"
-        : (inventory.get("Br") ?? 0) < 1
-          ? "brick"
-          : undefined;
-      const receiveOptions = await receive.locator("option:not([disabled])").evaluateAll((options) =>
-        options.map((option) => (option as HTMLOptionElement).value).filter(Boolean)
-      );
-      const receiveResource = missingRoadResource && missingRoadResource !== giveResource
-        ? missingRoadResource
-        : receiveOptions[0];
-      expect(receiveResource).toBeTruthy();
-      await receive.selectOption(receiveResource);
-      await page.getByRole("button", { name: "Maritime" }).click();
-      await expect(page.getByRole("log")).toContainText("A maritime trade was completed.");
-      traded = true;
-    }
-    if (!(traded && await road.isEnabled())) await advanceBackToFirstPlayer(page);
-  }
+  expect(await fundAndBuildWithMaritime(page, "Road")).toBeGreaterThan(0);
+});
 
-  expect(traded).toBe(true);
-  await expect(road).toBeEnabled();
-  await road.click();
-  await expect(road).toHaveAttribute("aria-pressed", "true");
-  await page.keyboard.press("Escape");
-  await expect(page.locator('[data-board-action-target="road"]')).toHaveCount(0);
-  await road.click();
-  const targets = page.locator('[data-board-visible-target="road"]');
-  const targetCount = await targets.count();
-  expect(targetCount).toBeGreaterThan(0);
-  await targets.first().click();
-  await expect(road).toBeDisabled();
+test("explicit maritime choices fund a selected Settlement target on any seeded map", async ({ page }) => {
+  test.setTimeout(150_000);
+  await openLocal(page);
+  await completeLocalSetup(page);
+  expect(await fundAndBuildSettlementWithMaritime(page)).toBeGreaterThan(0);
+});
+
+test("explicit maritime choices fund a selected City target on any seeded map", async ({ page }) => {
+  test.setTimeout(120_000);
+  await openLocal(page);
+  await completeLocalSetup(page);
+  expect(await fundAndBuildWithMaritime(page, "City", { maxRounds: 50 })).toBeGreaterThan(0);
 });
 
 test("Commerce controls keep valid named selections across turns", async ({ page }) => {
@@ -1042,6 +1230,7 @@ test("robber guidance stays readable and log/statistics lists reach their final 
   }
   await setDeterministicTotal(page, 7);
   await page.getByRole("button", { name: "Roll Dice" }).click();
+  await completePendingLocalDiscards(page);
 
   const robberPanel = page.locator('[data-turn-flow="robber-placement"]');
   await expect(robberPanel).toBeVisible();

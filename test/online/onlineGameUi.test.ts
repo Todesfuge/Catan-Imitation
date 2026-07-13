@@ -838,4 +838,27 @@ describe("online game projection adapter", () => {
     expect(() => projectRoomView({ roomCode: "234567", lifecycle: "playing", roomVersion: 1, seats,
       matchState: { game: nonstandard, guild: local.guild, lastDice: null } }, "seat-1")).toThrow("seed-derived board data");
   });
+
+  it.each([
+    ["duplicate player identity", (snapshot: RoomSnapshotMessage) => {
+      const room = snapshot.publicState as unknown as PublicRoomState;
+      const game = room.game as unknown as PublicGameView;
+      game.players[1] = { ...game.players[1]!, playerId: game.players[0]!.playerId };
+      room.seats[1] = { ...room.seats[1]!, playerId: room.seats[0]!.playerId };
+    }],
+    ["duplicate submitted bid seat", (snapshot: RoomSnapshotMessage) => {
+      const room = snapshot.publicState as unknown as PublicRoomState;
+      room.submittedBidSeatIds = [room.seats[0]!.seatId, room.seats[0]!.seatId];
+    }],
+    ["duplicate presence seat", (snapshot: RoomSnapshotMessage) => {
+      snapshot.presence[1] = { ...snapshot.presence[1]!, seatId: snapshot.presence[0]!.seatId };
+    }],
+    ["incoherent presence online flag", (snapshot: RoomSnapshotMessage) => {
+      snapshot.presence[0] = { ...snapshot.presence[0]!, connectionCount: 0, online: true };
+    }]
+  ])("rejects inconsistent room identity: %s", (_name, mutate) => {
+    const malformed = setupSnapshot();
+    mutate(malformed);
+    expectIncompatibleProjection(malformed);
+  });
 });

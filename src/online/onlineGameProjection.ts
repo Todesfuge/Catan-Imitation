@@ -269,7 +269,7 @@ export function parseOnlineGameProjection(snapshot: RoomSnapshotMessage | undefi
   if (!privateState(snapshot.privateState) || !publicGame(gameCandidate, mapSeed, boardIds)) return undefined;
   const game = gameCandidate;
   const playerIds = new Set(game.players.map((player) => player.playerId));
-  if (!object(publicState) || !exact(publicState, ["roomCode", "lifecycle", "roomVersion", "seats", "game", "guild", "submittedBidSeatIds"]) ||
+  if (playerIds.size !== game.players.length || !object(publicState) || !exact(publicState, ["roomCode", "lifecycle", "roomVersion", "seats", "game", "guild", "submittedBidSeatIds"]) ||
       !boundedString(publicState.roomCode, 6) || publicState.roomCode !== publicState.roomCode.toUpperCase() ||
       publicState.lifecycle !== snapshot.lifecycle || publicState.roomVersion !== snapshot.roomVersion ||
       !Array.isArray(publicState.seats) || publicState.seats.length !== game.players.length || !publicState.seats.every((seat) =>
@@ -278,7 +278,12 @@ export function parseOnlineGameProjection(snapshot: RoomSnapshotMessage | undefi
       !stringArray(publicState.submittedBidSeatIds, 4) || !publicGuild(publicState.guild, playerIds)) return undefined;
   const seatIds = new Set(publicState.seats.map((seat) => seat.seatId));
   const seatedPlayerIds = new Set(publicState.seats.map((seat) => seat.playerId));
-  if (seatIds.size !== publicState.seats.length || seatedPlayerIds.size !== playerIds.size) return undefined;
+  const submittedBidSeatIds = new Set(publicState.submittedBidSeatIds);
+  const presenceSeatIds = new Set(snapshot.presence.map((entry) => entry.seatId));
+  if (seatIds.size !== publicState.seats.length || seatedPlayerIds.size !== playerIds.size ||
+      submittedBidSeatIds.size !== publicState.submittedBidSeatIds.length ||
+      presenceSeatIds.size !== snapshot.presence.length ||
+      snapshot.presence.some((entry) => entry.online !== (entry.connectionCount > 0))) return undefined;
   const privateSeat = publicState.seats.find((seat) => seat.seatId === snapshot.privateState.seatId);
   const privateCards = new Map(snapshot.privateState.developmentCards?.map((card) => [card.id, card.kind]) ?? []);
   const buildingIds = new Set(game.buildings.map((building) => building.id));

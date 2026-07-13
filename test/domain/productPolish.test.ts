@@ -68,6 +68,14 @@ describe("product polish UI", () => {
     expect(html).toContain("Submit Discard");
   });
 
+  it("captures discard input values before React releases the change event", () => {
+    const source = readFileSync("src/ui/TurnFlowPanel.tsx", "utf8");
+
+    expect(source).toContain("const value = Number(event.currentTarget.value);");
+    expect(source).toContain("[resource]: value");
+    expect(source).not.toContain("[resource]: Number(event.currentTarget.value)");
+  });
+
   it("renders robber placement guidance and eligible victim controls", () => {
     const placementGame = {
       ...createScenarioGame(),

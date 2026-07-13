@@ -50,12 +50,13 @@ export function TurnFlowPanel({
                 disabled={!discardPolicy.enabled}
                 max={discardPolicy.maxByResource[resource]}
                 min={0}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const value = Number(event.currentTarget.value);
                   setDiscarded((current) => ({
                     ...current,
-                    [resource]: Number(event.currentTarget.value)
-                  }))
-                }
+                    [resource]: value
+                  }));
+                }}
                 step={1}
                 type="number"
                 value={discarded[resource]}

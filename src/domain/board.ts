@@ -1,5 +1,9 @@
 import type { BoardEdge, BoardHex, MaritimePort, Resource } from "./types";
 
+export function compareOrdinalIds(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export const STANDARD_HEX_COORDINATES = [
   [0, -2],
   [1, -2],
@@ -78,7 +82,7 @@ function vertexKey(q: number, r: number, vertexIndex: number): string {
 }
 
 function edgeKey(leftVertexId: string, rightVertexId: string): string {
-  return [leftVertexId, rightVertexId].sort().join("|");
+  return [leftVertexId, rightVertexId].sort(compareOrdinalIds).join("|");
 }
 
 export interface StandardHexTopology {
@@ -168,14 +172,14 @@ export function orderStandardCoastalEdges(
     }
   }
 
-  const startVertex = [...byVertex.keys()].sort()[0];
+  const startVertex = [...byVertex.keys()].sort(compareOrdinalIds)[0];
   const ordered: BoardEdge[] = [];
   let currentVertex = startVertex;
   let previousEdgeId: string | undefined;
   do {
     const candidates = (byVertex.get(currentVertex) ?? [])
       .filter((edge) => edge.id !== previousEdgeId)
-      .sort((left, right) => left.id.localeCompare(right.id));
+      .sort((left, right) => compareOrdinalIds(left.id, right.id));
     const edge = candidates[0];
     if (!edge) {
       throw new Error("Standard coastal edges must form one closed boundary.");

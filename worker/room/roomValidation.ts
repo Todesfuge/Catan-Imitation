@@ -1,4 +1,4 @@
-import { parseMapSeed } from "../../src/domain/mapSeed";
+import { LEGACY_STANDARD_MAP_SEED, parseMapSeed } from "../../src/domain/mapSeed";
 import type { MatchState } from "../../src/domain/match/types";
 import { matchesBoardDataForSeed } from "../../src/domain/randomBoard";
 import { resources } from "../../src/domain/types";
@@ -139,14 +139,17 @@ function road(value: unknown, references: GameReferences): value is UnknownRecor
     references.edgeIds.has(String(value.edgeId));
 }
 
-function gameLogEntry(value: unknown): value is UnknownRecord {
+function gameLogEntry(value: unknown, allowLegacyOwnUndefined: boolean): value is UnknownRecord {
   if (!record(value) || !exactKeys(value, ["id", "message"], ["messageKey", "params"]) ||
     !nonEmptyString(value.id) || typeof value.message !== "string" ||
-    (Object.hasOwn(value, "messageKey") && value.messageKey !== undefined &&
-      !gameMessageKeys.has(String(value.messageKey)))) {
+    (Object.hasOwn(value, "messageKey") &&
+      (value.messageKey === undefined
+        ? !allowLegacyOwnUndefined
+        : !gameMessageKeys.has(String(value.messageKey))))) {
     return false;
   }
-  return !Object.hasOwn(value, "params") || value.params === undefined ||
+  return !Object.hasOwn(value, "params") ||
+    (value.params === undefined && allowLegacyOwnUndefined) ||
     (record(value.params) && Object.entries(value.params).every(([key, parameter]) =>
       key.length > 0 && (typeof parameter === "string" ||
         (typeof parameter === "number" && Number.isFinite(parameter) && Number.isSafeInteger(parameter)))
@@ -358,6 +361,7 @@ function gameState(value: unknown): value is UnknownRecord {
   if (!matchesBoardDataForSeed({ board: value.board, edges: value.edges, ports: value.ports }, mapSeed)) {
     return false;
   }
+  const allowLegacyOwnUndefined = mapSeed === LEGACY_STANDARD_MAP_SEED;
 
   const players = value.players as UnknownRecord[];
   const playerIds = players.map((candidate) => candidate.id as string);
@@ -378,7 +382,7 @@ function gameState(value: unknown): value is UnknownRecord {
     !unique((value.roads as UnknownRecord[]).map((candidate) => candidate.edgeId as string)) ||
     !references.hexIds.has(String(value.robberHexId)) ||
     !record(value.bank) || !exactKeys(value.bank, ["resources"]) || !resourceMap(value.bank.resources) ||
-    !Array.isArray(value.log) || !value.log.every(gameLogEntry) ||
+    !Array.isArray(value.log) || !value.log.every((entry) => gameLogEntry(entry, allowLegacyOwnUndefined)) ||
     !unique((value.log as UnknownRecord[]).map((candidate) => candidate.id as string)) ||
     !Array.isArray(value.developmentDeck) ||
     !value.developmentDeck.every((card) => developmentCard(card, value.turn as number)) ||
@@ -400,7 +404,8 @@ function gameState(value: unknown): value is UnknownRecord {
       Object.hasOwn(value, "winnerId")) {
       return false;
     }
-  } else if (Object.hasOwn(value, "setup") && value.setup !== undefined) {
+  } else if (Object.hasOwn(value, "setup") &&
+    (value.setup !== undefined || !allowLegacyOwnUndefined)) {
     return false;
   }
   if (value.phase === "gameOver") {
@@ -412,7 +417,7 @@ function gameState(value: unknown): value is UnknownRecord {
   }
   return optional(value, "largestArmyOwnerId", (candidate) => references.playerIds.has(String(candidate))) &&
     (!Object.hasOwn(value, "longestRoadOwnerId") ||
-      (value.longestRoadOwnerId === undefined && value.phase !== "setup") ||
+      (value.longestRoadOwnerId === undefined && value.phase !== "setup" && allowLegacyOwnUndefined) ||
       references.playerIds.has(String(value.longestRoadOwnerId)));
 }
 
@@ -440,8 +445,9 @@ export function isPersistedMatchState(value: unknown): value is MatchState {
   };
   const guildValid = commerceGuild(value.guild, game, references);
   const diceValid = value.lastDice === null || diceRoll(value.lastDice);
+  const allowLegacyOwnUndefined = game.mapSeed === LEGACY_STANDARD_MAP_SEED;
   const tradeValid = !Object.hasOwn(value, "pendingPlayerTrade") ||
-    (value.pendingPlayerTrade === undefined && game.phase !== "setup") ||
+    (value.pendingPlayerTrade === undefined && game.phase !== "setup" && allowLegacyOwnUndefined) ||
     playerTrade(value.pendingPlayerTrade, game, references);
   return guildValid && diceValid && tradeValid;
 }

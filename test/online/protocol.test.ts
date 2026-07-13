@@ -403,6 +403,21 @@ describe("server WebSocket messages", () => {
         presence: [{ seatId: "seat", connectionCount: -1, online: true }]
       },
       {
+        type: "presence.changed",
+        presence: [
+          { seatId: "seat", connectionCount: 1, online: true },
+          { seatId: "seat", connectionCount: 1, online: true }
+        ]
+      },
+      {
+        type: "presence.changed",
+        presence: [{ seatId: "seat", connectionCount: 0, online: true }]
+      },
+      {
+        type: "presence.changed",
+        presence: [{ seatId: "seat", connectionCount: 1, online: false }]
+      },
+      {
         type: "room.snapshot",
         schemaVersion: 2,
         roomVersion: 0,

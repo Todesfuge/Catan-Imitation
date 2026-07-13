@@ -460,15 +460,23 @@ function projectionAt(value: unknown, path: string): ProjectionObject {
 function presenceAt(value: unknown, path: string): PresenceEntry[] {
   if (!Array.isArray(value)) fail(path, "must be an array");
   if (value.length > 4) fail(path, "must contain at most 4 seats");
-  return value.map((entry, index) => {
+  const presence = value.map((entry, index) => {
     const entryPath = `${path}[${index}]`;
     const object = exactObject(entry, entryPath, ["seatId", "connectionCount", "online"]);
-    return {
+    const parsed = {
       seatId: stringAt(object.seatId, `${entryPath}.seatId`),
       connectionCount: integerAt(object.connectionCount, `${entryPath}.connectionCount`),
       online: booleanAt(object.online, `${entryPath}.online`)
     };
+    if (parsed.online !== (parsed.connectionCount > 0)) {
+      fail(`${entryPath}.online`, "must equal whether connectionCount is greater than zero");
+    }
+    return parsed;
   });
+  if (new Set(presence.map((entry) => entry.seatId)).size !== presence.length) {
+    fail(path, "must contain unique seatId values");
+  }
+  return presence;
 }
 
 function parseRoomSnapshot(object: JsonObject): RoomSnapshotMessage {

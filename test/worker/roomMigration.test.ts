@@ -217,6 +217,37 @@ function createV2SetupPlaying(): PersistedRoom {
   };
 }
 
+function createV2M1Playing(): PersistedRoom {
+  const lobby = createV2Lobby();
+  const setupMatch = createSetupMatch(
+    NAMES.map((nickname) => ({ nickname })),
+    { kind: "seed", seed: M1_SEED },
+    executionContext()
+  );
+  const { setup: _setup, ...game } = setupMatch.game;
+  const matchState: MatchState = {
+    ...setupMatch,
+    game: {
+      ...game,
+      phase: "playing",
+      turnState: { phase: "awaitingRoll", pendingDiscards: {} }
+    }
+  };
+  return {
+    ...lobby,
+    lifecycle: "playing",
+    lastActivityAt: 8_000,
+    expiresAt: 8_000 + DAY_MS,
+    roomVersion: 22,
+    seats: lobby.seats.map((seat, index) => ({
+      ...seat,
+      playerId: matchState.game.players[index].id,
+      ready: true
+    })),
+    matchState
+  };
+}
+
 function createProductionPlaying(): PersistedRoom {
   const playing = createV2Playing();
   const { pendingAuction: _pendingAuction, ...room } = playing;
@@ -832,6 +863,26 @@ describe("legacy persisted-room migration", () => {
     expect(storage.roomPutCount).toBe(1);
     await expect(new RoomStore(storage).load(10_000)).resolves.toEqual(loaded);
     expect(storage.roomPutCount).toBe(1);
+  });
+
+  it.each([
+    ["setup", (raw: Record<string, unknown>) => { gameRecord(raw).setup = undefined; }],
+    ["pendingPlayerTrade", (raw: Record<string, unknown>) => { matchRecord(raw).pendingPlayerTrade = undefined; }],
+    ["log params", (raw: Record<string, unknown>) => { gameRecord(raw).log[0].params = undefined; }],
+    ["log messageKey", (raw: Record<string, unknown>) => { gameRecord(raw).log[0].messageKey = undefined; }],
+    ["longestRoadOwnerId", (raw: Record<string, unknown>) => { gameRecord(raw).longestRoadOwnerId = undefined; }]
+  ] as const)("rejects an M1 own-undefined %s field without writing", async (_name, mutate) => {
+    const raw = structuredClone(createV2M1Playing()) as unknown as Record<string, unknown>;
+    mutate(raw);
+    const before = snapshotOwnValues(raw);
+    const storage = new CountingStorage();
+    storage.values.set(ROOM_RECORD_KEY, raw);
+
+    await expect(new RoomStore(storage).load(10_000)).rejects.toBeInstanceOf(RoomSchemaError);
+
+    expect(storage.values.get(ROOM_RECORD_KEY)).toBe(raw);
+    expect(snapshotOwnValues(storage.values.get(ROOM_RECORD_KEY))).toEqual(before);
+    expect(storage.roomPutCount).toBe(0);
   });
 
   it.each([
