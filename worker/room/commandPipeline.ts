@@ -21,6 +21,7 @@ import {
   prepareCryptographicM1MapSeed
 } from "../crypto";
 import { RoomLifecycleError, restartRoom, setLobbyReady, startLobby } from "./roomLifecycle";
+import { createRestartAttemptLimiter } from "./restartAttemptLimiter";
 import type { LatestRoomMutation, LatestRoomMutationResult } from "./roomStore";
 import type { PersistedRoom, PersistedSeat } from "./roomTypes";
 
@@ -318,20 +319,7 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
   const project = dependencies.projectRoom ?? projectRoomView;
   const rateLimit = dependencies.rateLimit ?? { maximum: 10, windowMs: 2_000 };
   const audit = dependencies.audit ?? ((record: CommandAuditRecord) => console.log(record));
-  const restartAttemptTimestamps = new Map<string, number[]>();
-
-  function restartRateLimited(roomCode: string, seatId: string, now: number): boolean {
-    const key = `${roomCode}\0${seatId}`;
-    const recent = (restartAttemptTimestamps.get(key) ?? [])
-      .filter((timestamp) => timestamp > now - rateLimit.windowMs);
-    if (recent.length >= rateLimit.maximum) {
-      restartAttemptTimestamps.set(key, recent);
-      return true;
-    }
-    recent.push(now);
-    restartAttemptTimestamps.set(key, recent.slice(-rateLimit.maximum));
-    return false;
-  }
+  const restartAttemptLimiter = createRestartAttemptLimiter(rateLimit);
 
   async function emitAudit(
     roomCode: string,
@@ -453,7 +441,7 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
         }
         return;
       }
-      let restartLimited: boolean | undefined;
+      let restartRateDecision: ReturnType<typeof restartAttemptLimiter.assess> | undefined;
 
       let mutation: LatestRoomMutationResult<MutationOutcome>;
       try {
@@ -469,14 +457,24 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
             return { kind: "unchanged", value: { kind: "duplicate", commandId: parsed.commandId } };
           }
           const restart = parsed.type === "room.restart";
-          const recent = restart
-            ? []
-            : seat.commandAttemptTimestamps
-                .filter((timestamp) => timestamp > input.now - rateLimit.windowMs);
-          const limited = restart
-            ? (restartLimited ??= restartRateLimited(room.roomCode, seat.seatId, input.now))
-            : recent.length >= rateLimit.maximum;
-          if (limited) {
+          const rateDecision = restart
+            ? (restartRateDecision ??= restartAttemptLimiter.assess({
+                roomCode: room.roomCode,
+                currentSeatIds: room.seats.map((candidate) => candidate.seatId),
+                seatId: seat.seatId,
+                persistedAttemptTimestamps: seat.commandAttemptTimestamps,
+                now: input.now,
+                recordRestartAttempt: true
+              }))
+            : restartAttemptLimiter.assess({
+                roomCode: room.roomCode,
+                currentSeatIds: room.seats.map((candidate) => candidate.seatId),
+                seatId: seat.seatId,
+                persistedAttemptTimestamps: seat.commandAttemptTimestamps,
+                now: input.now,
+                recordRestartAttempt: false
+              });
+          if (rateDecision.limited) {
             return {
               kind: "unchanged",
               value: { kind: "rejected", commandId: parsed.commandId, code: "RATE_LIMITED" }
@@ -487,7 +485,8 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
             : withAttemptTimestamps(
                 room,
                 seat.seatId,
-                [...recent, input.now].sort((left, right) => left - right)
+                [...rateDecision.recentPersistedAttemptTimestamps, input.now]
+                  .sort((left, right) => left - right)
               );
           if (parsed.expectedVersion !== room.roomVersion) {
             if (parsed.type === "room.restart") {

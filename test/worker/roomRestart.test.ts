@@ -477,6 +477,86 @@ describe("room restart command pipeline", () => {
     }
   });
 
+  it("shares one rate budget between failed restarts and ordinary commands", async () => {
+    const room = createLobby({
+      roomCode: "ABC234",
+      seatId: "seat-1",
+      nickname: "Host",
+      tokenHash: "A".repeat(43)
+    }, 1_000);
+    const original = structuredClone(room);
+    const store = new MemoryCommandStore(structuredClone(room));
+    const peers = recipientSet("seat-1");
+    const pipeline = createCommandPipeline({
+      store,
+      audit: vi.fn(),
+      rateLimit: { maximum: 3, windowMs: 2_000 }
+    });
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await pipeline.handle({
+        seatId: "seat-1",
+        rawMessage: restartCommand(restartAttemptId(attempt), room.roomVersion, "fresh"),
+        now: 50_000 + attempt,
+        presence: NO_PRESENCE,
+        recipients: peers.recipients
+      });
+      expect(store.commits).toBe(0);
+      expect(store.room).toEqual(original);
+      expect(peers.messages.get("seat-1")?.at(-1)).toMatchObject({
+        type: "command.rejected",
+        error: { code: "COMMAND_NOT_ALLOWED" }
+      });
+    }
+
+    await pipeline.handle({
+      seatId: "seat-1",
+      rawMessage: JSON.stringify({
+        type: "room.ready",
+        commandId: COMMAND_IDS[0],
+        expectedVersion: room.roomVersion,
+        ready: true
+      }),
+      now: 50_002,
+      presence: NO_PRESENCE,
+      recipients: peers.recipients
+    });
+
+    expect(store.commits).toBe(1);
+    expect(store.room!.seats[0]).toMatchObject({
+      ready: true,
+      commandAttemptTimestamps: [50_002]
+    });
+    expect(peers.messages.get("seat-1")?.at(-1)).toMatchObject({
+      type: "room.snapshot",
+      acknowledgedCommandId: COMMAND_IDS[0]
+    });
+
+    await pipeline.handle({
+      seatId: "seat-1",
+      rawMessage: JSON.stringify({
+        type: "room.ready",
+        commandId: COMMAND_IDS[1],
+        expectedVersion: store.room!.roomVersion,
+        ready: false
+      }),
+      now: 50_003,
+      presence: NO_PRESENCE,
+      recipients: peers.recipients
+    });
+
+    expect(store.commits).toBe(1);
+    expect(store.room!.seats[0]).toMatchObject({
+      ready: true,
+      commandAttemptTimestamps: [50_002]
+    });
+    expect(peers.messages.get("seat-1")?.at(-1)).toMatchObject({
+      type: "command.rejected",
+      commandId: COMMAND_IDS[1],
+      error: { code: "RATE_LIMITED" }
+    });
+  });
+
   it("serializes two concurrent host restarts so only one reset and seed commit", async () => {
     const room = scenarioRoom("normal play");
     const store = new SerializedCommandStore(room);
