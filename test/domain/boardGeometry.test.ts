@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createStandardBoardData } from "../../src/domain/board";
+import { parseMapSeed } from "../../src/domain/mapSeed";
+import { createBoardDataForSeed } from "../../src/domain/randomBoard";
 import {
   boardViewBox,
   edgeProjection,
@@ -8,14 +9,18 @@ import {
   vertexProjection
 } from "../../src/ui/boardGeometry";
 
+const geometrySeed = parseMapSeed("M1-1234567890ABCDEF");
+
 describe("board SVG geometry", () => {
   it("projects neighboring hexes onto a shared vertex point", () => {
-    const { board } = createStandardBoardData();
-    const first = board.find((hex) => hex.id === "forest-4");
-    const second = board.find((hex) => hex.id === "field-11-a");
+    const { board } = createBoardDataForSeed(geometrySeed);
+    const first = board[0];
+    const second = board.find(
+      (hex) => hex.id !== first.id && hex.vertexIds.some((vertexId) => first.vertexIds.includes(vertexId))
+    );
 
     if (!first || !second) {
-      throw new Error("Expected demo board hexes to exist.");
+      throw new Error("Expected neighboring standard board hexes to exist.");
     }
 
     const sharedVertexId = first.vertexIds.find((vertexId) => second.vertexIds.includes(vertexId));
@@ -33,7 +38,7 @@ describe("board SVG geometry", () => {
   });
 
   it("projects roads exactly between the shared board vertices", () => {
-    const { board, edges } = createStandardBoardData();
+    const { board, edges } = createBoardDataForSeed(geometrySeed);
     const roadEdge = edges[0];
     const projected = edgeProjection(board, roadEdge);
     const from = vertexProjection(board, roadEdge.vertexIds[0]);
@@ -44,7 +49,7 @@ describe("board SVG geometry", () => {
   });
 
   it("keeps all rendered hex centers inside the board viewbox", () => {
-    const { board } = createStandardBoardData();
+    const { board } = createBoardDataForSeed(geometrySeed);
 
     for (const hex of board) {
       const center = hexCenterPoint(hex);

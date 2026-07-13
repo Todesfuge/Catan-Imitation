@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { createStandardBoardData } from "../../src/domain/board";
+import { parseMapSeed } from "../../src/domain/mapSeed";
+import { createBoardDataForSeed } from "../../src/domain/randomBoard";
 import { createDemoGame } from "../../src/domain/setup";
 import { collectProduction } from "../../src/domain/rules/production";
 import type { ResourceMap } from "../../src/domain/types";
 
+const productionSeed = parseMapSeed("M1-0F1E2D3C4B5A6978");
+
 describe("dice production", () => {
   it("uses shared intersections and edges across neighboring hexes", () => {
-    const { board, edges } = createStandardBoardData();
+    const { board, edges } = createBoardDataForSeed(productionSeed);
     const vertexUseCounts = new Map<string, number>();
 
     for (const hex of board) {
@@ -23,10 +26,29 @@ describe("dice production", () => {
   });
 
   it("produces from every terrain adjacent to a shared settlement vertex", () => {
-    const game = createDemoGame();
-    const sharedVertexId = game.board.find((hex) => hex.id === "pasture-8")?.vertexIds[1];
+    const generated = createBoardDataForSeed(productionSeed);
+    const desert = generated.board.find((hex) => hex.terrain === "desert");
+    const game = {
+      ...createDemoGame(),
+      ...generated,
+      buildings: [],
+      robberHexId: desert?.id ?? ""
+    };
+    const vertexUseCounts = new Map<string, number>();
+    for (const hex of game.board.filter((candidate) => candidate.resource !== null)) {
+      for (const vertexId of hex.vertexIds) {
+        vertexUseCounts.set(vertexId, (vertexUseCounts.get(vertexId) ?? 0) + 1);
+      }
+    }
+    const sharedVertexId = [...vertexUseCounts].find(([, count]) => count === 3)?.[0];
     const adjacentHexes = game.board.filter((hex) => hex.vertexIds.includes(sharedVertexId ?? ""));
     const adjacentHexIds = adjacentHexes.map((hex) => hex.id);
+    const expected: ResourceMap = { wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 };
+    for (const hex of adjacentHexes) {
+      if (hex.resource) {
+        expected[hex.resource] += 1;
+      }
+    }
 
     expect(adjacentHexes).toHaveLength(3);
 
@@ -49,13 +71,7 @@ describe("dice production", () => {
       11
     );
 
-    expect(production.byPlayer.p1).toMatchObject<ResourceMap>({
-      wood: 0,
-      brick: 1,
-      wool: 1,
-      grain: 1,
-      ore: 0
-    });
+    expect(production.byPlayer.p1).toMatchObject<ResourceMap>(expected);
     expect(production.events.map((event) => event.hexId).sort()).toEqual(adjacentHexIds.sort());
   });
 
@@ -81,14 +97,13 @@ describe("dice production", () => {
   });
 
   it("blocks production on the robber hex", () => {
-    const game = {
-      ...createDemoGame(),
-      robberHexId: "pasture-8"
-    };
+    const base = createDemoGame();
+    const blockedHex = base.board.find((hex) => hex.terrain === "pasture" && hex.diceNumber === 8);
+    const game = { ...base, robberHexId: blockedHex?.id ?? "" };
 
     const production = collectProduction(game, 8);
 
     expect(production.byPlayer.p1.wool).toBe(0);
-    expect(production.events.every((event) => event.hexId !== "pasture-8")).toBe(true);
+    expect(production.events.every((event) => event.hexId !== blockedHex?.id)).toBe(true);
   });
 });

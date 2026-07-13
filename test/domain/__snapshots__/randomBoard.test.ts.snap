@@ -1,0 +1,3361 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`bounded deterministic board generation > publishes the complete M1 layout for M1-0000000000000000 1`] = `
+"{
+  "board": [
+    {
+      "id": "hex-00",
+      "terrain": "mountain",
+      "resource": "ore",
+      "diceNumber": 8,
+      "q": 0,
+      "r": -2,
+      "vertexIds": [
+        "vertex-00",
+        "vertex-01",
+        "vertex-02",
+        "vertex-03",
+        "vertex-04",
+        "vertex-05"
+      ],
+      "edgeIds": [
+        "edge-00",
+        "edge-01",
+        "edge-02",
+        "edge-03",
+        "edge-04",
+        "edge-05"
+      ]
+    },
+    {
+      "id": "hex-01",
+      "terrain": "forest",
+      "resource": "wood",
+      "diceNumber": 10,
+      "q": 1,
+      "r": -2,
+      "vertexIds": [
+        "vertex-06",
+        "vertex-07",
+        "vertex-08",
+        "vertex-09",
+        "vertex-02",
+        "vertex-01"
+      ],
+      "edgeIds": [
+        "edge-06",
+        "edge-07",
+        "edge-08",
+        "edge-09",
+        "edge-01",
+        "edge-10"
+      ]
+    },
+    {
+      "id": "hex-02",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 12,
+      "q": 2,
+      "r": -2,
+      "vertexIds": [
+        "vertex-10",
+        "vertex-11",
+        "vertex-12",
+        "vertex-13",
+        "vertex-08",
+        "vertex-07"
+      ],
+      "edgeIds": [
+        "edge-11",
+        "edge-12",
+        "edge-13",
+        "edge-14",
+        "edge-07",
+        "edge-15"
+      ]
+    },
+    {
+      "id": "hex-03",
+      "terrain": "desert",
+      "resource": null,
+      "diceNumber": null,
+      "q": -1,
+      "r": -1,
+      "vertexIds": [
+        "vertex-04",
+        "vertex-03",
+        "vertex-14",
+        "vertex-15",
+        "vertex-16",
+        "vertex-17"
+      ],
+      "edgeIds": [
+        "edge-03",
+        "edge-16",
+        "edge-17",
+        "edge-18",
+        "edge-19",
+        "edge-20"
+      ]
+    },
+    {
+      "id": "hex-04",
+      "terrain": "field",
+      "resource": "grain",
+      "diceNumber": 3,
+      "q": 0,
+      "r": -1,
+      "vertexIds": [
+        "vertex-02",
+        "vertex-09",
+        "vertex-18",
+        "vertex-19",
+        "vertex-14",
+        "vertex-03"
+      ],
+      "edgeIds": [
+        "edge-09",
+        "edge-21",
+        "edge-22",
+        "edge-23",
+        "edge-16",
+        "edge-02"
+      ]
+    },
+    {
+      "id": "hex-05",
+      "terrain": "field",
+      "resource": "grain",
+      "diceNumber": 2,
+      "q": 1,
+      "r": -1,
+      "vertexIds": [
+        "vertex-08",
+        "vertex-13",
+        "vertex-20",
+        "vertex-21",
+        "vertex-18",
+        "vertex-09"
+      ],
+      "edgeIds": [
+        "edge-14",
+        "edge-24",
+        "edge-25",
+        "edge-26",
+        "edge-21",
+        "edge-08"
+      ]
+    },
+    {
+      "id": "hex-06",
+      "terrain": "hill",
+      "resource": "brick",
+      "diceNumber": 6,
+      "q": 2,
+      "r": -1,
+      "vertexIds": [
+        "vertex-12",
+        "vertex-22",
+        "vertex-23",
+        "vertex-24",
+        "vertex-20",
+        "vertex-13"
+      ],
+      "edgeIds": [
+        "edge-27",
+        "edge-28",
+        "edge-29",
+        "edge-30",
+        "edge-24",
+        "edge-13"
+      ]
+    },
+    {
+      "id": "hex-07",
+      "terrain": "field",
+      "resource": "grain",
+      "diceNumber": 10,
+      "q": -2,
+      "r": 0,
+      "vertexIds": [
+        "vertex-16",
+        "vertex-15",
+        "vertex-25",
+        "vertex-26",
+        "vertex-27",
+        "vertex-28"
+      ],
+      "edgeIds": [
+        "edge-18",
+        "edge-31",
+        "edge-32",
+        "edge-33",
+        "edge-34",
+        "edge-35"
+      ]
+    },
+    {
+      "id": "hex-08",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 4,
+      "q": -1,
+      "r": 0,
+      "vertexIds": [
+        "vertex-14",
+        "vertex-19",
+        "vertex-29",
+        "vertex-30",
+        "vertex-25",
+        "vertex-15"
+      ],
+      "edgeIds": [
+        "edge-23",
+        "edge-36",
+        "edge-37",
+        "edge-38",
+        "edge-31",
+        "edge-17"
+      ]
+    },
+    {
+      "id": "hex-09",
+      "terrain": "mountain",
+      "resource": "ore",
+      "diceNumber": 11,
+      "q": 0,
+      "r": 0,
+      "vertexIds": [
+        "vertex-18",
+        "vertex-21",
+        "vertex-31",
+        "vertex-32",
+        "vertex-29",
+        "vertex-19"
+      ],
+      "edgeIds": [
+        "edge-26",
+        "edge-39",
+        "edge-40",
+        "edge-41",
+        "edge-36",
+        "edge-22"
+      ]
+    },
+    {
+      "id": "hex-10",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 9,
+      "q": 1,
+      "r": 0,
+      "vertexIds": [
+        "vertex-20",
+        "vertex-24",
+        "vertex-33",
+        "vertex-34",
+        "vertex-31",
+        "vertex-21"
+      ],
+      "edgeIds": [
+        "edge-30",
+        "edge-42",
+        "edge-43",
+        "edge-44",
+        "edge-39",
+        "edge-25"
+      ]
+    },
+    {
+      "id": "hex-11",
+      "terrain": "forest",
+      "resource": "wood",
+      "diceNumber": 5,
+      "q": 2,
+      "r": 0,
+      "vertexIds": [
+        "vertex-23",
+        "vertex-35",
+        "vertex-36",
+        "vertex-37",
+        "vertex-33",
+        "vertex-24"
+      ],
+      "edgeIds": [
+        "edge-45",
+        "edge-46",
+        "edge-47",
+        "edge-48",
+        "edge-42",
+        "edge-29"
+      ]
+    },
+    {
+      "id": "hex-12",
+      "terrain": "forest",
+      "resource": "wood",
+      "diceNumber": 6,
+      "q": -2,
+      "r": 1,
+      "vertexIds": [
+        "vertex-25",
+        "vertex-30",
+        "vertex-38",
+        "vertex-39",
+        "vertex-40",
+        "vertex-26"
+      ],
+      "edgeIds": [
+        "edge-38",
+        "edge-49",
+        "edge-50",
+        "edge-51",
+        "edge-52",
+        "edge-32"
+      ]
+    },
+    {
+      "id": "hex-13",
+      "terrain": "field",
+      "resource": "grain",
+      "diceNumber": 3,
+      "q": -1,
+      "r": 1,
+      "vertexIds": [
+        "vertex-29",
+        "vertex-32",
+        "vertex-41",
+        "vertex-42",
+        "vertex-38",
+        "vertex-30"
+      ],
+      "edgeIds": [
+        "edge-41",
+        "edge-53",
+        "edge-54",
+        "edge-55",
+        "edge-49",
+        "edge-37"
+      ]
+    },
+    {
+      "id": "hex-14",
+      "terrain": "hill",
+      "resource": "brick",
+      "diceNumber": 5,
+      "q": 0,
+      "r": 1,
+      "vertexIds": [
+        "vertex-31",
+        "vertex-34",
+        "vertex-43",
+        "vertex-44",
+        "vertex-41",
+        "vertex-32"
+      ],
+      "edgeIds": [
+        "edge-44",
+        "edge-56",
+        "edge-57",
+        "edge-58",
+        "edge-53",
+        "edge-40"
+      ]
+    },
+    {
+      "id": "hex-15",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 9,
+      "q": 1,
+      "r": 1,
+      "vertexIds": [
+        "vertex-33",
+        "vertex-37",
+        "vertex-45",
+        "vertex-46",
+        "vertex-43",
+        "vertex-34"
+      ],
+      "edgeIds": [
+        "edge-48",
+        "edge-59",
+        "edge-60",
+        "edge-61",
+        "edge-56",
+        "edge-43"
+      ]
+    },
+    {
+      "id": "hex-16",
+      "terrain": "mountain",
+      "resource": "ore",
+      "diceNumber": 4,
+      "q": -2,
+      "r": 2,
+      "vertexIds": [
+        "vertex-38",
+        "vertex-42",
+        "vertex-47",
+        "vertex-48",
+        "vertex-49",
+        "vertex-39"
+      ],
+      "edgeIds": [
+        "edge-55",
+        "edge-62",
+        "edge-63",
+        "edge-64",
+        "edge-65",
+        "edge-50"
+      ]
+    },
+    {
+      "id": "hex-17",
+      "terrain": "hill",
+      "resource": "brick",
+      "diceNumber": 11,
+      "q": -1,
+      "r": 2,
+      "vertexIds": [
+        "vertex-41",
+        "vertex-44",
+        "vertex-50",
+        "vertex-51",
+        "vertex-47",
+        "vertex-42"
+      ],
+      "edgeIds": [
+        "edge-58",
+        "edge-66",
+        "edge-67",
+        "edge-68",
+        "edge-62",
+        "edge-54"
+      ]
+    },
+    {
+      "id": "hex-18",
+      "terrain": "forest",
+      "resource": "wood",
+      "diceNumber": 8,
+      "q": 0,
+      "r": 2,
+      "vertexIds": [
+        "vertex-43",
+        "vertex-46",
+        "vertex-52",
+        "vertex-53",
+        "vertex-50",
+        "vertex-44"
+      ],
+      "edgeIds": [
+        "edge-61",
+        "edge-69",
+        "edge-70",
+        "edge-71",
+        "edge-66",
+        "edge-57"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-00",
+      "hexId": "hex-00",
+      "vertexIds": [
+        "vertex-00",
+        "vertex-01"
+      ]
+    },
+    {
+      "id": "edge-01",
+      "hexId": "hex-00",
+      "vertexIds": [
+        "vertex-01",
+        "vertex-02"
+      ]
+    },
+    {
+      "id": "edge-02",
+      "hexId": "hex-00",
+      "vertexIds": [
+        "vertex-02",
+        "vertex-03"
+      ]
+    },
+    {
+      "id": "edge-03",
+      "hexId": "hex-00",
+      "vertexIds": [
+        "vertex-03",
+        "vertex-04"
+      ]
+    },
+    {
+      "id": "edge-04",
+      "hexId": "hex-00",
+      "vertexIds": [
+        "vertex-04",
+        "vertex-05"
+      ]
+    },
+    {
+      "id": "edge-05",
+      "hexId": "hex-00",
+      "vertexIds": [
+        "vertex-05",
+        "vertex-00"
+      ]
+    },
+    {
+      "id": "edge-06",
+      "hexId": "hex-01",
+      "vertexIds": [
+        "vertex-06",
+        "vertex-07"
+      ]
+    },
+    {
+      "id": "edge-07",
+      "hexId": "hex-01",
+      "vertexIds": [
+        "vertex-07",
+        "vertex-08"
+      ]
+    },
+    {
+      "id": "edge-08",
+      "hexId": "hex-01",
+      "vertexIds": [
+        "vertex-08",
+        "vertex-09"
+      ]
+    },
+    {
+      "id": "edge-09",
+      "hexId": "hex-01",
+      "vertexIds": [
+        "vertex-09",
+        "vertex-02"
+      ]
+    },
+    {
+      "id": "edge-10",
+      "hexId": "hex-01",
+      "vertexIds": [
+        "vertex-01",
+        "vertex-06"
+      ]
+    },
+    {
+      "id": "edge-11",
+      "hexId": "hex-02",
+      "vertexIds": [
+        "vertex-10",
+        "vertex-11"
+      ]
+    },
+    {
+      "id": "edge-12",
+      "hexId": "hex-02",
+      "vertexIds": [
+        "vertex-11",
+        "vertex-12"
+      ]
+    },
+    {
+      "id": "edge-13",
+      "hexId": "hex-02",
+      "vertexIds": [
+        "vertex-12",
+        "vertex-13"
+      ]
+    },
+    {
+      "id": "edge-14",
+      "hexId": "hex-02",
+      "vertexIds": [
+        "vertex-13",
+        "vertex-08"
+      ]
+    },
+    {
+      "id": "edge-15",
+      "hexId": "hex-02",
+      "vertexIds": [
+        "vertex-07",
+        "vertex-10"
+      ]
+    },
+    {
+      "id": "edge-16",
+      "hexId": "hex-03",
+      "vertexIds": [
+        "vertex-03",
+        "vertex-14"
+      ]
+    },
+    {
+      "id": "edge-17",
+      "hexId": "hex-03",
+      "vertexIds": [
+        "vertex-14",
+        "vertex-15"
+      ]
+    },
+    {
+      "id": "edge-18",
+      "hexId": "hex-03",
+      "vertexIds": [
+        "vertex-15",
+        "vertex-16"
+      ]
+    },
+    {
+      "id": "edge-19",
+      "hexId": "hex-03",
+      "vertexIds": [
+        "vertex-16",
+        "vertex-17"
+      ]
+    },
+    {
+      "id": "edge-20",
+      "hexId": "hex-03",
+      "vertexIds": [
+        "vertex-17",
+        "vertex-04"
+      ]
+    },
+    {
+      "id": "edge-21",
+      "hexId": "hex-04",
+      "vertexIds": [
+        "vertex-09",
+        "vertex-18"
+      ]
+    },
+    {
+      "id": "edge-22",
+      "hexId": "hex-04",
+      "vertexIds": [
+        "vertex-18",
+        "vertex-19"
+      ]
+    },
+    {
+      "id": "edge-23",
+      "hexId": "hex-04",
+      "vertexIds": [
+        "vertex-19",
+        "vertex-14"
+      ]
+    },
+    {
+      "id": "edge-24",
+      "hexId": "hex-05",
+      "vertexIds": [
+        "vertex-13",
+        "vertex-20"
+      ]
+    },
+    {
+      "id": "edge-25",
+      "hexId": "hex-05",
+      "vertexIds": [
+        "vertex-20",
+        "vertex-21"
+      ]
+    },
+    {
+      "id": "edge-26",
+      "hexId": "hex-05",
+      "vertexIds": [
+        "vertex-21",
+        "vertex-18"
+      ]
+    },
+    {
+      "id": "edge-27",
+      "hexId": "hex-06",
+      "vertexIds": [
+        "vertex-12",
+        "vertex-22"
+      ]
+    },
+    {
+      "id": "edge-28",
+      "hexId": "hex-06",
+      "vertexIds": [
+        "vertex-22",
+        "vertex-23"
+      ]
+    },
+    {
+      "id": "edge-29",
+      "hexId": "hex-06",
+      "vertexIds": [
+        "vertex-23",
+        "vertex-24"
+      ]
+    },
+    {
+      "id": "edge-30",
+      "hexId": "hex-06",
+      "vertexIds": [
+        "vertex-24",
+        "vertex-20"
+      ]
+    },
+    {
+      "id": "edge-31",
+      "hexId": "hex-07",
+      "vertexIds": [
+        "vertex-15",
+        "vertex-25"
+      ]
+    },
+    {
+      "id": "edge-32",
+      "hexId": "hex-07",
+      "vertexIds": [
+        "vertex-25",
+        "vertex-26"
+      ]
+    },
+    {
+      "id": "edge-33",
+      "hexId": "hex-07",
+      "vertexIds": [
+        "vertex-26",
+        "vertex-27"
+      ]
+    },
+    {
+      "id": "edge-34",
+      "hexId": "hex-07",
+      "vertexIds": [
+        "vertex-27",
+        "vertex-28"
+      ]
+    },
+    {
+      "id": "edge-35",
+      "hexId": "hex-07",
+      "vertexIds": [
+        "vertex-28",
+        "vertex-16"
+      ]
+    },
+    {
+      "id": "edge-36",
+      "hexId": "hex-08",
+      "vertexIds": [
+        "vertex-19",
+        "vertex-29"
+      ]
+    },
+    {
+      "id": "edge-37",
+      "hexId": "hex-08",
+      "vertexIds": [
+        "vertex-29",
+        "vertex-30"
+      ]
+    },
+    {
+      "id": "edge-38",
+      "hexId": "hex-08",
+      "vertexIds": [
+        "vertex-30",
+        "vertex-25"
+      ]
+    },
+    {
+      "id": "edge-39",
+      "hexId": "hex-09",
+      "vertexIds": [
+        "vertex-21",
+        "vertex-31"
+      ]
+    },
+    {
+      "id": "edge-40",
+      "hexId": "hex-09",
+      "vertexIds": [
+        "vertex-31",
+        "vertex-32"
+      ]
+    },
+    {
+      "id": "edge-41",
+      "hexId": "hex-09",
+      "vertexIds": [
+        "vertex-32",
+        "vertex-29"
+      ]
+    },
+    {
+      "id": "edge-42",
+      "hexId": "hex-10",
+      "vertexIds": [
+        "vertex-24",
+        "vertex-33"
+      ]
+    },
+    {
+      "id": "edge-43",
+      "hexId": "hex-10",
+      "vertexIds": [
+        "vertex-33",
+        "vertex-34"
+      ]
+    },
+    {
+      "id": "edge-44",
+      "hexId": "hex-10",
+      "vertexIds": [
+        "vertex-34",
+        "vertex-31"
+      ]
+    },
+    {
+      "id": "edge-45",
+      "hexId": "hex-11",
+      "vertexIds": [
+        "vertex-23",
+        "vertex-35"
+      ]
+    },
+    {
+      "id": "edge-46",
+      "hexId": "hex-11",
+      "vertexIds": [
+        "vertex-35",
+        "vertex-36"
+      ]
+    },
+    {
+      "id": "edge-47",
+      "hexId": "hex-11",
+      "vertexIds": [
+        "vertex-36",
+        "vertex-37"
+      ]
+    },
+    {
+      "id": "edge-48",
+      "hexId": "hex-11",
+      "vertexIds": [
+        "vertex-37",
+        "vertex-33"
+      ]
+    },
+    {
+      "id": "edge-49",
+      "hexId": "hex-12",
+      "vertexIds": [
+        "vertex-30",
+        "vertex-38"
+      ]
+    },
+    {
+      "id": "edge-50",
+      "hexId": "hex-12",
+      "vertexIds": [
+        "vertex-38",
+        "vertex-39"
+      ]
+    },
+    {
+      "id": "edge-51",
+      "hexId": "hex-12",
+      "vertexIds": [
+        "vertex-39",
+        "vertex-40"
+      ]
+    },
+    {
+      "id": "edge-52",
+      "hexId": "hex-12",
+      "vertexIds": [
+        "vertex-40",
+        "vertex-26"
+      ]
+    },
+    {
+      "id": "edge-53",
+      "hexId": "hex-13",
+      "vertexIds": [
+        "vertex-32",
+        "vertex-41"
+      ]
+    },
+    {
+      "id": "edge-54",
+      "hexId": "hex-13",
+      "vertexIds": [
+        "vertex-41",
+        "vertex-42"
+      ]
+    },
+    {
+      "id": "edge-55",
+      "hexId": "hex-13",
+      "vertexIds": [
+        "vertex-42",
+        "vertex-38"
+      ]
+    },
+    {
+      "id": "edge-56",
+      "hexId": "hex-14",
+      "vertexIds": [
+        "vertex-34",
+        "vertex-43"
+      ]
+    },
+    {
+      "id": "edge-57",
+      "hexId": "hex-14",
+      "vertexIds": [
+        "vertex-43",
+        "vertex-44"
+      ]
+    },
+    {
+      "id": "edge-58",
+      "hexId": "hex-14",
+      "vertexIds": [
+        "vertex-44",
+        "vertex-41"
+      ]
+    },
+    {
+      "id": "edge-59",
+      "hexId": "hex-15",
+      "vertexIds": [
+        "vertex-37",
+        "vertex-45"
+      ]
+    },
+    {
+      "id": "edge-60",
+      "hexId": "hex-15",
+      "vertexIds": [
+        "vertex-45",
+        "vertex-46"
+      ]
+    },
+    {
+      "id": "edge-61",
+      "hexId": "hex-15",
+      "vertexIds": [
+        "vertex-46",
+        "vertex-43"
+      ]
+    },
+    {
+      "id": "edge-62",
+      "hexId": "hex-16",
+      "vertexIds": [
+        "vertex-42",
+        "vertex-47"
+      ]
+    },
+    {
+      "id": "edge-63",
+      "hexId": "hex-16",
+      "vertexIds": [
+        "vertex-47",
+        "vertex-48"
+      ]
+    },
+    {
+      "id": "edge-64",
+      "hexId": "hex-16",
+      "vertexIds": [
+        "vertex-48",
+        "vertex-49"
+      ]
+    },
+    {
+      "id": "edge-65",
+      "hexId": "hex-16",
+      "vertexIds": [
+        "vertex-49",
+        "vertex-39"
+      ]
+    },
+    {
+      "id": "edge-66",
+      "hexId": "hex-17",
+      "vertexIds": [
+        "vertex-44",
+        "vertex-50"
+      ]
+    },
+    {
+      "id": "edge-67",
+      "hexId": "hex-17",
+      "vertexIds": [
+        "vertex-50",
+        "vertex-51"
+      ]
+    },
+    {
+      "id": "edge-68",
+      "hexId": "hex-17",
+      "vertexIds": [
+        "vertex-51",
+        "vertex-47"
+      ]
+    },
+    {
+      "id": "edge-69",
+      "hexId": "hex-18",
+      "vertexIds": [
+        "vertex-46",
+        "vertex-52"
+      ]
+    },
+    {
+      "id": "edge-70",
+      "hexId": "hex-18",
+      "vertexIds": [
+        "vertex-52",
+        "vertex-53"
+      ]
+    },
+    {
+      "id": "edge-71",
+      "hexId": "hex-18",
+      "vertexIds": [
+        "vertex-53",
+        "vertex-50"
+      ]
+    }
+  ],
+  "ports": [
+    {
+      "id": "port-edge-10",
+      "kind": "generic",
+      "vertexIds": [
+        "vertex-01",
+        "vertex-06"
+      ]
+    },
+    {
+      "id": "port-edge-27",
+      "kind": "generic",
+      "vertexIds": [
+        "vertex-12",
+        "vertex-22"
+      ]
+    },
+    {
+      "id": "port-edge-47",
+      "kind": "resource",
+      "resource": "wood",
+      "vertexIds": [
+        "vertex-36",
+        "vertex-37"
+      ]
+    },
+    {
+      "id": "port-edge-60",
+      "kind": "generic",
+      "vertexIds": [
+        "vertex-45",
+        "vertex-46"
+      ]
+    },
+    {
+      "id": "port-edge-70",
+      "kind": "resource",
+      "resource": "brick",
+      "vertexIds": [
+        "vertex-52",
+        "vertex-53"
+      ]
+    },
+    {
+      "id": "port-edge-67",
+      "kind": "resource",
+      "resource": "wool",
+      "vertexIds": [
+        "vertex-50",
+        "vertex-51"
+      ]
+    },
+    {
+      "id": "port-edge-63",
+      "kind": "generic",
+      "vertexIds": [
+        "vertex-47",
+        "vertex-48"
+      ]
+    },
+    {
+      "id": "port-edge-35",
+      "kind": "resource",
+      "resource": "ore",
+      "vertexIds": [
+        "vertex-28",
+        "vertex-16"
+      ]
+    },
+    {
+      "id": "port-edge-04",
+      "kind": "resource",
+      "resource": "grain",
+      "vertexIds": [
+        "vertex-04",
+        "vertex-05"
+      ]
+    }
+  ]
+}"
+`;
+
+exports[`bounded deterministic board generation > publishes the complete M1 layout for M1-0123456789ABCDEF 1`] = `
+"{
+  "board": [
+    {
+      "id": "hex-00",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 5,
+      "q": 0,
+      "r": -2,
+      "vertexIds": [
+        "vertex-00",
+        "vertex-01",
+        "vertex-02",
+        "vertex-03",
+        "vertex-04",
+        "vertex-05"
+      ],
+      "edgeIds": [
+        "edge-00",
+        "edge-01",
+        "edge-02",
+        "edge-03",
+        "edge-04",
+        "edge-05"
+      ]
+    },
+    {
+      "id": "hex-01",
+      "terrain": "mountain",
+      "resource": "ore",
+      "diceNumber": 10,
+      "q": 1,
+      "r": -2,
+      "vertexIds": [
+        "vertex-06",
+        "vertex-07",
+        "vertex-08",
+        "vertex-09",
+        "vertex-02",
+        "vertex-01"
+      ],
+      "edgeIds": [
+        "edge-06",
+        "edge-07",
+        "edge-08",
+        "edge-09",
+        "edge-01",
+        "edge-10"
+      ]
+    },
+    {
+      "id": "hex-02",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 8,
+      "q": 2,
+      "r": -2,
+      "vertexIds": [
+        "vertex-10",
+        "vertex-11",
+        "vertex-12",
+        "vertex-13",
+        "vertex-08",
+        "vertex-07"
+      ],
+      "edgeIds": [
+        "edge-11",
+        "edge-12",
+        "edge-13",
+        "edge-14",
+        "edge-07",
+        "edge-15"
+      ]
+    },
+    {
+      "id": "hex-03",
+      "terrain": "forest",
+      "resource": "wood",
+      "diceNumber": 10,
+      "q": -1,
+      "r": -1,
+      "vertexIds": [
+        "vertex-04",
+        "vertex-03",
+        "vertex-14",
+        "vertex-15",
+        "vertex-16",
+        "vertex-17"
+      ],
+      "edgeIds": [
+        "edge-03",
+        "edge-16",
+        "edge-17",
+        "edge-18",
+        "edge-19",
+        "edge-20"
+      ]
+    },
+    {
+      "id": "hex-04",
+      "terrain": "forest",
+      "resource": "wood",
+      "diceNumber": 9,
+      "q": 0,
+      "r": -1,
+      "vertexIds": [
+        "vertex-02",
+        "vertex-09",
+        "vertex-18",
+        "vertex-19",
+        "vertex-14",
+        "vertex-03"
+      ],
+      "edgeIds": [
+        "edge-09",
+        "edge-21",
+        "edge-22",
+        "edge-23",
+        "edge-16",
+        "edge-02"
+      ]
+    },
+    {
+      "id": "hex-05",
+      "terrain": "field",
+      "resource": "grain",
+      "diceNumber": 2,
+      "q": 1,
+      "r": -1,
+      "vertexIds": [
+        "vertex-08",
+        "vertex-13",
+        "vertex-20",
+        "vertex-21",
+        "vertex-18",
+        "vertex-09"
+      ],
+      "edgeIds": [
+        "edge-14",
+        "edge-24",
+        "edge-25",
+        "edge-26",
+        "edge-21",
+        "edge-08"
+      ]
+    },
+    {
+      "id": "hex-06",
+      "terrain": "forest",
+      "resource": "wood",
+      "diceNumber": 3,
+      "q": 2,
+      "r": -1,
+      "vertexIds": [
+        "vertex-12",
+        "vertex-22",
+        "vertex-23",
+        "vertex-24",
+        "vertex-20",
+        "vertex-13"
+      ],
+      "edgeIds": [
+        "edge-27",
+        "edge-28",
+        "edge-29",
+        "edge-30",
+        "edge-24",
+        "edge-13"
+      ]
+    },
+    {
+      "id": "hex-07",
+      "terrain": "field",
+      "resource": "grain",
+      "diceNumber": 5,
+      "q": -2,
+      "r": 0,
+      "vertexIds": [
+        "vertex-16",
+        "vertex-15",
+        "vertex-25",
+        "vertex-26",
+        "vertex-27",
+        "vertex-28"
+      ],
+      "edgeIds": [
+        "edge-18",
+        "edge-31",
+        "edge-32",
+        "edge-33",
+        "edge-34",
+        "edge-35"
+      ]
+    },
+    {
+      "id": "hex-08",
+      "terrain": "desert",
+      "resource": null,
+      "diceNumber": null,
+      "q": -1,
+      "r": 0,
+      "vertexIds": [
+        "vertex-14",
+        "vertex-19",
+        "vertex-29",
+        "vertex-30",
+        "vertex-25",
+        "vertex-15"
+      ],
+      "edgeIds": [
+        "edge-23",
+        "edge-36",
+        "edge-37",
+        "edge-38",
+        "edge-31",
+        "edge-17"
+      ]
+    },
+    {
+      "id": "hex-09",
+      "terrain": "field",
+      "resource": "grain",
+      "diceNumber": 6,
+      "q": 0,
+      "r": 0,
+      "vertexIds": [
+        "vertex-18",
+        "vertex-21",
+        "vertex-31",
+        "vertex-32",
+        "vertex-29",
+        "vertex-19"
+      ],
+      "edgeIds": [
+        "edge-26",
+        "edge-39",
+        "edge-40",
+        "edge-41",
+        "edge-36",
+        "edge-22"
+      ]
+    },
+    {
+      "id": "hex-10",
+      "terrain": "forest",
+      "resource": "wood",
+      "diceNumber": 11,
+      "q": 1,
+      "r": 0,
+      "vertexIds": [
+        "vertex-20",
+        "vertex-24",
+        "vertex-33",
+        "vertex-34",
+        "vertex-31",
+        "vertex-21"
+      ],
+      "edgeIds": [
+        "edge-30",
+        "edge-42",
+        "edge-43",
+        "edge-44",
+        "edge-39",
+        "edge-25"
+      ]
+    },
+    {
+      "id": "hex-11",
+      "terrain": "field",
+      "resource": "grain",
+      "diceNumber": 11,
+      "q": 2,
+      "r": 0,
+      "vertexIds": [
+        "vertex-23",
+        "vertex-35",
+        "vertex-36",
+        "vertex-37",
+        "vertex-33",
+        "vertex-24"
+      ],
+      "edgeIds": [
+        "edge-45",
+        "edge-46",
+        "edge-47",
+        "edge-48",
+        "edge-42",
+        "edge-29"
+      ]
+    },
+    {
+      "id": "hex-12",
+      "terrain": "hill",
+      "resource": "brick",
+      "diceNumber": 3,
+      "q": -2,
+      "r": 1,
+      "vertexIds": [
+        "vertex-25",
+        "vertex-30",
+        "vertex-38",
+        "vertex-39",
+        "vertex-40",
+        "vertex-26"
+      ],
+      "edgeIds": [
+        "edge-38",
+        "edge-49",
+        "edge-50",
+        "edge-51",
+        "edge-52",
+        "edge-32"
+      ]
+    },
+    {
+      "id": "hex-13",
+      "terrain": "mountain",
+      "resource": "ore",
+      "diceNumber": 4,
+      "q": -1,
+      "r": 1,
+      "vertexIds": [
+        "vertex-29",
+        "vertex-32",
+        "vertex-41",
+        "vertex-42",
+        "vertex-38",
+        "vertex-30"
+      ],
+      "edgeIds": [
+        "edge-41",
+        "edge-53",
+        "edge-54",
+        "edge-55",
+        "edge-49",
+        "edge-37"
+      ]
+    },
+    {
+      "id": "hex-14",
+      "terrain": "mountain",
+      "resource": "ore",
+      "diceNumber": 9,
+      "q": 0,
+      "r": 1,
+      "vertexIds": [
+        "vertex-31",
+        "vertex-34",
+        "vertex-43",
+        "vertex-44",
+        "vertex-41",
+        "vertex-32"
+      ],
+      "edgeIds": [
+        "edge-44",
+        "edge-56",
+        "edge-57",
+        "edge-58",
+        "edge-53",
+        "edge-40"
+      ]
+    },
+    {
+      "id": "hex-15",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 4,
+      "q": 1,
+      "r": 1,
+      "vertexIds": [
+        "vertex-33",
+        "vertex-37",
+        "vertex-45",
+        "vertex-46",
+        "vertex-43",
+        "vertex-34"
+      ],
+      "edgeIds": [
+        "edge-48",
+        "edge-59",
+        "edge-60",
+        "edge-61",
+        "edge-56",
+        "edge-43"
+      ]
+    },
+    {
+      "id": "hex-16",
+      "terrain": "hill",
+      "resource": "brick",
+      "diceNumber": 8,
+      "q": -2,
+      "r": 2,
+      "vertexIds": [
+        "vertex-38",
+        "vertex-42",
+        "vertex-47",
+        "vertex-48",
+        "vertex-49",
+        "vertex-39"
+      ],
+      "edgeIds": [
+        "edge-55",
+        "edge-62",
+        "edge-63",
+        "edge-64",
+        "edge-65",
+        "edge-50"
+      ]
+    },
+    {
+      "id": "hex-17",
+      "terrain": "hill",
+      "resource": "brick",
+      "diceNumber": 12,
+      "q": -1,
+      "r": 2,
+      "vertexIds": [
+        "vertex-41",
+        "vertex-44",
+        "vertex-50",
+        "vertex-51",
+        "vertex-47",
+        "vertex-42"
+      ],
+      "edgeIds": [
+        "edge-58",
+        "edge-66",
+        "edge-67",
+        "edge-68",
+        "edge-62",
+        "edge-54"
+      ]
+    },
+    {
+      "id": "hex-18",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 6,
+      "q": 0,
+      "r": 2,
+      "vertexIds": [
+        "vertex-43",
+        "vertex-46",
+        "vertex-52",
+        "vertex-53",
+        "vertex-50",
+        "vertex-44"
+      ],
+      "edgeIds": [
+        "edge-61",
+        "edge-69",
+        "edge-70",
+        "edge-71",
+        "edge-66",
+        "edge-57"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-00",
+      "hexId": "hex-00",
+      "vertexIds": [
+        "vertex-00",
+        "vertex-01"
+      ]
+    },
+    {
+      "id": "edge-01",
+      "hexId": "hex-00",
+      "vertexIds": [
+        "vertex-01",
+        "vertex-02"
+      ]
+    },
+    {
+      "id": "edge-02",
+      "hexId": "hex-00",
+      "vertexIds": [
+        "vertex-02",
+        "vertex-03"
+      ]
+    },
+    {
+      "id": "edge-03",
+      "hexId": "hex-00",
+      "vertexIds": [
+        "vertex-03",
+        "vertex-04"
+      ]
+    },
+    {
+      "id": "edge-04",
+      "hexId": "hex-00",
+      "vertexIds": [
+        "vertex-04",
+        "vertex-05"
+      ]
+    },
+    {
+      "id": "edge-05",
+      "hexId": "hex-00",
+      "vertexIds": [
+        "vertex-05",
+        "vertex-00"
+      ]
+    },
+    {
+      "id": "edge-06",
+      "hexId": "hex-01",
+      "vertexIds": [
+        "vertex-06",
+        "vertex-07"
+      ]
+    },
+    {
+      "id": "edge-07",
+      "hexId": "hex-01",
+      "vertexIds": [
+        "vertex-07",
+        "vertex-08"
+      ]
+    },
+    {
+      "id": "edge-08",
+      "hexId": "hex-01",
+      "vertexIds": [
+        "vertex-08",
+        "vertex-09"
+      ]
+    },
+    {
+      "id": "edge-09",
+      "hexId": "hex-01",
+      "vertexIds": [
+        "vertex-09",
+        "vertex-02"
+      ]
+    },
+    {
+      "id": "edge-10",
+      "hexId": "hex-01",
+      "vertexIds": [
+        "vertex-01",
+        "vertex-06"
+      ]
+    },
+    {
+      "id": "edge-11",
+      "hexId": "hex-02",
+      "vertexIds": [
+        "vertex-10",
+        "vertex-11"
+      ]
+    },
+    {
+      "id": "edge-12",
+      "hexId": "hex-02",
+      "vertexIds": [
+        "vertex-11",
+        "vertex-12"
+      ]
+    },
+    {
+      "id": "edge-13",
+      "hexId": "hex-02",
+      "vertexIds": [
+        "vertex-12",
+        "vertex-13"
+      ]
+    },
+    {
+      "id": "edge-14",
+      "hexId": "hex-02",
+      "vertexIds": [
+        "vertex-13",
+        "vertex-08"
+      ]
+    },
+    {
+      "id": "edge-15",
+      "hexId": "hex-02",
+      "vertexIds": [
+        "vertex-07",
+        "vertex-10"
+      ]
+    },
+    {
+      "id": "edge-16",
+      "hexId": "hex-03",
+      "vertexIds": [
+        "vertex-03",
+        "vertex-14"
+      ]
+    },
+    {
+      "id": "edge-17",
+      "hexId": "hex-03",
+      "vertexIds": [
+        "vertex-14",
+        "vertex-15"
+      ]
+    },
+    {
+      "id": "edge-18",
+      "hexId": "hex-03",
+      "vertexIds": [
+        "vertex-15",
+        "vertex-16"
+      ]
+    },
+    {
+      "id": "edge-19",
+      "hexId": "hex-03",
+      "vertexIds": [
+        "vertex-16",
+        "vertex-17"
+      ]
+    },
+    {
+      "id": "edge-20",
+      "hexId": "hex-03",
+      "vertexIds": [
+        "vertex-17",
+        "vertex-04"
+      ]
+    },
+    {
+      "id": "edge-21",
+      "hexId": "hex-04",
+      "vertexIds": [
+        "vertex-09",
+        "vertex-18"
+      ]
+    },
+    {
+      "id": "edge-22",
+      "hexId": "hex-04",
+      "vertexIds": [
+        "vertex-18",
+        "vertex-19"
+      ]
+    },
+    {
+      "id": "edge-23",
+      "hexId": "hex-04",
+      "vertexIds": [
+        "vertex-19",
+        "vertex-14"
+      ]
+    },
+    {
+      "id": "edge-24",
+      "hexId": "hex-05",
+      "vertexIds": [
+        "vertex-13",
+        "vertex-20"
+      ]
+    },
+    {
+      "id": "edge-25",
+      "hexId": "hex-05",
+      "vertexIds": [
+        "vertex-20",
+        "vertex-21"
+      ]
+    },
+    {
+      "id": "edge-26",
+      "hexId": "hex-05",
+      "vertexIds": [
+        "vertex-21",
+        "vertex-18"
+      ]
+    },
+    {
+      "id": "edge-27",
+      "hexId": "hex-06",
+      "vertexIds": [
+        "vertex-12",
+        "vertex-22"
+      ]
+    },
+    {
+      "id": "edge-28",
+      "hexId": "hex-06",
+      "vertexIds": [
+        "vertex-22",
+        "vertex-23"
+      ]
+    },
+    {
+      "id": "edge-29",
+      "hexId": "hex-06",
+      "vertexIds": [
+        "vertex-23",
+        "vertex-24"
+      ]
+    },
+    {
+      "id": "edge-30",
+      "hexId": "hex-06",
+      "vertexIds": [
+        "vertex-24",
+        "vertex-20"
+      ]
+    },
+    {
+      "id": "edge-31",
+      "hexId": "hex-07",
+      "vertexIds": [
+        "vertex-15",
+        "vertex-25"
+      ]
+    },
+    {
+      "id": "edge-32",
+      "hexId": "hex-07",
+      "vertexIds": [
+        "vertex-25",
+        "vertex-26"
+      ]
+    },
+    {
+      "id": "edge-33",
+      "hexId": "hex-07",
+      "vertexIds": [
+        "vertex-26",
+        "vertex-27"
+      ]
+    },
+    {
+      "id": "edge-34",
+      "hexId": "hex-07",
+      "vertexIds": [
+        "vertex-27",
+        "vertex-28"
+      ]
+    },
+    {
+      "id": "edge-35",
+      "hexId": "hex-07",
+      "vertexIds": [
+        "vertex-28",
+        "vertex-16"
+      ]
+    },
+    {
+      "id": "edge-36",
+      "hexId": "hex-08",
+      "vertexIds": [
+        "vertex-19",
+        "vertex-29"
+      ]
+    },
+    {
+      "id": "edge-37",
+      "hexId": "hex-08",
+      "vertexIds": [
+        "vertex-29",
+        "vertex-30"
+      ]
+    },
+    {
+      "id": "edge-38",
+      "hexId": "hex-08",
+      "vertexIds": [
+        "vertex-30",
+        "vertex-25"
+      ]
+    },
+    {
+      "id": "edge-39",
+      "hexId": "hex-09",
+      "vertexIds": [
+        "vertex-21",
+        "vertex-31"
+      ]
+    },
+    {
+      "id": "edge-40",
+      "hexId": "hex-09",
+      "vertexIds": [
+        "vertex-31",
+        "vertex-32"
+      ]
+    },
+    {
+      "id": "edge-41",
+      "hexId": "hex-09",
+      "vertexIds": [
+        "vertex-32",
+        "vertex-29"
+      ]
+    },
+    {
+      "id": "edge-42",
+      "hexId": "hex-10",
+      "vertexIds": [
+        "vertex-24",
+        "vertex-33"
+      ]
+    },
+    {
+      "id": "edge-43",
+      "hexId": "hex-10",
+      "vertexIds": [
+        "vertex-33",
+        "vertex-34"
+      ]
+    },
+    {
+      "id": "edge-44",
+      "hexId": "hex-10",
+      "vertexIds": [
+        "vertex-34",
+        "vertex-31"
+      ]
+    },
+    {
+      "id": "edge-45",
+      "hexId": "hex-11",
+      "vertexIds": [
+        "vertex-23",
+        "vertex-35"
+      ]
+    },
+    {
+      "id": "edge-46",
+      "hexId": "hex-11",
+      "vertexIds": [
+        "vertex-35",
+        "vertex-36"
+      ]
+    },
+    {
+      "id": "edge-47",
+      "hexId": "hex-11",
+      "vertexIds": [
+        "vertex-36",
+        "vertex-37"
+      ]
+    },
+    {
+      "id": "edge-48",
+      "hexId": "hex-11",
+      "vertexIds": [
+        "vertex-37",
+        "vertex-33"
+      ]
+    },
+    {
+      "id": "edge-49",
+      "hexId": "hex-12",
+      "vertexIds": [
+        "vertex-30",
+        "vertex-38"
+      ]
+    },
+    {
+      "id": "edge-50",
+      "hexId": "hex-12",
+      "vertexIds": [
+        "vertex-38",
+        "vertex-39"
+      ]
+    },
+    {
+      "id": "edge-51",
+      "hexId": "hex-12",
+      "vertexIds": [
+        "vertex-39",
+        "vertex-40"
+      ]
+    },
+    {
+      "id": "edge-52",
+      "hexId": "hex-12",
+      "vertexIds": [
+        "vertex-40",
+        "vertex-26"
+      ]
+    },
+    {
+      "id": "edge-53",
+      "hexId": "hex-13",
+      "vertexIds": [
+        "vertex-32",
+        "vertex-41"
+      ]
+    },
+    {
+      "id": "edge-54",
+      "hexId": "hex-13",
+      "vertexIds": [
+        "vertex-41",
+        "vertex-42"
+      ]
+    },
+    {
+      "id": "edge-55",
+      "hexId": "hex-13",
+      "vertexIds": [
+        "vertex-42",
+        "vertex-38"
+      ]
+    },
+    {
+      "id": "edge-56",
+      "hexId": "hex-14",
+      "vertexIds": [
+        "vertex-34",
+        "vertex-43"
+      ]
+    },
+    {
+      "id": "edge-57",
+      "hexId": "hex-14",
+      "vertexIds": [
+        "vertex-43",
+        "vertex-44"
+      ]
+    },
+    {
+      "id": "edge-58",
+      "hexId": "hex-14",
+      "vertexIds": [
+        "vertex-44",
+        "vertex-41"
+      ]
+    },
+    {
+      "id": "edge-59",
+      "hexId": "hex-15",
+      "vertexIds": [
+        "vertex-37",
+        "vertex-45"
+      ]
+    },
+    {
+      "id": "edge-60",
+      "hexId": "hex-15",
+      "vertexIds": [
+        "vertex-45",
+        "vertex-46"
+      ]
+    },
+    {
+      "id": "edge-61",
+      "hexId": "hex-15",
+      "vertexIds": [
+        "vertex-46",
+        "vertex-43"
+      ]
+    },
+    {
+      "id": "edge-62",
+      "hexId": "hex-16",
+      "vertexIds": [
+        "vertex-42",
+        "vertex-47"
+      ]
+    },
+    {
+      "id": "edge-63",
+      "hexId": "hex-16",
+      "vertexIds": [
+        "vertex-47",
+        "vertex-48"
+      ]
+    },
+    {
+      "id": "edge-64",
+      "hexId": "hex-16",
+      "vertexIds": [
+        "vertex-48",
+        "vertex-49"
+      ]
+    },
+    {
+      "id": "edge-65",
+      "hexId": "hex-16",
+      "vertexIds": [
+        "vertex-49",
+        "vertex-39"
+      ]
+    },
+    {
+      "id": "edge-66",
+      "hexId": "hex-17",
+      "vertexIds": [
+        "vertex-44",
+        "vertex-50"
+      ]
+    },
+    {
+      "id": "edge-67",
+      "hexId": "hex-17",
+      "vertexIds": [
+        "vertex-50",
+        "vertex-51"
+      ]
+    },
+    {
+      "id": "edge-68",
+      "hexId": "hex-17",
+      "vertexIds": [
+        "vertex-51",
+        "vertex-47"
+      ]
+    },
+    {
+      "id": "edge-69",
+      "hexId": "hex-18",
+      "vertexIds": [
+        "vertex-46",
+        "vertex-52"
+      ]
+    },
+    {
+      "id": "edge-70",
+      "hexId": "hex-18",
+      "vertexIds": [
+        "vertex-52",
+        "vertex-53"
+      ]
+    },
+    {
+      "id": "edge-71",
+      "hexId": "hex-18",
+      "vertexIds": [
+        "vertex-53",
+        "vertex-50"
+      ]
+    }
+  ],
+  "ports": [
+    {
+      "id": "port-edge-10",
+      "kind": "resource",
+      "resource": "wool",
+      "vertexIds": [
+        "vertex-01",
+        "vertex-06"
+      ]
+    },
+    {
+      "id": "port-edge-27",
+      "kind": "resource",
+      "resource": "wood",
+      "vertexIds": [
+        "vertex-12",
+        "vertex-22"
+      ]
+    },
+    {
+      "id": "port-edge-46",
+      "kind": "resource",
+      "resource": "grain",
+      "vertexIds": [
+        "vertex-35",
+        "vertex-36"
+      ]
+    },
+    {
+      "id": "port-edge-59",
+      "kind": "generic",
+      "vertexIds": [
+        "vertex-37",
+        "vertex-45"
+      ]
+    },
+    {
+      "id": "port-edge-70",
+      "kind": "resource",
+      "resource": "ore",
+      "vertexIds": [
+        "vertex-52",
+        "vertex-53"
+      ]
+    },
+    {
+      "id": "port-edge-63",
+      "kind": "resource",
+      "resource": "brick",
+      "vertexIds": [
+        "vertex-47",
+        "vertex-48"
+      ]
+    },
+    {
+      "id": "port-edge-65",
+      "kind": "generic",
+      "vertexIds": [
+        "vertex-49",
+        "vertex-39"
+      ]
+    },
+    {
+      "id": "port-edge-52",
+      "kind": "generic",
+      "vertexIds": [
+        "vertex-40",
+        "vertex-26"
+      ]
+    },
+    {
+      "id": "port-edge-04",
+      "kind": "generic",
+      "vertexIds": [
+        "vertex-04",
+        "vertex-05"
+      ]
+    }
+  ]
+}"
+`;
+
+exports[`bounded deterministic board generation > reconstructs the complete released M0 board including legacy IDs 1`] = `
+"{
+  "board": [
+    {
+      "id": "forest-4",
+      "terrain": "forest",
+      "resource": "wood",
+      "diceNumber": 4,
+      "q": 0,
+      "r": -2,
+      "vertexIds": [
+        "forest-4-v0",
+        "forest-4-v1",
+        "forest-4-v2",
+        "forest-4-v3",
+        "forest-4-v4",
+        "forest-4-v5"
+      ],
+      "edgeIds": [
+        "forest-4-e0",
+        "forest-4-e1",
+        "forest-4-e2",
+        "forest-4-e3",
+        "forest-4-e4",
+        "forest-4-e5"
+      ]
+    },
+    {
+      "id": "mountain-8",
+      "terrain": "mountain",
+      "resource": "ore",
+      "diceNumber": 8,
+      "q": 1,
+      "r": -2,
+      "vertexIds": [
+        "mountain-8-v0",
+        "mountain-8-v1",
+        "mountain-8-v2",
+        "mountain-8-v3",
+        "forest-4-v2",
+        "forest-4-v1"
+      ],
+      "edgeIds": [
+        "mountain-8-e0",
+        "mountain-8-e1",
+        "mountain-8-e2",
+        "mountain-8-e3",
+        "forest-4-e1",
+        "mountain-8-e5"
+      ]
+    },
+    {
+      "id": "pasture-5",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 5,
+      "q": 2,
+      "r": -2,
+      "vertexIds": [
+        "pasture-5-v0",
+        "pasture-5-v1",
+        "pasture-5-v2",
+        "pasture-5-v3",
+        "mountain-8-v2",
+        "mountain-8-v1"
+      ],
+      "edgeIds": [
+        "pasture-5-e0",
+        "pasture-5-e1",
+        "pasture-5-e2",
+        "pasture-5-e3",
+        "mountain-8-e1",
+        "pasture-5-e5"
+      ]
+    },
+    {
+      "id": "field-11-a",
+      "terrain": "field",
+      "resource": "grain",
+      "diceNumber": 11,
+      "q": -1,
+      "r": -1,
+      "vertexIds": [
+        "forest-4-v4",
+        "forest-4-v3",
+        "field-11-a-v2",
+        "field-11-a-v3",
+        "field-11-a-v4",
+        "field-11-a-v5"
+      ],
+      "edgeIds": [
+        "forest-4-e3",
+        "field-11-a-e1",
+        "field-11-a-e2",
+        "field-11-a-e3",
+        "field-11-a-e4",
+        "field-11-a-e5"
+      ]
+    },
+    {
+      "id": "field-3",
+      "terrain": "field",
+      "resource": "grain",
+      "diceNumber": 3,
+      "q": 0,
+      "r": -1,
+      "vertexIds": [
+        "forest-4-v2",
+        "mountain-8-v3",
+        "field-3-v2",
+        "field-3-v3",
+        "field-11-a-v2",
+        "forest-4-v3"
+      ],
+      "edgeIds": [
+        "mountain-8-e3",
+        "field-3-e1",
+        "field-3-e2",
+        "field-3-e3",
+        "field-11-a-e1",
+        "forest-4-e2"
+      ]
+    },
+    {
+      "id": "mountain-10",
+      "terrain": "mountain",
+      "resource": "ore",
+      "diceNumber": 10,
+      "q": 1,
+      "r": -1,
+      "vertexIds": [
+        "mountain-8-v2",
+        "pasture-5-v3",
+        "mountain-10-v2",
+        "mountain-10-v3",
+        "field-3-v2",
+        "mountain-8-v3"
+      ],
+      "edgeIds": [
+        "pasture-5-e3",
+        "mountain-10-e1",
+        "mountain-10-e2",
+        "mountain-10-e3",
+        "field-3-e1",
+        "mountain-8-e2"
+      ]
+    },
+    {
+      "id": "pasture-2",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 2,
+      "q": 2,
+      "r": -1,
+      "vertexIds": [
+        "pasture-5-v2",
+        "pasture-2-v1",
+        "pasture-2-v2",
+        "pasture-2-v3",
+        "mountain-10-v2",
+        "pasture-5-v3"
+      ],
+      "edgeIds": [
+        "pasture-2-e0",
+        "pasture-2-e1",
+        "pasture-2-e2",
+        "pasture-2-e3",
+        "mountain-10-e1",
+        "pasture-5-e2"
+      ]
+    },
+    {
+      "id": "forest-12",
+      "terrain": "forest",
+      "resource": "wood",
+      "diceNumber": 12,
+      "q": -2,
+      "r": 0,
+      "vertexIds": [
+        "field-11-a-v4",
+        "field-11-a-v3",
+        "forest-12-v2",
+        "forest-12-v3",
+        "forest-12-v4",
+        "forest-12-v5"
+      ],
+      "edgeIds": [
+        "field-11-a-e3",
+        "forest-12-e1",
+        "forest-12-e2",
+        "forest-12-e3",
+        "forest-12-e4",
+        "forest-12-e5"
+      ]
+    },
+    {
+      "id": "pasture-8",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 8,
+      "q": -1,
+      "r": 0,
+      "vertexIds": [
+        "field-11-a-v2",
+        "field-3-v3",
+        "pasture-8-v2",
+        "pasture-8-v3",
+        "forest-12-v2",
+        "field-11-a-v3"
+      ],
+      "edgeIds": [
+        "field-3-e3",
+        "pasture-8-e1",
+        "pasture-8-e2",
+        "pasture-8-e3",
+        "forest-12-e1",
+        "field-11-a-e2"
+      ]
+    },
+    {
+      "id": "hill-11",
+      "terrain": "hill",
+      "resource": "brick",
+      "diceNumber": 11,
+      "q": 0,
+      "r": 0,
+      "vertexIds": [
+        "field-3-v2",
+        "mountain-10-v3",
+        "hill-11-v2",
+        "hill-11-v3",
+        "pasture-8-v2",
+        "field-3-v3"
+      ],
+      "edgeIds": [
+        "mountain-10-e3",
+        "hill-11-e1",
+        "hill-11-e2",
+        "hill-11-e3",
+        "pasture-8-e1",
+        "field-3-e2"
+      ]
+    },
+    {
+      "id": "forest-9",
+      "terrain": "forest",
+      "resource": "wood",
+      "diceNumber": 9,
+      "q": 1,
+      "r": 0,
+      "vertexIds": [
+        "mountain-10-v2",
+        "pasture-2-v3",
+        "forest-9-v2",
+        "forest-9-v3",
+        "hill-11-v2",
+        "mountain-10-v3"
+      ],
+      "edgeIds": [
+        "pasture-2-e3",
+        "forest-9-e1",
+        "forest-9-e2",
+        "forest-9-e3",
+        "hill-11-e1",
+        "mountain-10-e2"
+      ]
+    },
+    {
+      "id": "field-6",
+      "terrain": "field",
+      "resource": "grain",
+      "diceNumber": 6,
+      "q": 2,
+      "r": 0,
+      "vertexIds": [
+        "pasture-2-v2",
+        "field-6-v1",
+        "field-6-v2",
+        "field-6-v3",
+        "forest-9-v2",
+        "pasture-2-v3"
+      ],
+      "edgeIds": [
+        "field-6-e0",
+        "field-6-e1",
+        "field-6-e2",
+        "field-6-e3",
+        "forest-9-e1",
+        "pasture-2-e2"
+      ]
+    },
+    {
+      "id": "mountain-9",
+      "terrain": "mountain",
+      "resource": "ore",
+      "diceNumber": 9,
+      "q": -2,
+      "r": 1,
+      "vertexIds": [
+        "forest-12-v2",
+        "pasture-8-v3",
+        "mountain-9-v2",
+        "mountain-9-v3",
+        "mountain-9-v4",
+        "forest-12-v3"
+      ],
+      "edgeIds": [
+        "pasture-8-e3",
+        "mountain-9-e1",
+        "mountain-9-e2",
+        "mountain-9-e3",
+        "mountain-9-e4",
+        "forest-12-e2"
+      ]
+    },
+    {
+      "id": "hill-5",
+      "terrain": "hill",
+      "resource": "brick",
+      "diceNumber": 5,
+      "q": -1,
+      "r": 1,
+      "vertexIds": [
+        "pasture-8-v2",
+        "hill-11-v3",
+        "hill-5-v2",
+        "hill-5-v3",
+        "mountain-9-v2",
+        "pasture-8-v3"
+      ],
+      "edgeIds": [
+        "hill-11-e3",
+        "hill-5-e1",
+        "hill-5-e2",
+        "hill-5-e3",
+        "mountain-9-e1",
+        "pasture-8-e2"
+      ]
+    },
+    {
+      "id": "hill-4",
+      "terrain": "hill",
+      "resource": "brick",
+      "diceNumber": 4,
+      "q": 0,
+      "r": 1,
+      "vertexIds": [
+        "hill-11-v2",
+        "forest-9-v3",
+        "hill-4-v2",
+        "hill-4-v3",
+        "hill-5-v2",
+        "hill-11-v3"
+      ],
+      "edgeIds": [
+        "forest-9-e3",
+        "hill-4-e1",
+        "hill-4-e2",
+        "hill-4-e3",
+        "hill-5-e1",
+        "hill-11-e2"
+      ]
+    },
+    {
+      "id": "field-3-b",
+      "terrain": "field",
+      "resource": "grain",
+      "diceNumber": 3,
+      "q": 1,
+      "r": 1,
+      "vertexIds": [
+        "forest-9-v2",
+        "field-6-v3",
+        "field-3-b-v2",
+        "field-3-b-v3",
+        "hill-4-v2",
+        "forest-9-v3"
+      ],
+      "edgeIds": [
+        "field-6-e3",
+        "field-3-b-e1",
+        "field-3-b-e2",
+        "field-3-b-e3",
+        "hill-4-e1",
+        "forest-9-e2"
+      ]
+    },
+    {
+      "id": "pasture-10",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 10,
+      "q": -2,
+      "r": 2,
+      "vertexIds": [
+        "mountain-9-v2",
+        "hill-5-v3",
+        "pasture-10-v2",
+        "pasture-10-v3",
+        "pasture-10-v4",
+        "mountain-9-v3"
+      ],
+      "edgeIds": [
+        "hill-5-e3",
+        "pasture-10-e1",
+        "pasture-10-e2",
+        "pasture-10-e3",
+        "pasture-10-e4",
+        "mountain-9-e2"
+      ]
+    },
+    {
+      "id": "pasture-6",
+      "terrain": "pasture",
+      "resource": "wool",
+      "diceNumber": 6,
+      "q": -1,
+      "r": 2,
+      "vertexIds": [
+        "hill-5-v2",
+        "hill-4-v3",
+        "pasture-6-v2",
+        "pasture-6-v3",
+        "pasture-10-v2",
+        "hill-5-v3"
+      ],
+      "edgeIds": [
+        "hill-4-e3",
+        "pasture-6-e1",
+        "pasture-6-e2",
+        "pasture-6-e3",
+        "pasture-10-e1",
+        "hill-5-e2"
+      ]
+    },
+    {
+      "id": "desert",
+      "terrain": "desert",
+      "resource": null,
+      "diceNumber": null,
+      "q": 0,
+      "r": 2,
+      "vertexIds": [
+        "hill-4-v2",
+        "field-3-b-v3",
+        "desert-v2",
+        "desert-v3",
+        "pasture-6-v2",
+        "hill-4-v3"
+      ],
+      "edgeIds": [
+        "field-3-b-e3",
+        "desert-e1",
+        "desert-e2",
+        "desert-e3",
+        "pasture-6-e1",
+        "hill-4-e2"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "forest-4-e0",
+      "hexId": "forest-4",
+      "vertexIds": [
+        "forest-4-v0",
+        "forest-4-v1"
+      ]
+    },
+    {
+      "id": "forest-4-e1",
+      "hexId": "forest-4",
+      "vertexIds": [
+        "forest-4-v1",
+        "forest-4-v2"
+      ]
+    },
+    {
+      "id": "forest-4-e2",
+      "hexId": "forest-4",
+      "vertexIds": [
+        "forest-4-v2",
+        "forest-4-v3"
+      ]
+    },
+    {
+      "id": "forest-4-e3",
+      "hexId": "forest-4",
+      "vertexIds": [
+        "forest-4-v3",
+        "forest-4-v4"
+      ]
+    },
+    {
+      "id": "forest-4-e4",
+      "hexId": "forest-4",
+      "vertexIds": [
+        "forest-4-v4",
+        "forest-4-v5"
+      ]
+    },
+    {
+      "id": "forest-4-e5",
+      "hexId": "forest-4",
+      "vertexIds": [
+        "forest-4-v5",
+        "forest-4-v0"
+      ]
+    },
+    {
+      "id": "mountain-8-e0",
+      "hexId": "mountain-8",
+      "vertexIds": [
+        "mountain-8-v0",
+        "mountain-8-v1"
+      ]
+    },
+    {
+      "id": "mountain-8-e1",
+      "hexId": "mountain-8",
+      "vertexIds": [
+        "mountain-8-v1",
+        "mountain-8-v2"
+      ]
+    },
+    {
+      "id": "mountain-8-e2",
+      "hexId": "mountain-8",
+      "vertexIds": [
+        "mountain-8-v2",
+        "mountain-8-v3"
+      ]
+    },
+    {
+      "id": "mountain-8-e3",
+      "hexId": "mountain-8",
+      "vertexIds": [
+        "mountain-8-v3",
+        "forest-4-v2"
+      ]
+    },
+    {
+      "id": "mountain-8-e5",
+      "hexId": "mountain-8",
+      "vertexIds": [
+        "forest-4-v1",
+        "mountain-8-v0"
+      ]
+    },
+    {
+      "id": "pasture-5-e0",
+      "hexId": "pasture-5",
+      "vertexIds": [
+        "pasture-5-v0",
+        "pasture-5-v1"
+      ]
+    },
+    {
+      "id": "pasture-5-e1",
+      "hexId": "pasture-5",
+      "vertexIds": [
+        "pasture-5-v1",
+        "pasture-5-v2"
+      ]
+    },
+    {
+      "id": "pasture-5-e2",
+      "hexId": "pasture-5",
+      "vertexIds": [
+        "pasture-5-v2",
+        "pasture-5-v3"
+      ]
+    },
+    {
+      "id": "pasture-5-e3",
+      "hexId": "pasture-5",
+      "vertexIds": [
+        "pasture-5-v3",
+        "mountain-8-v2"
+      ]
+    },
+    {
+      "id": "pasture-5-e5",
+      "hexId": "pasture-5",
+      "vertexIds": [
+        "mountain-8-v1",
+        "pasture-5-v0"
+      ]
+    },
+    {
+      "id": "field-11-a-e1",
+      "hexId": "field-11-a",
+      "vertexIds": [
+        "forest-4-v3",
+        "field-11-a-v2"
+      ]
+    },
+    {
+      "id": "field-11-a-e2",
+      "hexId": "field-11-a",
+      "vertexIds": [
+        "field-11-a-v2",
+        "field-11-a-v3"
+      ]
+    },
+    {
+      "id": "field-11-a-e3",
+      "hexId": "field-11-a",
+      "vertexIds": [
+        "field-11-a-v3",
+        "field-11-a-v4"
+      ]
+    },
+    {
+      "id": "field-11-a-e4",
+      "hexId": "field-11-a",
+      "vertexIds": [
+        "field-11-a-v4",
+        "field-11-a-v5"
+      ]
+    },
+    {
+      "id": "field-11-a-e5",
+      "hexId": "field-11-a",
+      "vertexIds": [
+        "field-11-a-v5",
+        "forest-4-v4"
+      ]
+    },
+    {
+      "id": "field-3-e1",
+      "hexId": "field-3",
+      "vertexIds": [
+        "mountain-8-v3",
+        "field-3-v2"
+      ]
+    },
+    {
+      "id": "field-3-e2",
+      "hexId": "field-3",
+      "vertexIds": [
+        "field-3-v2",
+        "field-3-v3"
+      ]
+    },
+    {
+      "id": "field-3-e3",
+      "hexId": "field-3",
+      "vertexIds": [
+        "field-3-v3",
+        "field-11-a-v2"
+      ]
+    },
+    {
+      "id": "mountain-10-e1",
+      "hexId": "mountain-10",
+      "vertexIds": [
+        "pasture-5-v3",
+        "mountain-10-v2"
+      ]
+    },
+    {
+      "id": "mountain-10-e2",
+      "hexId": "mountain-10",
+      "vertexIds": [
+        "mountain-10-v2",
+        "mountain-10-v3"
+      ]
+    },
+    {
+      "id": "mountain-10-e3",
+      "hexId": "mountain-10",
+      "vertexIds": [
+        "mountain-10-v3",
+        "field-3-v2"
+      ]
+    },
+    {
+      "id": "pasture-2-e0",
+      "hexId": "pasture-2",
+      "vertexIds": [
+        "pasture-5-v2",
+        "pasture-2-v1"
+      ]
+    },
+    {
+      "id": "pasture-2-e1",
+      "hexId": "pasture-2",
+      "vertexIds": [
+        "pasture-2-v1",
+        "pasture-2-v2"
+      ]
+    },
+    {
+      "id": "pasture-2-e2",
+      "hexId": "pasture-2",
+      "vertexIds": [
+        "pasture-2-v2",
+        "pasture-2-v3"
+      ]
+    },
+    {
+      "id": "pasture-2-e3",
+      "hexId": "pasture-2",
+      "vertexIds": [
+        "pasture-2-v3",
+        "mountain-10-v2"
+      ]
+    },
+    {
+      "id": "forest-12-e1",
+      "hexId": "forest-12",
+      "vertexIds": [
+        "field-11-a-v3",
+        "forest-12-v2"
+      ]
+    },
+    {
+      "id": "forest-12-e2",
+      "hexId": "forest-12",
+      "vertexIds": [
+        "forest-12-v2",
+        "forest-12-v3"
+      ]
+    },
+    {
+      "id": "forest-12-e3",
+      "hexId": "forest-12",
+      "vertexIds": [
+        "forest-12-v3",
+        "forest-12-v4"
+      ]
+    },
+    {
+      "id": "forest-12-e4",
+      "hexId": "forest-12",
+      "vertexIds": [
+        "forest-12-v4",
+        "forest-12-v5"
+      ]
+    },
+    {
+      "id": "forest-12-e5",
+      "hexId": "forest-12",
+      "vertexIds": [
+        "forest-12-v5",
+        "field-11-a-v4"
+      ]
+    },
+    {
+      "id": "pasture-8-e1",
+      "hexId": "pasture-8",
+      "vertexIds": [
+        "field-3-v3",
+        "pasture-8-v2"
+      ]
+    },
+    {
+      "id": "pasture-8-e2",
+      "hexId": "pasture-8",
+      "vertexIds": [
+        "pasture-8-v2",
+        "pasture-8-v3"
+      ]
+    },
+    {
+      "id": "pasture-8-e3",
+      "hexId": "pasture-8",
+      "vertexIds": [
+        "pasture-8-v3",
+        "forest-12-v2"
+      ]
+    },
+    {
+      "id": "hill-11-e1",
+      "hexId": "hill-11",
+      "vertexIds": [
+        "mountain-10-v3",
+        "hill-11-v2"
+      ]
+    },
+    {
+      "id": "hill-11-e2",
+      "hexId": "hill-11",
+      "vertexIds": [
+        "hill-11-v2",
+        "hill-11-v3"
+      ]
+    },
+    {
+      "id": "hill-11-e3",
+      "hexId": "hill-11",
+      "vertexIds": [
+        "hill-11-v3",
+        "pasture-8-v2"
+      ]
+    },
+    {
+      "id": "forest-9-e1",
+      "hexId": "forest-9",
+      "vertexIds": [
+        "pasture-2-v3",
+        "forest-9-v2"
+      ]
+    },
+    {
+      "id": "forest-9-e2",
+      "hexId": "forest-9",
+      "vertexIds": [
+        "forest-9-v2",
+        "forest-9-v3"
+      ]
+    },
+    {
+      "id": "forest-9-e3",
+      "hexId": "forest-9",
+      "vertexIds": [
+        "forest-9-v3",
+        "hill-11-v2"
+      ]
+    },
+    {
+      "id": "field-6-e0",
+      "hexId": "field-6",
+      "vertexIds": [
+        "pasture-2-v2",
+        "field-6-v1"
+      ]
+    },
+    {
+      "id": "field-6-e1",
+      "hexId": "field-6",
+      "vertexIds": [
+        "field-6-v1",
+        "field-6-v2"
+      ]
+    },
+    {
+      "id": "field-6-e2",
+      "hexId": "field-6",
+      "vertexIds": [
+        "field-6-v2",
+        "field-6-v3"
+      ]
+    },
+    {
+      "id": "field-6-e3",
+      "hexId": "field-6",
+      "vertexIds": [
+        "field-6-v3",
+        "forest-9-v2"
+      ]
+    },
+    {
+      "id": "mountain-9-e1",
+      "hexId": "mountain-9",
+      "vertexIds": [
+        "pasture-8-v3",
+        "mountain-9-v2"
+      ]
+    },
+    {
+      "id": "mountain-9-e2",
+      "hexId": "mountain-9",
+      "vertexIds": [
+        "mountain-9-v2",
+        "mountain-9-v3"
+      ]
+    },
+    {
+      "id": "mountain-9-e3",
+      "hexId": "mountain-9",
+      "vertexIds": [
+        "mountain-9-v3",
+        "mountain-9-v4"
+      ]
+    },
+    {
+      "id": "mountain-9-e4",
+      "hexId": "mountain-9",
+      "vertexIds": [
+        "mountain-9-v4",
+        "forest-12-v3"
+      ]
+    },
+    {
+      "id": "hill-5-e1",
+      "hexId": "hill-5",
+      "vertexIds": [
+        "hill-11-v3",
+        "hill-5-v2"
+      ]
+    },
+    {
+      "id": "hill-5-e2",
+      "hexId": "hill-5",
+      "vertexIds": [
+        "hill-5-v2",
+        "hill-5-v3"
+      ]
+    },
+    {
+      "id": "hill-5-e3",
+      "hexId": "hill-5",
+      "vertexIds": [
+        "hill-5-v3",
+        "mountain-9-v2"
+      ]
+    },
+    {
+      "id": "hill-4-e1",
+      "hexId": "hill-4",
+      "vertexIds": [
+        "forest-9-v3",
+        "hill-4-v2"
+      ]
+    },
+    {
+      "id": "hill-4-e2",
+      "hexId": "hill-4",
+      "vertexIds": [
+        "hill-4-v2",
+        "hill-4-v3"
+      ]
+    },
+    {
+      "id": "hill-4-e3",
+      "hexId": "hill-4",
+      "vertexIds": [
+        "hill-4-v3",
+        "hill-5-v2"
+      ]
+    },
+    {
+      "id": "field-3-b-e1",
+      "hexId": "field-3-b",
+      "vertexIds": [
+        "field-6-v3",
+        "field-3-b-v2"
+      ]
+    },
+    {
+      "id": "field-3-b-e2",
+      "hexId": "field-3-b",
+      "vertexIds": [
+        "field-3-b-v2",
+        "field-3-b-v3"
+      ]
+    },
+    {
+      "id": "field-3-b-e3",
+      "hexId": "field-3-b",
+      "vertexIds": [
+        "field-3-b-v3",
+        "hill-4-v2"
+      ]
+    },
+    {
+      "id": "pasture-10-e1",
+      "hexId": "pasture-10",
+      "vertexIds": [
+        "hill-5-v3",
+        "pasture-10-v2"
+      ]
+    },
+    {
+      "id": "pasture-10-e2",
+      "hexId": "pasture-10",
+      "vertexIds": [
+        "pasture-10-v2",
+        "pasture-10-v3"
+      ]
+    },
+    {
+      "id": "pasture-10-e3",
+      "hexId": "pasture-10",
+      "vertexIds": [
+        "pasture-10-v3",
+        "pasture-10-v4"
+      ]
+    },
+    {
+      "id": "pasture-10-e4",
+      "hexId": "pasture-10",
+      "vertexIds": [
+        "pasture-10-v4",
+        "mountain-9-v3"
+      ]
+    },
+    {
+      "id": "pasture-6-e1",
+      "hexId": "pasture-6",
+      "vertexIds": [
+        "hill-4-v3",
+        "pasture-6-v2"
+      ]
+    },
+    {
+      "id": "pasture-6-e2",
+      "hexId": "pasture-6",
+      "vertexIds": [
+        "pasture-6-v2",
+        "pasture-6-v3"
+      ]
+    },
+    {
+      "id": "pasture-6-e3",
+      "hexId": "pasture-6",
+      "vertexIds": [
+        "pasture-6-v3",
+        "pasture-10-v2"
+      ]
+    },
+    {
+      "id": "desert-e1",
+      "hexId": "desert",
+      "vertexIds": [
+        "field-3-b-v3",
+        "desert-v2"
+      ]
+    },
+    {
+      "id": "desert-e2",
+      "hexId": "desert",
+      "vertexIds": [
+        "desert-v2",
+        "desert-v3"
+      ]
+    },
+    {
+      "id": "desert-e3",
+      "hexId": "desert",
+      "vertexIds": [
+        "desert-v3",
+        "pasture-6-v2"
+      ]
+    }
+  ],
+  "ports": [
+    {
+      "id": "standard-port-1",
+      "kind": "generic",
+      "vertexIds": [
+        "field-3-b-v3",
+        "desert-v2"
+      ]
+    },
+    {
+      "id": "standard-port-2",
+      "kind": "resource",
+      "resource": "wood",
+      "vertexIds": [
+        "field-6-v2",
+        "field-6-v3"
+      ]
+    },
+    {
+      "id": "standard-port-3",
+      "kind": "generic",
+      "vertexIds": [
+        "pasture-2-v1",
+        "pasture-2-v2"
+      ]
+    },
+    {
+      "id": "standard-port-4",
+      "kind": "resource",
+      "resource": "brick",
+      "vertexIds": [
+        "mountain-8-v1",
+        "pasture-5-v0"
+      ]
+    },
+    {
+      "id": "standard-port-5",
+      "kind": "resource",
+      "resource": "wool",
+      "vertexIds": [
+        "forest-4-v0",
+        "forest-4-v1"
+      ]
+    },
+    {
+      "id": "standard-port-6",
+      "kind": "generic",
+      "vertexIds": [
+        "field-11-a-v5",
+        "forest-4-v4"
+      ]
+    },
+    {
+      "id": "standard-port-7",
+      "kind": "resource",
+      "resource": "grain",
+      "vertexIds": [
+        "forest-12-v3",
+        "forest-12-v4"
+      ]
+    },
+    {
+      "id": "standard-port-8",
+      "kind": "generic",
+      "vertexIds": [
+        "pasture-10-v4",
+        "mountain-9-v3"
+      ]
+    },
+    {
+      "id": "standard-port-9",
+      "kind": "resource",
+      "resource": "ore",
+      "vertexIds": [
+        "pasture-6-v3",
+        "pasture-10-v2"
+      ]
+    }
+  ]
+}"
+`;

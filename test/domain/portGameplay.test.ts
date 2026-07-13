@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createStandardBoardData } from "../../src/domain/board";
+import { parseMapSeed } from "../../src/domain/mapSeed";
+import { createBoardDataForSeed } from "../../src/domain/randomBoard";
 import { getMaritimeTradeRatio } from "../../src/domain/rules/maritimeTrade";
 import { createDemoGame, createSetupGame } from "../../src/domain/setup";
 import { portProjection, vertexProjection } from "../../src/ui/boardGeometry";
 import { resources, type GameState, type MaritimePort } from "../../src/domain/types";
+
+const portSeed = parseMapSeed("M1-89ABCDEF01234567");
 
 function withPortBuilding(game: GameState, port: MaritimePort, endpointIndex: 0 | 1): GameState {
   return {
@@ -21,9 +24,9 @@ function withPortBuilding(game: GameState, port: MaritimePort, endpointIndex: 0 
 }
 
 describe("standard playable ports", () => {
-  it("generates nine deterministic non-overlapping coastal ports with the standard distribution", () => {
-    const first = createStandardBoardData();
-    const second = createStandardBoardData();
+  it("generates nine deterministic non-overlapping seeded coastal ports with the standard distribution", () => {
+    const first = createBoardDataForSeed(portSeed);
+    const second = createBoardDataForSeed(portSeed);
     const edgeUse = new Map<string, number>();
     for (const hex of first.board) {
       for (const edgeId of hex.edgeIds) {
@@ -74,7 +77,7 @@ describe("standard playable ports", () => {
   });
 
   it("projects port connectors from the same shared board vertices and places labels seaward", () => {
-    const { board, ports } = createStandardBoardData();
+    const { board, ports } = createBoardDataForSeed(portSeed);
     const port = ports[0];
     const projection = portProjection(board, port);
     const firstVertex = vertexProjection(board, port.vertexIds[0]);

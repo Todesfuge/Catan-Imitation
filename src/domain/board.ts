@@ -1,6 +1,6 @@
 import type { BoardEdge, BoardHex, MaritimePort, Resource } from "./types";
 
-const ringCoords = [
+export const STANDARD_HEX_COORDINATES = [
   [0, -2],
   [1, -2],
   [2, -2],
@@ -81,7 +81,79 @@ function edgeKey(leftVertexId: string, rightVertexId: string): string {
   return [leftVertexId, rightVertexId].sort().join("|");
 }
 
-function orderCoastalEdges(board: BoardHex[], edges: BoardEdge[]): BoardEdge[] {
+export interface StandardHexTopology {
+  id: string;
+  q: number;
+  r: number;
+  vertexIds: string[];
+  edgeIds: string[];
+}
+
+export interface StandardBoardTopology {
+  board: StandardHexTopology[];
+  edges: BoardEdge[];
+}
+
+interface StandardTopologyIdentity {
+  hexId(index: number): string;
+  vertexId(ownerHexId: string, localIndex: number, geometryIndex: number): string;
+  edgeId(ownerHexId: string, localIndex: number, geometryIndex: number): string;
+}
+
+function buildStandardBoardTopology(identity: StandardTopologyIdentity): StandardBoardTopology {
+  const edges: BoardEdge[] = [];
+  const vertexIdsByKey = new Map<string, string>();
+  const edgeIdsByKey = new Map<string, string>();
+  const board = STANDARD_HEX_COORDINATES.map(([q, r], hexIndex) => {
+    const hexId = identity.hexId(hexIndex);
+    const vertexIds = Array.from({ length: 6 }, (_, vertexIndex) => {
+      const key = vertexKey(q, r, vertexIndex);
+      const existingVertexId = vertexIdsByKey.get(key);
+      if (existingVertexId) {
+        return existingVertexId;
+      }
+
+      const vertexId = identity.vertexId(hexId, vertexIndex, vertexIdsByKey.size);
+      vertexIdsByKey.set(key, vertexId);
+      return vertexId;
+    });
+
+    const edgeIds = vertexIds.map((leftVertexId, edgeIndex) => {
+      const rightVertexId = vertexIds[(edgeIndex + 1) % vertexIds.length];
+      const key = edgeKey(leftVertexId, rightVertexId);
+      const existingEdgeId = edgeIdsByKey.get(key);
+      if (existingEdgeId) {
+        return existingEdgeId;
+      }
+
+      const edgeId = identity.edgeId(hexId, edgeIndex, edgeIdsByKey.size);
+      edgeIdsByKey.set(key, edgeId);
+      edges.push({ id: edgeId, hexId, vertexIds: [leftVertexId, rightVertexId] });
+      return edgeId;
+    });
+
+    return { id: hexId, q, r, vertexIds, edgeIds };
+  });
+
+  return { board, edges };
+}
+
+export function createStandardBoardTopology(): StandardBoardTopology {
+  const geometryId = (kind: string, index: number) =>
+    `${kind}-${index.toString().padStart(2, "0")}`;
+
+  return buildStandardBoardTopology({
+    hexId: (index) => geometryId("hex", index),
+    vertexId: (_ownerHexId, _localIndex, geometryIndex) =>
+      geometryId("vertex", geometryIndex),
+    edgeId: (_ownerHexId, _localIndex, geometryIndex) => geometryId("edge", geometryIndex)
+  });
+}
+
+export function orderStandardCoastalEdges(
+  board: ReadonlyArray<Pick<BoardHex, "edgeIds">>,
+  edges: readonly BoardEdge[]
+): BoardEdge[] {
   const edgeUse = new Map<string, number>();
   for (const hex of board) {
     for (const edgeId of hex.edgeIds) {
@@ -120,7 +192,7 @@ function orderCoastalEdges(board: BoardHex[], edges: BoardEdge[]): BoardEdge[] {
 }
 
 function createStandardPorts(board: BoardHex[], edges: BoardEdge[]): MaritimePort[] {
-  const coastalEdges = orderCoastalEdges(board, edges);
+  const coastalEdges = orderStandardCoastalEdges(board, edges);
   const portEdgeIndices = [0, 3, 6, 10, 13, 16, 20, 23, 26];
   const portKinds: Array<{ kind: "generic" } | { kind: "resource"; resource: Resource }> = [
     { kind: "generic" },
@@ -146,49 +218,12 @@ function createStandardPorts(board: BoardHex[], edges: BoardEdge[]): MaritimePor
 }
 
 export function createStandardBoardData(): StandardBoardData {
-  const edges: BoardEdge[] = [];
-  const vertexIdsByKey = new Map<string, string>();
-  const edgeIdsByKey = new Map<string, string>();
-  const board = terrainPlan.map((hex, index) => {
-    const [q, r] = ringCoords[index];
-    const vertexIds = Array.from({ length: 6 }, (_, vertexIndex) => {
-      const key = vertexKey(q, r, vertexIndex);
-      const existingVertexId = vertexIdsByKey.get(key);
-      if (existingVertexId) {
-        return existingVertexId;
-      }
-
-      const vertexId = `${hex.id}-v${vertexIndex}`;
-      vertexIdsByKey.set(key, vertexId);
-      return vertexId;
-    });
-
-    const edgeIds = vertexIds.map((leftVertexId, edgeIndex) => {
-      const rightVertexId = vertexIds[(edgeIndex + 1) % vertexIds.length];
-      const key = edgeKey(leftVertexId, rightVertexId);
-      const existingEdgeId = edgeIdsByKey.get(key);
-      if (existingEdgeId) {
-        return existingEdgeId;
-      }
-
-      const edgeId = `${hex.id}-e${edgeIndex}`;
-      edgeIdsByKey.set(key, edgeId);
-      edges.push({
-        id: edgeId,
-        hexId: hex.id,
-        vertexIds: [leftVertexId, rightVertexId]
-      });
-      return edgeId;
-    });
-
-    return {
-      ...hex,
-      q,
-      r,
-      vertexIds,
-      edgeIds
-    };
+  const { board: topology, edges } = buildStandardBoardTopology({
+    hexId: (index) => terrainPlan[index].id,
+    vertexId: (ownerHexId, localIndex) => `${ownerHexId}-v${localIndex}`,
+    edgeId: (ownerHexId, localIndex) => `${ownerHexId}-e${localIndex}`
   });
+  const board = terrainPlan.map((hex, index) => ({ ...hex, ...topology[index] }));
 
   return { board, edges, ports: createStandardPorts(board, edges) };
 }
