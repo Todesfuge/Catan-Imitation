@@ -1573,8 +1573,7 @@ button.primary {
   }
 
   .map-seed-row,
-  .restart-actions,
-  .restart-confirmation > div {
+  .restart-actions {
     grid-template-columns: 1fr;
   }
 }

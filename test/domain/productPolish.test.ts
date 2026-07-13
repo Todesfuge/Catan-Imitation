@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import App from "../../src/App";
 import { createLocalGameTableView } from "../../src/app/localGameState";
 import { getLegalRoadEdgeIds } from "../../src/domain/rules/building";
@@ -301,39 +301,6 @@ describe("product polish UI", () => {
     expect(html).toContain("New Random Map");
     expect(html).toContain("Replay Current Map");
     expect(html).toContain('aria-live="polite"');
-  });
-
-  it("reports clipboard success, unavailable APIs, rejection, and repeated attempts", async () => {
-    const utilityModule = await import("../../src/ui/UtilityDialog") as unknown as {
-      copyMapSeed?: (seed: string, clipboard?: { writeText(value: string): Promise<void> }) => Promise<boolean>;
-    };
-    expect(typeof utilityModule.copyMapSeed).toBe("function");
-    const copyMapSeed = utilityModule.copyMapSeed!;
-    const writeText = vi.fn()
-      .mockRejectedValueOnce(new Error("denied"))
-      .mockResolvedValueOnce(undefined);
-
-    await expect(copyMapSeed("M1-0123456789ABCDEF", undefined)).resolves.toBe(false);
-    await expect(copyMapSeed("M1-0123456789ABCDEF", { writeText })).resolves.toBe(false);
-    await expect(copyMapSeed("M1-0123456789ABCDEF", { writeText })).resolves.toBe(true);
-    expect(writeText).toHaveBeenCalledTimes(2);
-    expect(writeText).toHaveBeenLastCalledWith("M1-0123456789ABCDEF");
-  });
-
-  it("keeps online restart confirmation cancelable before dispatch", async () => {
-    const utilityModule = await import("../../src/ui/UtilityDialog") as unknown as {
-      transitionRestartConfirmation?: (
-        pending: "fresh" | "sameMap" | null,
-        action: { type: "request"; mode: "fresh" | "sameMap" } | { type: "cancel" } | { type: "confirm" }
-      ) => { pending: "fresh" | "sameMap" | null; confirmedMode?: "fresh" | "sameMap" };
-    };
-    expect(typeof utilityModule.transitionRestartConfirmation).toBe("function");
-    const transition = utilityModule.transitionRestartConfirmation!;
-
-    expect(transition(null, { type: "request", mode: "fresh" })).toEqual({ pending: "fresh" });
-    expect(transition("fresh", { type: "cancel" })).toEqual({ pending: null });
-    expect(transition(null, { type: "request", mode: "sameMap" })).toEqual({ pending: "sameMap" });
-    expect(transition("sameMap", { type: "confirm" })).toEqual({ pending: null, confirmedMode: "sameMap" });
   });
 
   it("styles restart confirmation for focus visibility, touch targets, and responsive wrapping", () => {

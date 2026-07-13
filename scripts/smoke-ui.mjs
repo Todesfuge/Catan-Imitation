@@ -94,7 +94,7 @@ try {
     "Effective maritime trade ratios",
     "Token recipient",
     "Gathering player",
-    "Start New Game",
+    "New Random Map",
     "Standard maritime ports",
     "2:1 "
     ,"Publish Public Offer"

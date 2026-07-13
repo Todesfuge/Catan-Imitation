@@ -8,7 +8,7 @@ export type UtilityPanel = "settings" | "rulebook" | "info" | null;
 
 type SeedClipboard = Pick<Clipboard, "writeText">;
 
-export async function copyMapSeed(
+async function copyMapSeed(
   seed: string,
   clipboard: SeedClipboard | undefined
 ): Promise<boolean> {
@@ -19,20 +19,6 @@ export async function copyMapSeed(
   } catch {
     return false;
   }
-}
-
-type RestartConfirmationAction =
-  | { readonly type: "request"; readonly mode: MapRestartMode }
-  | { readonly type: "cancel" }
-  | { readonly type: "confirm" };
-
-export function transitionRestartConfirmation(
-  pending: MapRestartMode | null,
-  action: RestartConfirmationAction
-): { readonly pending: MapRestartMode | null; readonly confirmedMode?: MapRestartMode } {
-  if (action.type === "request") return { pending: action.mode };
-  if (action.type === "confirm" && pending) return { pending: null, confirmedMode: pending };
-  return { pending: null };
 }
 
 export function UtilityDialog({
@@ -52,6 +38,7 @@ export function UtilityDialog({
   const openerRef = useRef<HTMLElement | null>(null);
   const restartOriginRef = useRef<HTMLButtonElement | null>(null);
   const restartCancelRef = useRef<HTMLButtonElement>(null);
+  const copyRequestRef = useRef(0);
   const [pendingRestart, setPendingRestart] = useState<MapRestartMode | null>(null);
   const [copyStatus, setCopyStatus] = useState<{
     readonly kind: "success" | "failure";
@@ -84,6 +71,13 @@ export function UtilityDialog({
     if (pendingRestart) restartCancelRef.current?.focus();
   }, [pendingRestart]);
 
+  useEffect(() => {
+    copyRequestRef.current += 1;
+    setPendingRestart(null);
+    setCopyStatus(null);
+    restartOriginRef.current = null;
+  }, [panel, state.game.mapSeed, state.restart?.enabled, state.restart?.requiresConfirmation]);
+
   if (!panel) {
     return null;
   }
@@ -95,28 +89,45 @@ export function UtilityDialog({
   );
 
   function requestRestart(mode: MapRestartMode, origin: HTMLButtonElement) {
-    if (!state.restart?.requiresConfirmation) {
+    if (!state.restart?.enabled) return;
+    if (!state.restart.requiresConfirmation) {
       onRestart(mode);
       return;
     }
     restartOriginRef.current = origin;
-    setPendingRestart(transitionRestartConfirmation(pendingRestart, { type: "request", mode }).pending);
+    setPendingRestart(mode);
   }
 
   function cancelRestart() {
-    setPendingRestart(transitionRestartConfirmation(pendingRestart, { type: "cancel" }).pending);
-    queueMicrotask(() => restartOriginRef.current?.focus());
+    const origin = restartOriginRef.current;
+    restartOriginRef.current = null;
+    setPendingRestart(null);
+    queueMicrotask(() => {
+      if (origin?.isConnected) origin.focus();
+    });
   }
 
   function confirmRestart() {
-    const transition = transitionRestartConfirmation(pendingRestart, { type: "confirm" });
-    setPendingRestart(transition.pending);
-    if (transition.confirmedMode) onRestart(transition.confirmedMode);
+    const mode = pendingRestart;
+    setPendingRestart(null);
+    restartOriginRef.current = null;
+    if (!mode || !state.restart?.enabled || !state.restart.requiresConfirmation) return;
+    onRestart(mode);
+  }
+
+  function closeDialog() {
+    copyRequestRef.current += 1;
+    setPendingRestart(null);
+    setCopyStatus(null);
+    restartOriginRef.current = null;
+    onClose();
   }
 
   async function handleCopySeed() {
     const clipboard = typeof navigator === "undefined" ? undefined : navigator.clipboard;
+    const request = ++copyRequestRef.current;
     const copied = await copyMapSeed(state.game.mapSeed, clipboard);
+    if (request !== copyRequestRef.current) return;
     setCopyStatus((current) => ({
       kind: copied ? "success" : "failure",
       attempt: (current?.attempt ?? 0) + 1
@@ -129,7 +140,7 @@ export function UtilityDialog({
       className="utility-modal"
       onCancel={(event) => {
         event.preventDefault();
-        onClose();
+        closeDialog();
       }}
       ref={dialogRef}
     >
@@ -140,7 +151,7 @@ export function UtilityDialog({
             aria-label={t("dialog.close")}
             className="modal-close"
             data-dialog-close
-            onClick={onClose}
+            onClick={closeDialog}
             ref={closeRef}
             type="button"
           >
@@ -242,7 +253,12 @@ export function UtilityDialog({
                       <button onClick={cancelRestart} ref={restartCancelRef} type="button">
                         {t("settings.restartCancel")}
                       </button>
-                      <button className="danger-button" onClick={confirmRestart} type="button">
+                      <button
+                        className="danger-button"
+                        disabled={!state.restart.enabled}
+                        onClick={confirmRestart}
+                        type="button"
+                      >
                         {t("settings.restartConfirm")}
                       </button>
                     </div>

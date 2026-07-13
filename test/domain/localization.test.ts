@@ -82,6 +82,8 @@ describe("English and Simplified Chinese localization", () => {
       "settings.copySeed",
       "settings.copySeedSuccess",
       "settings.copySeedFailed",
+      "settings.restartTitle",
+      "settings.restartDescription",
       "settings.newRandomMap",
       "settings.replayCurrentMap",
       "settings.restartConfirmFresh",

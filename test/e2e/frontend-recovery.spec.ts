@@ -137,7 +137,7 @@ function callerOnlineGameSnapshot() {
     ready: true
   }));
   const projected = projectRoomView({
-    roomCode: "234567", lifecycle: "playing", roomVersion: 42, seats,
+    roomCode: "234567", lifecycle: "playing", roomVersion: 42, hostSeatId: "seat-1", seats,
     matchState: { game: local.game, guild: local.guild, lastDice: local.lastDice }
   }, "seat-1", { connectedSeatIds: seats.map((seat) => seat.seatId) });
   return {
@@ -148,8 +148,40 @@ function callerOnlineGameSnapshot() {
 }
 
 async function installOnlineGameMock(page: Page) {
-  await page.addInitScript((snapshot) => {
-    const state = { sent: [] as Array<Record<string, unknown>>, socketCount: 0 };
+  const nextSeedSnapshot = callerOnlineGameSnapshot();
+  nextSeedSnapshot.roomVersion = 43;
+  (nextSeedSnapshot.publicState as unknown as Record<string, unknown>).roomVersion = 43;
+  await page.addInitScript(({ initialSnapshot, refreshedSnapshot }) => {
+    let currentSnapshot = structuredClone(initialSnapshot);
+    let socket: MockWebSocket | undefined;
+    const state = {
+      sent: [] as Array<Record<string, unknown>>,
+      socketCount: 0,
+      copied: [] as string[],
+      clipboardMode: "success" as "success" | "missing" | "reject" | "deferred",
+      pendingClipboard: [] as Array<() => void>,
+      holdConnections: false,
+      setClipboardMode(mode: "success" | "missing" | "reject" | "deferred") { this.clipboardMode = mode; },
+      resolveClipboard() { this.pendingClipboard.shift()?.(); },
+      setRestartCapability(canRestartMatch: boolean) {
+        const next = structuredClone(currentSnapshot);
+        next.roomVersion += 1;
+        next.publicState.roomVersion = next.roomVersion;
+        next.privateState.canRestartMatch = canRestartMatch;
+        currentSnapshot = next;
+        socket?.emit("message", { data: JSON.stringify(next) });
+      },
+      changeSeed() {
+        currentSnapshot = structuredClone(refreshedSnapshot);
+        socket?.emit("message", { data: JSON.stringify(currentSnapshot) });
+      },
+      disconnect() {
+        if (!socket) return;
+        this.holdConnections = true;
+        socket.readyState = 3;
+        socket.emit("close", { code: 1006, reason: "test disconnect", wasClean: false });
+      }
+    };
     const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), {
       status, headers: { "content-type": "application/json; charset=utf-8" }
     });
@@ -163,11 +195,13 @@ async function installOnlineGameMock(page: Page) {
       readyState = 0;
       private listeners = new Map<string, Set<(event: unknown) => void>>();
       constructor(_url: string) {
+        socket = this;
         state.socketCount += 1;
+        if (state.holdConnections) return;
         queueMicrotask(() => {
           this.readyState = 1;
           this.emit("open", {});
-          this.emit("message", { data: JSON.stringify(snapshot) });
+          this.emit("message", { data: JSON.stringify(currentSnapshot) });
         });
       }
       addEventListener(type: string, listener: (event: unknown) => void) {
@@ -178,9 +212,32 @@ async function installOnlineGameMock(page: Page) {
       close() { this.readyState = 3; }
       emit(type: string, event: unknown) { for (const listener of this.listeners.get(type) ?? []) listener(event); }
     }
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      get() {
+        if (state.clipboardMode === "missing") return undefined;
+        return {
+          writeText: async (value: string) => {
+            if (state.clipboardMode === "reject") throw new Error("clipboard denied");
+            if (state.clipboardMode === "deferred") {
+              await new Promise<void>((resolve) => state.pendingClipboard.push(resolve));
+            }
+            state.copied.push(value);
+          }
+        };
+      }
+    });
     window.WebSocket = MockWebSocket as unknown as typeof WebSocket;
     (window as unknown as { __onlineGameMock: typeof state }).__onlineGameMock = state;
-  }, callerOnlineGameSnapshot());
+  }, { initialSnapshot: callerOnlineGameSnapshot(), refreshedSnapshot: nextSeedSnapshot });
+}
+
+async function openMockOnlineGame(page: Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Play Online Game" }).click();
+  await page.getByLabel("Create nickname").fill("Voyage1969");
+  await page.getByRole("button", { name: "Create room" }).click();
+  await expect(page.locator(".online-game-shell")).toBeVisible();
 }
 
 async function enterMockCreatedRoom(page: Page) {
@@ -394,6 +451,206 @@ for (const viewport of [
   });
 }
 
+test("online Settings confirms each restart mode through the shared table before sending", async ({ page }) => {
+  await installOnlineGameMock(page);
+  await openMockOnlineGame(page);
+  const sent = () => page.evaluate(() =>
+    (window as unknown as { __onlineGameMock: { sent: Array<Record<string, unknown>> } }).__onlineGameMock.sent
+  );
+
+  for (const [label, mode] of [["New Random Map", "fresh"], ["Replay Current Map", "sameMap"]] as const) {
+    await page.getByRole("button", { name: "Open settings" }).click();
+    const restart = page.getByRole("button", { name: label });
+    await restart.click();
+    await expect(page.locator(".restart-confirmation")).toBeVisible();
+    expect(await sent()).toHaveLength(mode === "fresh" ? 0 : 1);
+
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(page.locator(".restart-confirmation")).toHaveCount(0);
+    await expect(restart).toBeFocused();
+    expect(await sent()).toHaveLength(mode === "fresh" ? 0 : 1);
+
+    await restart.click();
+    expect(await sent()).toHaveLength(mode === "fresh" ? 0 : 1);
+    await page.getByRole("button", { name: "Confirm Restart" }).click();
+    await expect(page.locator(".utility-modal")).toHaveCount(0);
+    const messages = await sent();
+    const message = messages.at(-1)!;
+    expect(messages).toHaveLength(mode === "fresh" ? 1 : 2);
+    expect(message).toEqual({
+      type: "room.restart",
+      commandId: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+      expectedVersion: 42,
+      mode
+    });
+    expect(message).not.toHaveProperty("seed");
+    expect(message).not.toHaveProperty("actorId");
+    expect(message).not.toHaveProperty("hostSeatId");
+  }
+});
+
+test("Settings clears stale confirmation and copy state across close, policy, connection, and seed changes", async ({ page }) => {
+  await installOnlineGameMock(page);
+  await openMockOnlineGame(page);
+  const sentCount = () => page.evaluate(() =>
+    (window as unknown as { __onlineGameMock: { sent: unknown[] } }).__onlineGameMock.sent.length
+  );
+  const openSettings = () => page.getByRole("button", { name: "Open settings" }).click();
+
+  await openSettings();
+  await page.getByRole("button", { name: "New Random Map" }).click();
+  await page.getByRole("button", { name: "Close utility panel" }).click();
+  await expect(page.getByRole("button", { name: "Open settings" })).toBeFocused();
+  await openSettings();
+  await expect(page.locator(".restart-confirmation")).toHaveCount(0);
+  expect(await sentCount()).toBe(0);
+
+  await page.getByRole("button", { name: "Replay Current Map" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Open settings" })).toBeFocused();
+  await page.getByRole("button", { name: "Open rulebook" }).click();
+  await expect(page.getByRole("heading", { name: "Rulebook" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await openSettings();
+  await expect(page.locator(".restart-confirmation")).toHaveCount(0);
+
+  const copyStatus = page.locator(".map-seed-copy-status");
+  await page.getByRole("button", { name: "Copy Seed" }).click();
+  await expect(copyStatus).toHaveText("Map seed copied.");
+  const seedBefore = await page.locator("[data-map-seed]").inputValue();
+  await page.evaluate(() => {
+    (window as unknown as { __onlineGameMock: { changeSeed(): void } }).__onlineGameMock.changeSeed();
+  });
+  await expect(page.locator("[data-map-seed]")).not.toHaveValue(seedBefore);
+  await expect(copyStatus).toHaveText("");
+
+  await page.getByRole("button", { name: "New Random Map" }).click();
+  await page.evaluate(() => {
+    (window as unknown as { __onlineGameMock: { setRestartCapability(value: boolean): void } }).__onlineGameMock
+      .setRestartCapability(false);
+  });
+  await expect(page.locator(".restart-confirmation")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Confirm Restart" })).toHaveCount(0);
+  expect(await sentCount()).toBe(0);
+});
+
+test("Settings clears pending restart when the host connection becomes unavailable", async ({ page }) => {
+  await installOnlineGameMock(page);
+  await openMockOnlineGame(page);
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await page.getByRole("button", { name: "New Random Map" }).click();
+  await expect(page.locator(".restart-confirmation")).toBeVisible();
+  await page.evaluate(() => {
+    (window as unknown as { __onlineGameMock: { disconnect(): void } }).__onlineGameMock.disconnect();
+  });
+  await expect(page.locator(".connection-badge")).toHaveText(/Reconnecting|Offline/);
+  await expect(page.locator(".restart-confirmation")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "New Random Map" })).toBeDisabled();
+  expect(await page.evaluate(() =>
+    (window as unknown as { __onlineGameMock: { sent: unknown[] } }).__onlineGameMock.sent.length
+  )).toBe(0);
+});
+
+test("seed copy failure remains localized, selectable, and retryable through the real Settings UI", async ({ page }) => {
+  await installOnlineGameMock(page);
+  await openMockOnlineGame(page);
+  await page.getByRole("button", { name: "Open settings" }).click();
+  const seed = page.locator("[data-map-seed]");
+  const status = page.locator(".map-seed-copy-status");
+  const setClipboardMode = (mode: "success" | "missing" | "reject") => page.evaluate((nextMode) => {
+    (window as unknown as { __onlineGameMock: { setClipboardMode(value: typeof nextMode): void } }).__onlineGameMock
+      .setClipboardMode(nextMode);
+  }, mode);
+
+  await setClipboardMode("missing");
+  await page.getByRole("button", { name: "Copy Seed" }).click();
+  await expect(status).toHaveText("Copy failed. Select the seed and copy it manually.");
+  expect(await seed.evaluate((input: HTMLInputElement) => {
+    input.select();
+    return input.selectionStart === 0 && input.selectionEnd === input.value.length;
+  })).toBe(true);
+
+  await setClipboardMode("reject");
+  await page.getByRole("button", { name: "Copy Seed" }).click();
+  await expect(status).toHaveAttribute("data-copy-attempt", "2");
+  await expect(status).toHaveText("Copy failed. Select the seed and copy it manually.");
+
+  await setClipboardMode("success");
+  await page.getByRole("button", { name: "Copy Seed" }).click();
+  await expect(status).toHaveText("Map seed copied.");
+  expect(await page.evaluate(() =>
+    (window as unknown as { __onlineGameMock: { copied: string[] } }).__onlineGameMock.copied
+  )).toEqual([await seed.inputValue()]);
+
+  await page.locator("[data-language-select]").selectOption("zh-CN");
+  await setClipboardMode("reject");
+  await page.getByRole("button", { name: "复制种子" }).click();
+  await expect(status).toHaveText("复制失败，请选择种子并手动复制。");
+});
+
+test("late clipboard completion cannot restore status after Settings or seed invalidates the attempt", async ({ page }) => {
+  await installOnlineGameMock(page);
+  await openMockOnlineGame(page);
+  const status = page.locator(".map-seed-copy-status");
+  const deferCopy = () => page.evaluate(() => {
+    (window as unknown as { __onlineGameMock: { setClipboardMode(value: "deferred"): void } }).__onlineGameMock
+      .setClipboardMode("deferred");
+  });
+  const resolveCopy = () => page.evaluate(() => {
+    (window as unknown as { __onlineGameMock: { resolveClipboard(): void } }).__onlineGameMock.resolveClipboard();
+  });
+
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await deferCopy();
+  await page.getByRole("button", { name: "Copy Seed" }).click();
+  await page.getByRole("button", { name: "Close utility panel" }).click();
+  await resolveCopy();
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await expect(status).toHaveText("");
+
+  await deferCopy();
+  await page.getByRole("button", { name: "Copy Seed" }).click();
+  const previousSeed = await page.locator("[data-map-seed]").inputValue();
+  await page.evaluate(() => {
+    (window as unknown as { __onlineGameMock: { changeSeed(): void } }).__onlineGameMock.changeSeed();
+  });
+  await expect(page.locator("[data-map-seed]")).not.toHaveValue(previousSeed);
+  await resolveCopy();
+  await expect(status).toHaveText("");
+});
+
+for (const visual of [
+  { locale: "en", width: 1280, height: 768, label: "New Random Map" },
+  { locale: "en", width: 390, height: 844, label: "New Random Map" },
+  { locale: "zh-CN", width: 1280, height: 768, label: "新随机地图" },
+  { locale: "zh-CN", width: 390, height: 844, label: "新随机地图" }
+] as const) {
+  test(`expanded restart confirmation is contained at ${visual.locale} ${visual.width}px`, async ({ page }, testInfo) => {
+    await installOnlineGameMock(page);
+    await page.setViewportSize({ width: visual.width, height: visual.height });
+    await openMockOnlineGame(page);
+    await page.getByRole("button", { name: "Open settings" }).click();
+    if (visual.locale === "zh-CN") await page.locator("[data-language-select]").selectOption("zh-CN");
+    await page.getByRole("button", { name: visual.label }).click();
+    const confirmation = page.locator(".restart-confirmation");
+    const confirm = page.getByRole("button", { name: visual.locale === "en" ? "Confirm Restart" : "确认重新开始" });
+    await expect(confirmation).toBeVisible();
+    await expect(page.getByRole("button", { name: visual.locale === "en" ? "Cancel" : "取消" })).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(visual.width);
+    const [dialogBox, confirmBox] = await Promise.all([
+      page.locator(".modal-card").boundingBox(),
+      confirm.boundingBox()
+    ]);
+    expect(dialogBox).not.toBeNull();
+    expect(confirmBox).not.toBeNull();
+    expect(confirmBox!.y + confirmBox!.height).toBeLessThanOrEqual(
+      Math.min(visual.height, dialogBox!.y + dialogBox!.height)
+    );
+    const screenshot = await page.screenshot({ path: testInfo.outputPath(`${visual.locale}-${visual.width}-confirmation.png`) });
+    await testInfo.attach(`${visual.locale}-${visual.width}-confirmation`, { body: screenshot, contentType: "image/png" });
+  });
+}
+
 async function advanceBackToFirstPlayer(page: Page) {
   await page.getByRole("button", { name: "End Turn" }).click();
   for (let otherPlayer = 0; otherPlayer < 3; otherPlayer += 1) {
@@ -428,7 +685,7 @@ test("a zero-token gathering completes without entering an unwinnable auction", 
   );
   await expect(page.getByRole("button", { name: "Resolve Blind Box" })).toHaveCount(0);
   await page.getByRole("button", { name: "Open settings" }).click();
-  await page.getByRole("button", { name: "Start New Game" }).click();
+  await page.getByRole("button", { name: "New Random Map" }).click();
   await expect(page.getByRole("status")).toHaveCount(0);
 });
 
@@ -444,19 +701,19 @@ test("unaffordable actions stay disabled and maritime choices are explicit", asy
   await expect(page.getByLabel("Maritime receive resource")).toBeVisible();
 });
 
-test("New Game enters interactive snake-order setup", async ({ page }) => {
+test("New Random Map enters interactive snake-order setup", async ({ page }) => {
   await openLocal(page);
   await page.getByRole("button", { name: "Open settings" }).click();
-  await page.getByRole("button", { name: "Start New Game" }).click();
+  await page.getByRole("button", { name: "New Random Map" }).click();
 
   await expect(page.getByText("Place the next settlement")).toBeVisible();
   await expect(page.locator('[data-board-action-target="setupSettlement"]')).not.toHaveCount(0);
 });
 
-test("New Game completes all setup pairs and enters normal play", async ({ page }) => {
+test("New Random Map completes all setup pairs and enters normal play", async ({ page }) => {
   await openLocal(page);
   await page.getByRole("button", { name: "Open settings" }).click();
-  await page.getByRole("button", { name: "Start New Game" }).click();
+  await page.getByRole("button", { name: "New Random Map" }).click();
 
   for (let placement = 0; placement < 8; placement += 1) {
     const settlements = page.locator('[data-board-action-target="setupSettlement"]');
@@ -678,7 +935,7 @@ test("mobile setup board targets retain a 44px non-scaling hit stroke", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await openLocal(page);
   await page.getByRole("button", { name: "Open settings" }).click();
-  await page.getByRole("button", { name: "Start New Game" }).click();
+  await page.getByRole("button", { name: "New Random Map" }).click();
 
   const target = page.locator('[data-board-action-target="setupSettlement"]');
   expect(await target.count()).toBeGreaterThan(0);
