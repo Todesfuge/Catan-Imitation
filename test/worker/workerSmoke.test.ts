@@ -13,7 +13,7 @@ describe("combined Worker", () => {
     expect(response.headers.get("content-type")).toContain("application/json");
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("content-security-policy")).toContain("connect-src 'self'");
-    await expect(response.json()).resolves.toEqual({ ok: true, schemaVersion: 1 });
+    await expect(response.json()).resolves.toEqual({ ok: true, schemaVersion: 2 });
   });
 
   it("returns a stable safe error for an unknown API route", async () => {

@@ -1,8 +1,11 @@
 import type { CommerceGuildState } from "../../src/domain/expansion/commerceGuild";
+import { parseMapSeed } from "../../src/domain/mapSeed";
 import type { MatchState } from "../../src/domain/match/types";
+import { matchesBoardDataForSeed } from "../../src/domain/randomBoard";
 import type { GameState, Player } from "../../src/domain/types";
 import type { ConnectionTicket, PersistedRoom, PersistedSeat } from "./roomTypes";
 import { hashesMatch } from "../crypto";
+import { migratePersistedRoomV1 } from "./roomMigration";
 import {
   joinLobby,
   leaveLobby,
@@ -26,6 +29,11 @@ export interface RoomStorage {
 
 export type RoomLookup =
   | { kind: "active"; room: PersistedRoom }
+  | { kind: "expired"; expiredAt: number }
+  | { kind: "missing" };
+
+type StoredRoomLookup =
+  | { kind: "active"; room: PersistedRoom; replacementRequired: boolean }
   | { kind: "expired"; expiredAt: number }
   | { kind: "missing" };
 
@@ -114,6 +122,17 @@ function gameState(value: unknown): value is GameState {
   if (!record(value) || !["setup", "playing", "gameOver"].includes(String(value.phase)) ||
     !Array.isArray(value.players) || !value.players.every(player) ||
     typeof value.activePlayerId !== "string" || !integer(value.round, 1)) return false;
+  let mapSeed;
+  try {
+    mapSeed = parseMapSeed(value.mapSeed);
+  } catch {
+    return false;
+  }
+  if (!matchesBoardDataForSeed({
+    board: value.board,
+    edges: value.edges,
+    ports: value.ports
+  }, mapSeed)) return false;
   return value.players.some((candidate) => candidate.id === value.activePlayerId);
 }
 
@@ -169,7 +188,7 @@ function assertPersistedRoomSemantics(value: unknown): asserts value is Persiste
     "schemaVersion", "roomCode", "lifecycle", "createdAt", "lastActivityAt", "expiresAt",
     "hostSeatId", "nextJoinOrder", "roomVersion", "seats", "connectionTickets"
   ], ["matchState", "pendingAuction"]) ||
-    value.schemaVersion !== 1 || typeof value.roomCode !== "string" ||
+    value.schemaVersion !== 2 || typeof value.roomCode !== "string" ||
     !/^[A-HJ-NP-Z2-9]{6}$/.test(value.roomCode) ||
     !["lobby", "playing", "finished"].includes(String(value.lifecycle)) ||
     !integer(value.createdAt) || !integer(value.lastActivityAt) || !integer(value.expiresAt) ||
@@ -232,7 +251,7 @@ function expiredAt(value: unknown): number | undefined {
 async function readStoredRoom(
   storage: RoomStorage,
   now: number
-): Promise<RoomLookup> {
+): Promise<StoredRoomLookup> {
   const value = await storage.get(ROOM_RECORD_KEY);
   const tombstone = await storage.get(ROOM_EXPIRED_KEY);
   if (value !== undefined && tombstone !== undefined) throw new RoomSchemaError();
@@ -243,24 +262,50 @@ async function readStoredRoom(
     return { kind: "expired", expiredAt: timestamp };
   }
 
-  assertPersistedRoomSemantics(value);
-  const connectionTickets = value.connectionTickets.filter((item) => item.expiresAt > now);
-  const cleaned = connectionTickets.length === value.connectionTickets.length
-    ? value
-    : { ...value, connectionTickets };
-  assertTicketBounds(cleaned);
-  if (connectionTickets.length === value.connectionTickets.length) {
-    return { kind: "active", room: value };
+  let replacementRequired = false;
+  let room: PersistedRoom;
+  if (record(value) && value.schemaVersion === 2) {
+    assertPersistedRoomSemantics(value);
+    room = value;
+  } else {
+    const migrated = migratePersistedRoomV1(value);
+    if (migrated === undefined) throw new RoomSchemaError();
+    assertPersistedRoomSemantics(migrated);
+    room = migrated;
+    replacementRequired = true;
   }
-  await storage.put(ROOM_RECORD_KEY, cleaned);
-  return { kind: "active", room: cleaned };
+
+  const connectionTickets = room.connectionTickets.filter((item) => item.expiresAt > now);
+  const cleaned = connectionTickets.length === room.connectionTickets.length
+    ? room
+    : { ...room, connectionTickets };
+  replacementRequired ||= cleaned !== room;
+  assertTicketBounds(cleaned);
+  return { kind: "active", room: cleaned, replacementRequired };
+}
+
+function roomLookup(value: StoredRoomLookup): RoomLookup {
+  return value.kind === "active"
+    ? { kind: "active", room: value.room }
+    : value;
+}
+
+async function persistReadReplacement(
+  storage: RoomStorage,
+  value: StoredRoomLookup
+): Promise<void> {
+  if (value.kind === "active" && value.replacementRequired) {
+    await storage.put(ROOM_RECORD_KEY, value.room);
+  }
 }
 
 export class RoomStore {
   constructor(private readonly storage: RoomStorage) {}
 
-  lookup(now: number): Promise<RoomLookup> {
-    return readStoredRoom(this.storage, now);
+  async lookup(now: number): Promise<RoomLookup> {
+    const current = await readStoredRoom(this.storage, now);
+    await persistReadReplacement(this.storage, current);
+    return roomLookup(current);
   }
 
   async load(now: number): Promise<PersistedRoom | null> {
@@ -271,7 +316,9 @@ export class RoomStore {
   async createIfEmpty(room: PersistedRoom): Promise<"created" | "collision"> {
     assertPersistedRoom(room);
     return this.transaction(async (storage) => {
-      if ((await readStoredRoom(storage, room.createdAt)).kind !== "missing") {
+      const current = await readStoredRoom(storage, room.createdAt);
+      if (current.kind !== "missing") {
+        await persistReadReplacement(storage, current);
         return "collision";
       }
       await storage.put(ROOM_RECORD_KEY, room);
@@ -296,6 +343,7 @@ export class RoomStore {
       if (current.kind !== "active") return current;
       const result = mutation(current.room);
       if (result.kind === "unchanged") {
+        await persistReadReplacement(storage, current);
         return { kind: "active", room: current.room, value: result.value };
       }
       assertPersistedRoom(result.room);
@@ -331,10 +379,12 @@ export class RoomStore {
         return { kind: "alreadyExpired" };
       }
       if (current.room.expiresAt > now) {
+        await persistReadReplacement(storage, current);
         await storage.setAlarm(current.room.expiresAt);
         return { kind: "refreshed", expiresAt: current.room.expiresAt };
       }
       if (openConnections) {
+        await persistReadReplacement(storage, current);
         await storage.setAlarm(deferredUntil);
         return { kind: "deferred", nextAlarmAt: deferredUntil };
       }
@@ -358,6 +408,7 @@ export class RoomStore {
       const current = await readStoredRoom(storage, now);
       if (current.kind !== "active") return current.kind;
       const room = joinLobby(current.room, input, now);
+      assertPersistedRoom(room);
       await storage.put(ROOM_RECORD_KEY, room);
       await storage.setAlarm(room.expiresAt);
       return room;
@@ -376,13 +427,17 @@ export class RoomStore {
       const seat = current.room.seats.find((candidate) =>
         candidate.seatId === seatId && hashesMatch(candidate.tokenHash, tokenHash)
       );
-      if (seat === undefined) return "invalid-token";
+      if (seat === undefined) {
+        await persistReadReplacement(storage, current);
+        return "invalid-token";
+      }
       const result = leaveLobby(current.room, seatId, connectedSeatIds, now);
       if (result.kind === "deleted") {
         await storage.delete(ROOM_RECORD_KEY);
         await storage.deleteAlarm();
         return "deleted";
       }
+      assertPersistedRoom(result.room);
       await storage.put(ROOM_RECORD_KEY, result.room);
       await storage.setAlarm(result.room.expiresAt);
       return { room: result.room };
@@ -399,11 +454,15 @@ export class RoomStore {
       if (current.kind !== "active") return current.kind;
       const value = current.room;
       const seat = value.seats.find((candidate) => hashesMatch(candidate.tokenHash, tokenHash));
-      if (seat === undefined) return "invalid-token";
+      if (seat === undefined) {
+        await persistReadReplacement(storage, current);
+        return "invalid-token";
+      }
       const validTickets = value.connectionTickets.filter((candidate) => candidate.expiresAt > now);
       const seatTicketCount = validTickets.filter((candidate) => candidate.seatId === seat.seatId).length;
       if (seatTicketCount >= MAX_OUTSTANDING_TICKETS_PER_SEAT ||
         validTickets.length >= MAX_OUTSTANDING_TICKETS_PER_ROOM) {
+        await persistReadReplacement(storage, current);
         return "rate-limited";
       }
       const room = {
@@ -428,9 +487,7 @@ export class RoomStore {
       const validTickets = value.connectionTickets.filter((ticket) => ticket.expiresAt > now);
       const ticket = validTickets.find((candidate) => hashesMatch(candidate.ticketHash, ticketHash));
       if (ticket === undefined) {
-        if (validTickets.length !== value.connectionTickets.length) {
-          await storage.put(ROOM_RECORD_KEY, { ...value, connectionTickets: validTickets });
-        }
+        await persistReadReplacement(storage, current);
         return "invalid-ticket" as const;
       }
       const room = refreshRoomActivity({

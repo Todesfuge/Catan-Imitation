@@ -33,7 +33,7 @@ export interface PendingSealedAuction {
 }
 
 export interface PersistedRoom {
-  schemaVersion: 1;
+  schemaVersion: 2;
   roomCode: string;
   lifecycle: PersistedRoomLifecycle;
   createdAt: number;

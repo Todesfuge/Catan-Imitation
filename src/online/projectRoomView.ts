@@ -5,7 +5,7 @@ import type {
 } from "../domain/expansion/commerceGuild";
 import type { MatchState } from "../domain/match/types";
 import { parseMapSeed, type MapSeed } from "../domain/mapSeed";
-import { createBoardDataForSeed } from "../domain/randomBoard";
+import { matchesBoardDataForSeed } from "../domain/randomBoard";
 import { calculatePlayerScore } from "../domain/rules/scoring";
 import {
   resources,
@@ -71,40 +71,10 @@ const developmentCardKinds: readonly DevelopmentCardKind[] = [
 
 const MAX_PUBLIC_LOG_ENTRIES = 6;
 
-function strictStructuralEqual(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true;
-  if (
-    left === null ||
-    right === null ||
-    typeof left !== "object" ||
-    typeof right !== "object" ||
-    Array.isArray(left) !== Array.isArray(right)
-  ) {
-    return false;
-  }
-  if (Array.isArray(left) && Array.isArray(right) && left.length !== right.length) {
-    return false;
-  }
-
-  const leftObject = left as Record<string, unknown>;
-  const rightObject = right as Record<string, unknown>;
-  const leftKeys = Object.keys(leftObject);
-  const rightKeys = Object.keys(rightObject);
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key) =>
-        Object.hasOwn(rightObject, key) &&
-        strictStructuralEqual(leftObject[key], rightObject[key])
-    )
-  );
-}
-
 function requireSeedDerivedBoardData(game: GameState): MapSeed {
   const mapSeed = parseMapSeed(game.mapSeed);
-  const expected = createBoardDataForSeed(mapSeed);
   const stored = { board: game.board, edges: game.edges, ports: game.ports };
-  if (!strictStructuralEqual(stored, expected)) {
+  if (!matchesBoardDataForSeed(stored, mapSeed)) {
     throw new Error("Online projection requires static seed-derived board data.");
   }
   return mapSeed;

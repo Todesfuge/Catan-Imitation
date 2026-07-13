@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { RuleViolationError } from "../../src/domain/errors";
+import { parseMapSeed } from "../../src/domain/mapSeed";
 import { applyMatchCommand } from "../../src/domain/match/applyMatchCommand";
 import type { MatchCommand, MatchExecutionContext, MatchState } from "../../src/domain/match/types";
 import { MAX_WIRE_BYTES, type PresenceEntry, type ServerWebSocketMessage } from "../../src/online/protocol";
@@ -22,6 +23,7 @@ const ids = Array.from({ length: 80 }, (_, index) =>
 
 const context: MatchExecutionContext = {
   random: { nextInt: () => 0 },
+  nextMapSeed: () => parseMapSeed("M1-0000000000000002"),
   nextLogId: () => "log-id",
   now: () => 1_000
 };
@@ -129,7 +131,7 @@ describe("authoritative room command pipeline", () => {
     const small: ServerWebSocketMessage = { type: "presence.changed", presence: [] };
     const snapshot = {
       type: "room.snapshot",
-      schemaVersion: 1,
+      schemaVersion: 2,
       roomVersion: 1,
       lifecycle: "lobby",
       publicState: {},
@@ -583,7 +585,10 @@ describe("authoritative room command pipeline", () => {
     const pipeline = createCommandPipeline({
       store,
       prepareExecutionContext: () => () => ({
-        random: { nextInt: () => 0 }, nextLogId: () => "retry-log", now: () => 100
+        random: { nextInt: () => 0 },
+        nextMapSeed: () => parseMapSeed("M1-0000000000000003"),
+        nextLogId: () => "retry-log",
+        now: () => 100
       }),
       executeMatchCommand(state, _command, execution) {
         const first = execution.random.nextInt(6) + 1;

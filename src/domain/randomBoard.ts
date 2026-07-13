@@ -220,6 +220,35 @@ function createM1BoardData(seed: MapSeed): StandardBoardData {
   return { board, edges, ports };
 }
 
+function strictStructuralEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (
+    left === null ||
+    right === null ||
+    typeof left !== "object" ||
+    typeof right !== "object" ||
+    Array.isArray(left) !== Array.isArray(right)
+  ) {
+    return false;
+  }
+  if (Array.isArray(left) && Array.isArray(right) && left.length !== right.length) {
+    return false;
+  }
+
+  const leftObject = left as Record<string, unknown>;
+  const rightObject = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftObject);
+  const rightKeys = Object.keys(rightObject);
+  return leftKeys.length === rightKeys.length && leftKeys.every((key) =>
+    Object.hasOwn(rightObject, key) &&
+    strictStructuralEqual(leftObject[key], rightObject[key])
+  );
+}
+
 export function createBoardDataForSeed(seed: MapSeed): StandardBoardData {
   return seed === LEGACY_STANDARD_MAP_SEED ? createStandardBoardData() : createM1BoardData(seed);
+}
+
+export function matchesBoardDataForSeed(value: unknown, seed: MapSeed): boolean {
+  return strictStructuralEqual(value, createBoardDataForSeed(seed));
 }

@@ -100,7 +100,7 @@ export function createLobby(
 ): PersistedRoom {
   const host = makeSeat(input, now, 1);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     roomCode: normalizeRoomCode(input.roomCode),
     lifecycle: "lobby",
     createdAt: now,
@@ -191,7 +191,11 @@ export function startLobby(
   if (room.seats.some((seat) => !seat.ready)) throw new RoomLifecycleError("NOT_ALL_READY");
 
   const seats = [...room.seats].sort((left, right) => left.joinOrder - right.joinOrder);
-  const matchState = createSetupMatch(seats.map((seat) => ({ nickname: seat.nickname })), context);
+  const matchState = createSetupMatch(
+    seats.map((seat) => ({ nickname: seat.nickname })),
+    { kind: "fresh" },
+    context
+  );
   const lockedSeats = seats.map((seat, index) => ({
     ...seat,
     playerId: matchState.game.players[index].id

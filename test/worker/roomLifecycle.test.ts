@@ -4,6 +4,7 @@ import worker from "../../worker/index";
 import { hashSecret } from "../../worker/crypto";
 import { RoomDurableObject } from "../../worker/room/RoomDurableObject";
 
+import { parseMapSeed } from "../../src/domain/mapSeed";
 import type { MatchExecutionContext } from "../../src/domain/match/types";
 import { MAX_WIRE_BYTES } from "../../src/online/protocol";
 import {
@@ -40,6 +41,7 @@ function context(): MatchExecutionContext {
   let logId = 0;
   return {
     random: { nextInt: () => 0 },
+    nextMapSeed: () => parseMapSeed("M1-0000000000000001"),
     nextLogId: () => `log-${++logId}`,
     now: () => 1_000
   };
@@ -189,7 +191,7 @@ describe("pure lobby lifecycle", () => {
     const room = roomWithSeats();
 
     expect(room).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       roomCode: "ABC234",
       lifecycle: "lobby",
       hostSeatId: "seat-1",
@@ -414,7 +416,7 @@ describe("RoomStore", () => {
 
   it("rejects incompatible and malformed persisted schema", async () => {
     for (const invalid of [
-      { ...roomWithSeats(), schemaVersion: 2 },
+      { ...roomWithSeats(), schemaVersion: 3 },
       { ...roomWithSeats(), hostSeatId: "missing" },
       { ...roomWithSeats(), presence: [] },
       {
@@ -1060,7 +1062,7 @@ describe("room HTTP routes and authenticated sockets", () => {
     const snapshot = await nextMessage(first);
     expect(snapshot).toMatchObject({
       type: "room.snapshot",
-      schemaVersion: 1,
+      schemaVersion: 2,
       lifecycle: "lobby",
       privateState: { seatId: host.seatId, seatTokenPresent: true }
     });
@@ -1659,7 +1661,7 @@ describe("room eviction recovery and expiry alarms", () => {
     await rooms.seed("incompatible-recovery", roomWithSeats());
     await rooms.state("incompatible-recovery").storage.put(ROOM_RECORD_KEY, {
       ...roomWithSeats(),
-      schemaVersion: 2
+      schemaVersion: 3
     });
     rooms.evict("incompatible-recovery");
 
@@ -1676,7 +1678,7 @@ describe("room eviction recovery and expiry alarms", () => {
     await expect(response.json()).resolves.toEqual({
       error: {
         code: "PROTOCOL_INCOMPATIBLE",
-        params: { expected: 1 },
+        params: { expected: 2 },
         retryable: false
       }
     });
