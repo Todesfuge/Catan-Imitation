@@ -119,7 +119,7 @@ Files:
 Steps:
 
 - [ ] Add a Local boot test asserting `createInitialAppState()` is setup phase with four current names, zero pieces/resources/private cards, no pending trade/decision, and a canonical M1 seed.
-- [ ] Add Local controller/reducer tests for `game.restart` fresh and same-map modes, including UI selection/notice reset.
+- [ ] Add Local reducer tests for mode-bearing `START_NEW_GAME` fresh and same-map commands, including UI selection/notice reset; until T008 replaces the shared UI intent, map the existing `game.new` intent explicitly to `fresh` so no mode-less command remains.
 - [ ] Add a repository guard test that searches `src/` and `worker/` and fails on any `createDemoGame` declaration, export, import, or call.
 - [ ] Run `pnpm vitest run test/domain/gameTableView.test.ts test/domain/deliveryReadiness.test.ts`; expect RED because Local still constructs the prepared game and the production demo symbol exists.
 - [ ] Create `test/fixtures/createScenarioGame.ts` from the prepared rule-test state, with `M0-STANDARD` and no production imports from `test/`.
