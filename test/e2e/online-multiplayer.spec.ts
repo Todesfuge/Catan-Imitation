@@ -13,7 +13,14 @@ type Snapshot = {
   acknowledgedCommandId?: string;
 };
 
+type CommandRejection = {
+  type: "command.rejected";
+  commandId: string;
+  error: { code: string };
+};
+
 const productionWireSnapshots = new WeakMap<Page, Snapshot[]>();
+const wireCommandRejections = new WeakMap<Page, CommandRejection[]>();
 const ticketRequestCounts = new WeakMap<Page, { count: number }>();
 
 async function trackProductionSockets(context: BrowserContext): Promise<void> {
@@ -45,8 +52,10 @@ function resourceRichSetupTarget(targets: string[], seed: string): string | unde
 async function openOnline(context: BrowserContext, mobile = false): Promise<Page> {
   const page = await context.newPage();
   const snapshots: Snapshot[] = [];
+  const rejections: CommandRejection[] = [];
   const tickets = { count: 0 };
   productionWireSnapshots.set(page, snapshots);
+  wireCommandRejections.set(page, rejections);
   ticketRequestCounts.set(page, tickets);
   page.on("request", (request) => {
     if (request.url().includes("/connection-ticket")) tickets.count += 1;
@@ -55,7 +64,8 @@ async function openOnline(context: BrowserContext, mobile = false): Promise<Page
     try {
       const message = JSON.parse(String(payload));
       if (message.type === "room.snapshot") snapshots.push(message);
-    } catch { /* non-JSON frames are not room snapshots */ }
+      if (message.type === "command.rejected") rejections.push(message);
+    } catch { /* non-JSON frames are not room messages */ }
   }));
   if (mobile) await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
@@ -149,8 +159,14 @@ async function synchronized(pages: Page[]): Promise<Snapshot[]> {
 
 async function uiMutation(pages: Page[], actor: Page, action: () => Promise<void>): Promise<Snapshot[]> {
   const before = Math.max(...(await synchronized(pages)).map((snapshot) => snapshot.roomVersion));
+  await expect(actor.locator(".online-game-shell")).toHaveAttribute("data-room-version", String(before), { timeout: 8_000 });
+  const rejectionIndex = wireCommandRejections.get(actor)?.length ?? 0;
   await action();
-  await expect.poll(async () => (await latestSnapshot(actor)).roomVersion, { timeout: 8_000 }).toBeGreaterThan(before);
+  await expect.poll(async () => {
+    const rejection = wireCommandRejections.get(actor)?.slice(rejectionIndex).at(-1);
+    if (rejection) throw new Error(`UI command ${rejection.commandId} was rejected: ${rejection.error.code}`);
+    return (await latestSnapshot(actor)).roomVersion;
+  }, { timeout: 8_000 }).toBeGreaterThan(before);
   return synchronized(pages);
 }
 
@@ -257,8 +273,12 @@ async function submitAuctionRound(
     const amount: number = preferPositive && !submittedPositive && max > 0 ? 1 : 0;
     const projectedAfterBid = await uiMutation(pages, pages[index], async () => {
       await pages[index].getByRole("tab", { name: "Commerce Guild" }).click();
-      await pages[index].getByLabel("Your sealed bid").fill(String(amount));
-      await pages[index].getByRole("button", { name: "Submit sealed bid" }).click();
+      const bidInput = pages[index].getByLabel("Your sealed bid");
+      const submitButton = pages[index].getByRole("button", { name: "Submit sealed bid" });
+      await expect(bidInput).toBeEnabled();
+      await expect(submitButton).toBeEnabled();
+      await bidInput.fill(String(amount));
+      await submitButton.click();
     });
     onUiBid(index);
     const projected = projectedAfterBid;

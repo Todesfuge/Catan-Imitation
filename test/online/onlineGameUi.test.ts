@@ -523,6 +523,7 @@ describe("online game projection adapter", () => {
       React.createElement(OnlineGame, { roomCode: "234567", state: clientState, dispatch: vi.fn(), reconnect: vi.fn(), onExit: vi.fn(), createCommandId: crypto.randomUUID })
     ));
     const connectedHtml = renderGame(state(robberSnapshot));
+    expect(connectedHtml).toContain('data-room-version="41"');
     expect(connectedHtml).toContain(`data-robber-target="${targetHex}"`);
     expect((connectedHtml.match(/data-robber-target=/g) ?? [])).toHaveLength(1);
     expect(renderGame(state(robberSnapshot, "reconnecting"))).not.toContain("data-robber-target=");

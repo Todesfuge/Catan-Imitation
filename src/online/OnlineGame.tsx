@@ -43,7 +43,7 @@ export function OnlineGame({
     if (!projection) return undefined;
     try { return createOnlineGameTableView(state); } catch { return undefined; }
   }, [projection, state]);
-  if (!baseView || !projection) {
+  if (!baseView || !projection || !state.snapshot) {
     return (
       <main className="online-shell">
         <section className="online-game-protocol-error" role="alert">
@@ -72,7 +72,7 @@ export function OnlineGame({
     controller.dispatch(intent);
   };
   return (
-    <div className="online-game-shell">
+    <div className="online-game-shell" data-room-version={state.snapshot.roomVersion}>
       <header className="online-game-status" aria-label={t("online.tableStatus") }>
         <div><strong>{t("online.roomShort", { code: roomCode })}</strong><span>{t("online.privacyNote")}</span></div>
         <span className={`connection-badge connection-badge--${state.status}`} role="status">{t(connectionKeys[state.status])}</span>
