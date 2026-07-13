@@ -148,7 +148,7 @@ function assertM1Invariants(seed: MapSeed): void {
   const desertHexes = data.board.filter((hex) => hex.terrain === "desert");
   expect(desertHexes).toHaveLength(1);
   expect(desertHexes[0]).toMatchObject({ resource: null, diceNumber: null });
-  expect(data.board.some((hex) => hex.id === desertHexes[0].id)).toBe(true);
+  expect(desertHexes[0].id).toMatch(/^hex-\d{2}$/);
   for (const hex of data.board) {
     if (hex.terrain !== "desert") {
       expect(hex.resource).toBe(RESOURCE_BY_TERRAIN[hex.terrain]);

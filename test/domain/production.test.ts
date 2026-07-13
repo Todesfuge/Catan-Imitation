@@ -65,8 +65,7 @@ describe("dice production", () => {
             vertexId: sharedVertexId ?? "",
             kind: "settlement"
           }
-        ],
-        robberHexId: "desert"
+        ]
       },
       11
     );
@@ -96,14 +95,44 @@ describe("dice production", () => {
     });
   });
 
-  it("blocks production on the robber hex", () => {
-    const base = createDemoGame();
-    const blockedHex = base.board.find((hex) => hex.terrain === "pasture" && hex.diceNumber === 8);
-    const game = { ...base, robberHexId: blockedHex?.id ?? "" };
+  it("blocks production when the robber occupies a neutral-ID generated hex", () => {
+    const generated = createBoardDataForSeed(productionSeed);
+    const vertexUseCounts = new Map<string, number>();
+    for (const hex of generated.board) {
+      for (const vertexId of hex.vertexIds) {
+        vertexUseCounts.set(vertexId, (vertexUseCounts.get(vertexId) ?? 0) + 1);
+      }
+    }
+    const blockedHex = generated.board.find(
+      (hex) =>
+        hex.resource !== null &&
+        hex.diceNumber !== null &&
+        hex.vertexIds.some((vertexId) => vertexUseCounts.get(vertexId) === 1)
+    );
+    const settlementVertexId = blockedHex?.vertexIds.find(
+      (vertexId) => vertexUseCounts.get(vertexId) === 1
+    );
+    if (!blockedHex || !blockedHex.resource || blockedHex.diceNumber === null || !settlementVertexId) {
+      throw new Error("Expected a productive generated coastal hex with an exclusive vertex.");
+    }
+    const game = {
+      ...createDemoGame(),
+      ...generated,
+      buildings: [
+        {
+          id: "generated-blocked-settlement",
+          ownerId: "p1",
+          vertexId: settlementVertexId,
+          kind: "settlement" as const
+        }
+      ],
+      robberHexId: blockedHex.id
+    };
 
-    const production = collectProduction(game, 8);
+    const production = collectProduction(game, blockedHex.diceNumber);
 
-    expect(production.byPlayer.p1.wool).toBe(0);
-    expect(production.events.every((event) => event.hexId !== blockedHex?.id)).toBe(true);
+    expect(blockedHex.id).toMatch(/^hex-\d{2}$/);
+    expect(production.byPlayer.p1[blockedHex.resource]).toBe(0);
+    expect(production.events.every((event) => event.hexId !== blockedHex.id)).toBe(true);
   });
 });

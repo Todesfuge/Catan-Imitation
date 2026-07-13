@@ -167,8 +167,104 @@ Exited `0`; the only messages were the repository's CRLF conversion warnings.
 - Every selection loop has a finite structural bound. There is no probabilistic retry.
 - The one internal identity strategy interface has two current callers (legacy and neutral) and removes topology duplication rather than adding a speculative abstraction.
 - The complexity-only review found no dead code, wrapper, dependency, facade path, or standard-library replacement to remove.
+- The generated-desert invariant now checks the neutral `hex-NN` identity contract instead of proving membership in the array it was derived from.
+- The production regression builds an M1 board, selects a productive neutral-ID coastal hex with an exclusive vertex, places a settlement there, and proves that assigning that exact `hex-NN` ID to the robber suppresses its resource/event.
+- Generated-board production state retains the generated desert ID; no nested object literal replaces it with legacy `"desert"`.
 - `git diff --check`, focused tests, TypeScript compilation, and the full suite are clean.
 
 ## Concerns
 
-None. The large snapshot is deliberate because the contract requires complete board JSON goldens; reviewers should treat changes to either M1 golden as an explicit compatibility event.
+No blocking concerns. The large snapshot is deliberate because the contract requires complete board JSON goldens; reviewers should treat changes to either M1 golden as an explicit compatibility event. The review's Minor `localeCompare` portability note was intentionally not changed in this fix wave and remains logged for whole-branch triage.
+
+## Review Fix Evidence — Neutral Robber IDs
+
+Reviewer finding: the original desert-ID assertion was tautological, the generated production state was overwritten with legacy `"desert"`, and the robber-blocking test only exercised the released M0 board.
+
+### RED — legacy overwrite retained in the new generated-board regression
+
+Command:
+
+```text
+pnpm vitest run test/domain/randomBoard.test.ts test/domain/production.test.ts
+```
+
+Exit code: `1`
+
+Output:
+
+```text
+RUN  v2.1.8 C:/Study/Catan/.worktrees/seeded-random-maps
+
+❯ test/domain/production.test.ts (4 tests | 1 failed) 23ms
+  × dice production > blocks production when the robber occupies a neutral-ID generated hex 6ms
+    → expected 1 to be +0 // Object.is equality
+✓ test/domain/randomBoard.test.ts (7 tests) 1383ms
+  ✓ bounded deterministic board generation > satisfies every topology, multiset, red-token, and port invariant for 1,000 seeds 1359ms
+
+FAIL  test/domain/production.test.ts > dice production > blocks production when the robber occupies a neutral-ID generated hex
+AssertionError: expected 1 to be +0 // Object.is equality
+- Expected
++ Received
+- 0
++ 1
+
+Test Files  1 failed | 1 passed (2)
+Tests       1 failed | 10 passed (11)
+Duration    2.13s
+```
+
+The productive `hex-NN` emitted one resource because the test state still held legacy `robberHexId: "desert"`. This directly reproduced the review finding.
+
+### GREEN — generated IDs preserved and used
+
+Minimum command:
+
+```text
+pnpm vitest run test/domain/randomBoard.test.ts test/domain/production.test.ts
+```
+
+Exit code: `0`
+
+Output:
+
+```text
+✓ test/domain/production.test.ts (4 tests) 18ms
+✓ test/domain/randomBoard.test.ts (7 tests) 1420ms
+  ✓ bounded deterministic board generation > satisfies every topology, multiset, red-token, and port invariant for 1,000 seeds 1393ms
+
+Test Files  2 passed (2)
+Tests       11 passed (11)
+Duration    2.18s
+```
+
+Full focused T002 command:
+
+```text
+pnpm vitest run test/domain/randomBoard.test.ts test/domain/boardGeometry.test.ts test/domain/portGameplay.test.ts test/domain/production.test.ts
+```
+
+Exit code: `0`
+
+Output:
+
+```text
+✓ test/domain/boardGeometry.test.ts (3 tests) 16ms
+✓ test/domain/production.test.ts (4 tests) 18ms
+✓ test/domain/portGameplay.test.ts (4 tests) 19ms
+✓ test/domain/randomBoard.test.ts (7 tests) 1382ms
+  ✓ bounded deterministic board generation > satisfies every topology, multiset, red-token, and port invariant for 1,000 seeds 1358ms
+
+Test Files  4 passed (4)
+Tests       18 passed (18)
+Duration    2.14s
+```
+
+Type verification:
+
+```text
+pnpm exec tsc -b --pretty false
+```
+
+Exited `0` with no output.
+
+Review-fix boundary: only `test/domain/randomBoard.test.ts`, `test/domain/production.test.ts`, and this report changed. No production implementation or shared helper changed.
