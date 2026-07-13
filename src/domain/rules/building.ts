@@ -383,11 +383,11 @@ export function placeSetupRoad(game: GameState, playerId: PlayerId, edgeId: Edge
   const nextPlacementIndex = game.setup.placementIndex + 1;
 
   if (nextPlacementIndex >= game.setup.order.length) {
+    const { setup: _completedSetup, ...startedGame } = roadGame;
     return {
-      ...roadGame,
+      ...startedGame,
       phase: "playing",
-      activePlayerId: game.setup.order[0],
-      setup: undefined
+      activePlayerId: game.setup.order[0]
     };
   }
 

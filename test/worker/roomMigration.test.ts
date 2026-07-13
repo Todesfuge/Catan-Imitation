@@ -91,14 +91,18 @@ function createRichMatch(): MatchState {
   return {
     game: {
       ...scenario,
+      phase: "playing",
       activePlayerId: "p2",
       turn: 17,
       round: 5,
+      turnState: { phase: "action", pendingDiscards: {}, developmentCardPlayed: false },
       players: scenario.players.map((player, index) => ({
         ...player,
         resources: index === 0
           ? { wood: 2, brick: 1, wool: 3, grain: 0, ore: 4 }
-          : player.resources,
+          : index === 1
+            ? { ...player.resources, wood: 1 }
+            : player.resources,
         guildTokens: index === 0 ? 6 : index,
         developmentCards: index === 0 ? [{ ...heldCard, purchasedTurn: 9 }] : [],
         knightsPlayed: index === 0 ? 3 : 0
@@ -167,19 +171,42 @@ function createV2Playing(): PersistedRoom {
 
 function createV2Finished(): PersistedRoom {
   const playing = createV2Playing();
+  const { pendingAuction: _pendingAuction, ...room } = playing;
+  const { pendingPlayerTrade: _pendingPlayerTrade, ...matchState } = playing.matchState!;
   return {
-    ...playing,
+    ...room,
     lifecycle: "finished",
     roomVersion: 42,
     matchState: {
-      ...playing.matchState!,
+      ...matchState,
       game: {
-        ...playing.matchState!.game,
+        ...matchState.game,
         phase: "gameOver",
         winnerId: "p1"
       }
-    },
-    pendingAuction: undefined
+    }
+  };
+}
+
+function createV2SetupPlaying(): PersistedRoom {
+  const lobby = createV2Lobby();
+  const matchState = createSetupMatch(
+    NAMES.map((nickname) => ({ nickname })),
+    { kind: "seed", seed: LEGACY_STANDARD_MAP_SEED },
+    executionContext()
+  );
+  return {
+    ...lobby,
+    lifecycle: "playing",
+    lastActivityAt: 8_000,
+    expiresAt: 8_000 + DAY_MS,
+    roomVersion: 21,
+    seats: lobby.seats.map((seat, index) => ({
+      ...seat,
+      playerId: matchState.game.players[index].id,
+      ready: true
+    })),
+    matchState
   };
 }
 
@@ -205,6 +232,177 @@ function corruptedLegacy(
   mutate((raw.matchState as Record<string, any>).game);
   return raw;
 }
+
+function snapshotOwnValues(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(snapshotOwnValues);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.keys(value).map((key) => [
+      key,
+      snapshotOwnValues((value as Record<string, unknown>)[key])
+    ])
+  );
+}
+
+function matchRecord(raw: Record<string, unknown>): Record<string, any> {
+  return raw.matchState as Record<string, any>;
+}
+
+function gameRecord(raw: Record<string, unknown>): Record<string, any> {
+  return matchRecord(raw).game;
+}
+
+interface InvalidStoredRoomCase {
+  name: string;
+  createRoom?: () => PersistedRoom;
+  mutate(raw: Record<string, unknown>): void;
+}
+
+const invalidStoredRoomCases: InvalidStoredRoomCase[] = [
+  { name: "missing bank", mutate: (raw) => { delete gameRecord(raw).bank; } },
+  { name: "missing turnState", mutate: (raw) => { delete gameRecord(raw).turnState; } },
+  { name: "unknown nested game key", mutate: (raw) => { gameRecord(raw).debugState = true; } },
+  { name: "explicit undefined optional game field", mutate: (raw) => { gameRecord(raw).winnerId = undefined; } },
+  { name: "explicit undefined required game field", mutate: (raw) => { gameRecord(raw).bank = undefined; } },
+  {
+    name: "inherited required game field",
+    mutate(raw) {
+      const game = gameRecord(raw);
+      const phase = game.phase;
+      delete game.phase;
+      Object.setPrototypeOf(game, { phase });
+    }
+  },
+  { name: "non-finite turn", mutate: (raw) => { gameRecord(raw).turn = Number.POSITIVE_INFINITY; } },
+  {
+    name: "unsafe player resource count",
+    mutate: (raw) => { gameRecord(raw).players[0].resources.wood = Number.MAX_SAFE_INTEGER + 1; }
+  },
+  { name: "non-finite dice value", mutate: (raw) => { matchRecord(raw).lastDice.first = Number.NaN; } },
+  {
+    name: "unsafe guild reward",
+    mutate: (raw) => { matchRecord(raw).guild.tradeSlots[0].tokenReward = Number.MAX_SAFE_INTEGER + 1; }
+  },
+  {
+    name: "unsafe sealed bid",
+    mutate: (raw) => {
+      (raw.pendingAuction as Record<string, any>).bidsBySeatId["seat-1"] = Number.MAX_SAFE_INTEGER + 1;
+    }
+  },
+  { name: "unknown robber hex", mutate: (raw) => { gameRecord(raw).robberHexId = "hex-missing"; } },
+  {
+    name: "unknown building owner",
+    mutate: (raw) => { gameRecord(raw).buildings[0].ownerId = "player-missing"; }
+  },
+  {
+    name: "unknown building vertex",
+    mutate: (raw) => { gameRecord(raw).buildings[0].vertexId = "vertex-missing"; }
+  },
+  { name: "unknown road owner", mutate: (raw) => { gameRecord(raw).roads[0].ownerId = "player-missing"; } },
+  { name: "unknown road edge", mutate: (raw) => { gameRecord(raw).roads[0].edgeId = "edge-missing"; } },
+  {
+    name: "unknown setup player",
+    createRoom: createV2SetupPlaying,
+    mutate: (raw) => { gameRecord(raw).setup.order[0] = "player-missing"; }
+  },
+  {
+    name: "unknown setup pending vertex",
+    createRoom: createV2SetupPlaying,
+    mutate(raw) {
+      const game = gameRecord(raw);
+      game.setup.stage = "road";
+      game.setup.pendingSettlement = {
+        playerId: game.activePlayerId,
+        vertexId: "vertex-missing"
+      };
+    }
+  },
+  {
+    name: "unknown turn pending player",
+    mutate(raw) {
+      gameRecord(raw).turnState = {
+        phase: "awaitingDevelopmentEffect",
+        pendingDiscards: {},
+        pendingDevelopmentEffect: {
+          kind: "monopoly",
+          playerId: "player-missing",
+          resumePhase: "action"
+        },
+        developmentCardPlayed: true
+      };
+    }
+  },
+  {
+    name: "malformed player resources",
+    mutate: (raw) => { delete gameRecord(raw).players[0].resources.ore; }
+  },
+  {
+    name: "malformed player development card",
+    mutate: (raw) => { gameRecord(raw).players[0].developmentCards[0].revealed = "no"; }
+  },
+  {
+    name: "malformed development deck card",
+    mutate: (raw) => { gameRecord(raw).developmentDeck[0].kind = "unknown-card"; }
+  },
+  { name: "invalid bank resources", mutate: (raw) => { gameRecord(raw).bank.resources.wood = -1; } },
+  {
+    name: "invalid log params",
+    mutate: (raw) => { gameRecord(raw).log[0].params = { total: Number.NaN }; }
+  },
+  {
+    name: "invalid guild trade slots",
+    mutate: (raw) => { matchRecord(raw).guild.tradeSlots[0].requires = { unknown: 1 }; }
+  },
+  {
+    name: "invalid guild gathering",
+    mutate: (raw) => { matchRecord(raw).guild.gathering.phase = "unknown-phase"; }
+  },
+  {
+    name: "invalid guild outcome",
+    mutate: (raw) => { matchRecord(raw).guild.gathering.auctionResults[0] = { kind: "unknown" }; }
+  },
+  {
+    name: "malformed lastDice total",
+    mutate: (raw) => { matchRecord(raw).lastDice.total = 2; }
+  },
+  {
+    name: "malformed player trade proposer",
+    mutate: (raw) => { matchRecord(raw).pendingPlayerTrade.proposerId = "player-missing"; }
+  },
+  {
+    name: "unknown largest-army owner",
+    mutate: (raw) => { gameRecord(raw).largestArmyOwnerId = "player-missing"; }
+  },
+  {
+    name: "unknown winner",
+    createRoom: createV2Finished,
+    mutate: (raw) => { gameRecord(raw).winnerId = "player-missing"; }
+  },
+  {
+    name: "setup phase without setup state",
+    createRoom: createV2SetupPlaying,
+    mutate: (raw) => { delete gameRecord(raw).setup; }
+  },
+  {
+    name: "playing phase with setup state",
+    createRoom: createV2SetupPlaying,
+    mutate: (raw) => { gameRecord(raw).phase = "playing"; }
+  },
+  {
+    name: "finished lifecycle with playing phase",
+    mutate: (raw) => { raw.lifecycle = "finished"; }
+  },
+  {
+    name: "game-over phase without winner",
+    createRoom: createV2Finished,
+    mutate: (raw) => { delete gameRecord(raw).winnerId; }
+  }
+];
+
+const rawValidationMatrix = invalidStoredRoomCases.flatMap((testCase) => [
+  { name: `v1 ${testCase.name}`, schema: "v1" as const, testCase },
+  { name: `v2 ${testCase.name}`, schema: "v2" as const, testCase }
+]);
 
 describe("persisted room schema v2", () => {
   it("creates and writes schema-v2 lobbies without match state", async () => {
@@ -279,6 +477,49 @@ describe("persisted room schema v2", () => {
       expect(storage.roomPutCount).toBe(0);
     }
   });
+});
+
+describe("complete raw persisted match validation", () => {
+  it.each(rawValidationMatrix)(
+    "rejects $name without writing or mutating raw storage",
+    async ({ schema, testCase }) => {
+      const room = testCase.createRoom?.() ?? createV2Playing();
+      const raw = schema === "v1"
+        ? toLegacyRecord(room)
+        : structuredClone(room) as unknown as Record<string, unknown>;
+      testCase.mutate(raw);
+      const before = snapshotOwnValues(raw);
+      const storage = new CountingStorage();
+      storage.values.set(ROOM_RECORD_KEY, raw);
+
+      await expect(new RoomStore(storage).load(10_000))
+        .rejects.toBeInstanceOf(RoomSchemaError);
+
+      expect(storage.values.get(ROOM_RECORD_KEY)).toBe(raw);
+      expect(snapshotOwnValues(storage.values.get(ROOM_RECORD_KEY))).toEqual(before);
+      expect(storage.roomPutCount).toBe(0);
+    }
+  );
+
+  it.each(["v1", "v2"] as const)(
+    "rejects %s lobby with an explicitly undefined matchState without writing",
+    async (schema) => {
+      const raw = schema === "v1"
+        ? toLegacyRecord(createV2Lobby())
+        : structuredClone(createV2Lobby()) as unknown as Record<string, unknown>;
+      raw.matchState = undefined;
+      const before = snapshotOwnValues(raw);
+      const storage = new CountingStorage();
+      storage.values.set(ROOM_RECORD_KEY, raw);
+
+      await expect(new RoomStore(storage).load(10_000))
+        .rejects.toBeInstanceOf(RoomSchemaError);
+
+      expect(storage.values.get(ROOM_RECORD_KEY)).toBe(raw);
+      expect(snapshotOwnValues(storage.values.get(ROOM_RECORD_KEY))).toEqual(before);
+      expect(storage.roomPutCount).toBe(0);
+    }
+  );
 });
 
 describe("legacy persisted-room migration", () => {

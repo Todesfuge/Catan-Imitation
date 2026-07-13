@@ -43,8 +43,9 @@ export function executeMatchCommandForTest<T extends MatchState>(
     dice?: [number, number];
     random?: () => number;
   };
+  const { pendingPlayerTrade: _pendingPlayerTrade, ...withoutPriorPlayerTrade } = state;
   return {
-    ...state,
+    ...withoutPriorPlayerTrade,
     ...applyMatchCommand(state, matchCommand as MatchCommand, context)
-  };
+  } as T;
 }

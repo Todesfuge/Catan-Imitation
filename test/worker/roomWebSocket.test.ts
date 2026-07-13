@@ -43,12 +43,13 @@ function playingRoom(): PersistedRoom {
 
 function auctionRoom(tokens = [3, 2, 1]): PersistedRoom {
   const room = playingRoom();
+  const { setup: _setup, ...game } = room.matchState!.game;
   return {
     ...room,
     matchState: {
       ...room.matchState!,
       game: {
-        ...room.matchState!.game,
+        ...game,
         phase: "playing",
         players: room.matchState!.game.players.map((player, index) => ({
           ...player,

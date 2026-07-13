@@ -108,6 +108,7 @@ describe("complete local-game setup interaction", () => {
     expect(state.game.turnState.phase).toBe("awaitingRoll");
     expect(state.game.buildings).toHaveLength(8);
     expect(state.game.roads).toHaveLength(8);
+    expect(Object.hasOwn(state.game, "setup")).toBe(false);
   });
 
   it("restarts a completed game without a page reload", () => {

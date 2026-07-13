@@ -121,6 +121,7 @@ describe("public player resource trade", () => {
     });
     expect(accepted.game.players).toEqual(acceptedGame.players);
     expect(accepted.pendingPlayerTrade).toBeUndefined();
+    expect(Object.hasOwn(accepted, "pendingPlayerTrade")).toBe(false);
     expect(accepted.game.log[0].messageKey).toBe("trade.player.accepted");
   });
 
@@ -195,11 +196,13 @@ describe("public player resource trade", () => {
       playerId: "p1"
     });
     expect(cancelled.pendingPlayerTrade).toBeUndefined();
+    expect(Object.hasOwn(cancelled, "pendingPlayerTrade")).toBe(false);
 
     const ended = executeMatchCommandForTest(published, {
       type: "END_TURN",
       playerId: "p1"
     });
     expect(ended.pendingPlayerTrade).toBeUndefined();
+    expect(Object.hasOwn(ended, "pendingPlayerTrade")).toBe(false);
   });
 });

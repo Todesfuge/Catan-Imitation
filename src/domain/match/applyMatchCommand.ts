@@ -273,8 +273,9 @@ export function applyMatchCommand(
       const gatheringStarted =
         resetGuild.gathering.phase === "idle" &&
         nextGuild.gathering.phase === "redemption";
+      const { pendingPlayerTrade: _pendingPlayerTrade, ...withoutPendingPlayerTrade } = state;
       return {
-        ...state,
+        ...withoutPendingPlayerTrade,
         game: {
           ...nextGame,
           log: gatheringStarted
@@ -289,8 +290,7 @@ export function applyMatchCommand(
             : nextGame.log
         },
         guild: nextGuild,
-        lastDice: null,
-        pendingPlayerTrade: undefined
+        lastDice: null
       };
     }
     case "BUILD_ROAD":
@@ -499,9 +499,9 @@ export function applyMatchCommand(
         );
       }
       const proposerName = getPlayerName(state.game, command.playerId);
+      const { pendingPlayerTrade: _pendingPlayerTrade, ...withoutPendingPlayerTrade } = state;
       return {
-        ...state,
-        pendingPlayerTrade: undefined,
+        ...withoutPendingPlayerTrade,
         game: {
           ...state.game,
           log: [
@@ -527,9 +527,9 @@ export function applyMatchCommand(
         state.pendingPlayerTrade,
         command.playerId
       );
+      const { pendingPlayerTrade: _pendingPlayerTrade, ...withoutPendingPlayerTrade } = state;
       return {
-        ...state,
-        pendingPlayerTrade: undefined,
+        ...withoutPendingPlayerTrade,
         game: {
           ...acceptedGame,
           log: [

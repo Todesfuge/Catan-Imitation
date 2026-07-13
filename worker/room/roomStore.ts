@@ -1,11 +1,7 @@
-import type { CommerceGuildState } from "../../src/domain/expansion/commerceGuild";
-import { parseMapSeed } from "../../src/domain/mapSeed";
-import type { MatchState } from "../../src/domain/match/types";
-import { matchesBoardDataForSeed } from "../../src/domain/randomBoard";
-import type { GameState, Player } from "../../src/domain/types";
 import type { ConnectionTicket, PersistedRoom, PersistedSeat } from "./roomTypes";
 import { hashesMatch } from "../crypto";
 import { migratePersistedRoomV1 } from "./roomMigration";
+import { isPersistedMatchState } from "./roomValidation";
 import {
   joinLobby,
   leaveLobby,
@@ -66,7 +62,8 @@ function record(value: unknown): value is Record<string, unknown> {
 
 function exactKeys(value: Record<string, unknown>, required: string[], optional: string[] = []): boolean {
   const allowed = new Set([...required, ...optional]);
-  return required.every((key) => key in value) && Object.keys(value).every((key) => allowed.has(key));
+  return required.every((key) => Object.hasOwn(value, key)) &&
+    Object.keys(value).every((key) => allowed.has(key));
 }
 
 function integer(value: unknown, minimum = 0): value is number {
@@ -97,7 +94,8 @@ function seat(value: unknown): value is PersistedSeat {
     value.normalizedNickname === value.nickname.toLocaleLowerCase() &&
     hash(value.tokenHash) && integer(value.joinedAt) && integer(value.joinOrder, 1) &&
     typeof value.ready === "boolean" &&
-    (value.playerId === undefined || (typeof value.playerId === "string" && value.playerId.length > 0)) &&
+    (!Object.hasOwn(value, "playerId") ||
+      (typeof value.playerId === "string" && value.playerId.length > 0)) &&
     Array.isArray(value.acceptedCommandIds) && value.acceptedCommandIds.length <= 64 &&
     value.acceptedCommandIds.every(acceptedCommand) &&
     Array.isArray(value.commandAttemptTimestamps) && value.commandAttemptTimestamps.length <= 10 &&
@@ -113,44 +111,6 @@ function ticket(value: unknown): value is ConnectionTicket {
     integer(value.expiresAt);
 }
 
-function player(value: unknown): value is Player {
-  return record(value) && typeof value.id === "string" && value.id.length > 0 &&
-    typeof value.name === "string" && integer(value.guildTokens);
-}
-
-function gameState(value: unknown): value is GameState {
-  if (!record(value) || !["setup", "playing", "gameOver"].includes(String(value.phase)) ||
-    !Array.isArray(value.players) || !value.players.every(player) ||
-    typeof value.activePlayerId !== "string" || !integer(value.round, 1)) return false;
-  let mapSeed;
-  try {
-    mapSeed = parseMapSeed(value.mapSeed);
-  } catch {
-    return false;
-  }
-  if (!matchesBoardDataForSeed({
-    board: value.board,
-    edges: value.edges,
-    ports: value.ports
-  }, mapSeed)) return false;
-  return value.players.some((candidate) => candidate.id === value.activePlayerId);
-}
-
-function guildState(value: unknown): value is CommerceGuildState {
-  if (!record(value) || !Array.isArray(value.tradeSlots) ||
-    !Array.isArray(value.usedTradePlayerIds) || !record(value.gathering)) return false;
-  const gathering = value.gathering;
-  return ["idle", "redemption", "auction", "complete"].includes(String(gathering.phase)) &&
-    record(gathering.redemptions) && integer(gathering.auctionRound, 1) &&
-    Array.isArray(gathering.auctionResults);
-}
-
-function matchState(value: unknown): value is MatchState {
-  return record(value) && exactKeys(value, ["game", "guild", "lastDice"], ["pendingPlayerTrade"]) &&
-    gameState(value.game) && guildState(value.guild) &&
-    (value.lastDice === null || record(value.lastDice));
-}
-
 function pendingAuction(value: unknown): boolean {
   return record(value) && exactKeys(value, ["round", "bidsBySeatId"]) &&
     integer(value.round, 1) && record(value.bidsBySeatId) &&
@@ -159,7 +119,7 @@ function pendingAuction(value: unknown): boolean {
 
 function lockedMatchIsConsistent(room: PersistedRoom, seats: PersistedSeat[]): boolean {
   const match = room.matchState;
-  if (!matchState(match) || match.game.players.length !== seats.length) return false;
+  if (!isPersistedMatchState(match) || match.game.players.length !== seats.length) return false;
   if (room.lifecycle === "playing" && match.game.phase === "gameOver") return false;
   if (room.lifecycle === "finished" && match.game.phase !== "gameOver") return false;
   return seats.every((seat, index) =>
@@ -169,10 +129,10 @@ function lockedMatchIsConsistent(room: PersistedRoom, seats: PersistedSeat[]): b
 }
 
 function pendingAuctionIsConsistent(room: PersistedRoom, seats: PersistedSeat[]): boolean {
-  const auction = room.pendingAuction;
-  if (auction === undefined) return true;
+  if (!Object.hasOwn(room, "pendingAuction")) return true;
+  const auction = room.pendingAuction!;
   const match = room.matchState;
-  if (room.lifecycle !== "playing" || !matchState(match) ||
+  if (room.lifecycle !== "playing" || !isPersistedMatchState(match) ||
     match.guild.gathering.phase !== "auction" ||
     auction.round !== match.guild.gathering.auctionRound) return false;
 
@@ -196,7 +156,7 @@ function assertPersistedRoomSemantics(value: unknown): asserts value is Persiste
     typeof value.hostSeatId !== "string" || !integer(value.nextJoinOrder, 2) ||
     !integer(value.roomVersion, 1) || !Array.isArray(value.seats) || !value.seats.every(seat) ||
     !Array.isArray(value.connectionTickets) || !value.connectionTickets.every(ticket) ||
-    (value.pendingAuction !== undefined && !pendingAuction(value.pendingAuction))) {
+    (Object.hasOwn(value, "pendingAuction") && !pendingAuction(value.pendingAuction))) {
     throw new RoomSchemaError();
   }
 
@@ -209,8 +169,8 @@ function assertPersistedRoomSemantics(value: unknown): asserts value is Persiste
   const lobby = value.lifecycle === "lobby";
   const countValid = lobby ? seats.length >= 1 && seats.length <= 4 : seats.length >= 3 && seats.length <= 4;
   const stateValid = lobby
-    ? value.matchState === undefined && players.length === 0
-    : players.length === seats.length && new Set(players).size === players.length &&
+    ? !Object.hasOwn(value, "matchState") && !Object.hasOwn(value, "pendingAuction") && players.length === 0
+    : Object.hasOwn(value, "matchState") && players.length === seats.length && new Set(players).size === players.length &&
       lockedMatchIsConsistent(room, seats);
   const referencesValid = seatIds.has(value.hostSeatId) &&
     value.connectionTickets.every((item) => seatIds.has(item.seatId)) &&
@@ -295,6 +255,7 @@ async function persistReadReplacement(
   value: StoredRoomLookup
 ): Promise<void> {
   if (value.kind === "active" && value.replacementRequired) {
+    assertPersistedRoom(value.room);
     await storage.put(ROOM_RECORD_KEY, value.room);
   }
 }
