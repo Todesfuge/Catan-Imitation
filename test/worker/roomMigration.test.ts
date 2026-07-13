@@ -5,8 +5,10 @@ import {
   LEGACY_STANDARD_MAP_SEED,
   parseMapSeed
 } from "../../src/domain/mapSeed";
+import { applyMatchCommand } from "../../src/domain/match/applyMatchCommand";
 import { createSetupMatch } from "../../src/domain/match/createMatch";
-import type { MatchExecutionContext, MatchState } from "../../src/domain/match/types";
+import type { MatchCommand, MatchExecutionContext, MatchState } from "../../src/domain/match/types";
+import { getLegalRoadEdgeIds } from "../../src/domain/rules/building";
 import {
   createLobby,
   joinLobby,
@@ -51,12 +53,17 @@ class CountingStorage implements RoomStorage {
   }
 }
 
-function executionContext(seed = M1_SEED): MatchExecutionContext {
+function executionContext(
+  seed = M1_SEED,
+  randomValues: readonly number[] = [],
+  logPrefix = "migration-log"
+): MatchExecutionContext {
   let logId = 0;
+  let randomIndex = 0;
   return {
-    random: { nextInt: () => 0 },
+    random: { nextInt: () => randomValues[randomIndex++] ?? 0 },
     nextMapSeed: () => seed,
-    nextLogId: () => `migration-log-${++logId}`,
+    nextLogId: () => `${logPrefix}-${++logId}`,
     now: () => 10_000
   };
 }
@@ -210,6 +217,68 @@ function createV2SetupPlaying(): PersistedRoom {
   };
 }
 
+function createProductionPlaying(): PersistedRoom {
+  const playing = createV2Playing();
+  const { pendingAuction: _pendingAuction, ...room } = playing;
+  return {
+    ...room,
+    matchState: {
+      ...playing.matchState!,
+      guild: createCommerceGuild()
+    }
+  };
+}
+
+function transitionRoom(
+  room: PersistedRoom,
+  command: MatchCommand,
+  context = executionContext()
+): PersistedRoom {
+  const matchState = applyMatchCommand(room.matchState!, command, context);
+  return {
+    ...room,
+    lifecycle: matchState.game.phase === "gameOver" ? "finished" : "playing",
+    matchState
+  };
+}
+
+function createFinishedWithRetainedTrade(): PersistedRoom {
+  const room = createProductionPlaying();
+  const prepared = {
+    ...room,
+    matchState: {
+      ...room.matchState!,
+      game: {
+        ...room.matchState!.game,
+        targetScore: 1,
+        players: room.matchState!.game.players.map((player) => player.id === "p2"
+          ? { ...player, vouchers: 3 }
+          : player)
+      }
+    }
+  };
+  return transitionRoom(prepared, { type: "REDEEM_PRIZE", playerId: "p2" });
+}
+
+function createFinishedWithRetainedAuction(): PersistedRoom {
+  const room = createV2Playing();
+  const { pendingPlayerTrade: _pendingPlayerTrade, ...matchState } = room.matchState!;
+  const prepared = {
+    ...room,
+    matchState: {
+      ...matchState,
+      game: {
+        ...matchState.game,
+        targetScore: 1,
+        players: matchState.game.players.map((player) => player.id === "p2"
+          ? { ...player, vouchers: 3 }
+          : player)
+      }
+    }
+  };
+  return transitionRoom(prepared, { type: "REDEEM_PRIZE", playerId: "p2" });
+}
+
 function toLegacyRecord(room: PersistedRoom): Record<string, unknown> {
   const legacy = structuredClone(room) as Record<string, any>;
   legacy.schemaVersion = 1;
@@ -333,6 +402,30 @@ const invalidStoredRoomCases: InvalidStoredRoomCase[] = [
     }
   },
   {
+    name: "setup phase player trade",
+    createRoom: createV2SetupPlaying,
+    mutate(raw) {
+      const game = gameRecord(raw);
+      game.turnState = { phase: "action", pendingDiscards: {}, developmentCardPlayed: false };
+      game.players[0].resources.wood = 1;
+      matchRecord(raw).pendingPlayerTrade = {
+        proposerId: "p1",
+        offered: { wood: 1, brick: 0, wool: 0, grain: 0, ore: 0 },
+        requested: { wood: 0, brick: 1, wool: 0, grain: 0, ore: 0 }
+      };
+    }
+  },
+  {
+    name: "setup phase undefined player trade",
+    createRoom: createV2SetupPlaying,
+    mutate: (raw) => { matchRecord(raw).pendingPlayerTrade = undefined; }
+  },
+  {
+    name: "setup phase undefined longest-road owner",
+    createRoom: createV2SetupPlaying,
+    mutate: (raw) => { gameRecord(raw).longestRoadOwnerId = undefined; }
+  },
+  {
     name: "malformed player resources",
     mutate: (raw) => { delete gameRecord(raw).players[0].resources.ore; }
   },
@@ -372,6 +465,10 @@ const invalidStoredRoomCases: InvalidStoredRoomCase[] = [
   {
     name: "unknown largest-army owner",
     mutate: (raw) => { gameRecord(raw).largestArmyOwnerId = "player-missing"; }
+  },
+  {
+    name: "unsupported undefined largest-army owner",
+    mutate: (raw) => { gameRecord(raw).largestArmyOwnerId = undefined; }
   },
   {
     name: "unknown winner",
@@ -418,6 +515,133 @@ describe("persisted room schema v2", () => {
     const storage = new CountingStorage();
     await expect(new RoomStore(storage).createIfEmpty(room)).resolves.toBe("created");
     expect(storage.values.get(ROOM_RECORD_KEY)).toEqual(room);
+  });
+
+  it.each([
+    {
+      name: "seven-roll log without params",
+      create() {
+        const room = createProductionPlaying();
+        const { pendingPlayerTrade: _pendingPlayerTrade, ...matchState } = room.matchState!;
+        const prepared = {
+          ...room,
+          matchState: {
+            ...matchState,
+            lastDice: null,
+            game: {
+              ...matchState.game,
+              turnState: { phase: "awaitingRoll" as const, pendingDiscards: {}, developmentCardPlayed: false }
+            }
+          }
+        };
+        return transitionRoom(
+          prepared,
+          { type: "ROLL_DICE", playerId: "p2" },
+          executionContext(M1_SEED, [2, 3])
+        );
+      }
+    },
+    {
+      name: "ordinary road below the award threshold",
+      create() {
+        const room = createProductionPlaying();
+        const prepared = {
+          ...room,
+          matchState: {
+            ...room.matchState!,
+            game: {
+              ...room.matchState!.game,
+              players: room.matchState!.game.players.map((player) => player.id === "p2"
+                ? { ...player, resources: { ...player.resources, wood: 2, brick: 1 } }
+                : player)
+            }
+          }
+        };
+        const edgeId = getLegalRoadEdgeIds(prepared.matchState.game, "p2")[0];
+        return transitionRoom(prepared, { type: "BUILD_ROAD", playerId: "p2", edgeId });
+      }
+    },
+    {
+      name: "new-game log without params",
+      create: () => transitionRoom(createProductionPlaying(), { type: "START_NEW_GAME", mode: "sameMap" })
+    },
+    {
+      name: "guild-start log without params",
+      create: () => transitionRoom(createProductionPlaying(), { type: "START_GATHERING" })
+    },
+    {
+      name: "guild-open log without params",
+      create() {
+        const started = transitionRoom(
+          createProductionPlaying(),
+          { type: "START_GATHERING" },
+          executionContext(M1_SEED, [], "guild-start-log")
+        );
+        return transitionRoom(
+          started,
+          { type: "OPEN_AUCTION" },
+          executionContext(M1_SEED, [], "guild-open-log")
+        );
+      }
+    },
+    {
+      name: "guild-slot-complete log without params",
+      create() {
+        const room = createProductionPlaying();
+        const prepared = {
+          ...room,
+          matchState: {
+            ...room.matchState!,
+            game: {
+              ...room.matchState!.game,
+              players: room.matchState!.game.players.map((player) => player.id === "p2"
+                ? { ...player, resources: { ...player.resources, wood: 3, brick: 1 } }
+                : player)
+            }
+          }
+        };
+        return transitionRoom(prepared, {
+          type: "COMPLETE_TRADE_SLOT",
+          playerId: "p2",
+          slotId: "wood-contract"
+        });
+      }
+    }
+  ])("persists the real production $name transition", async ({ name, create }) => {
+    const room = create();
+    const storage = new CountingStorage();
+
+    if (name === "ordinary road below the award threshold") {
+      expect(Object.hasOwn(room.matchState!.game, "longestRoadOwnerId")).toBe(false);
+    }
+    expect(room.matchState!.game.log.every((entry) =>
+      (!Object.hasOwn(entry, "messageKey") || entry.messageKey !== undefined) &&
+      (!Object.hasOwn(entry, "params") || entry.params !== undefined)
+    )).toBe(true);
+
+    await expect(new RoomStore(storage).save(room)).resolves.toBeUndefined();
+    expect(storage.roomPutCount).toBe(1);
+  });
+
+  it.each([
+    ["pending player trade", createFinishedWithRetainedTrade],
+    ["sealed auction", createFinishedWithRetainedAuction]
+  ] as const)("persists a production game-over transition retaining a valid %s", async (
+    name,
+    createRoom
+  ) => {
+    const room = createRoom();
+    expect(room.lifecycle).toBe("finished");
+    expect(room.matchState?.game.phase).toBe("gameOver");
+    if (name === "pending player trade") {
+      expect(room.matchState?.pendingPlayerTrade).toBeDefined();
+    } else {
+      expect(room.pendingAuction).toBeDefined();
+    }
+    const storage = new CountingStorage();
+
+    await expect(new RoomStore(storage).save(room)).resolves.toBeUndefined();
+    expect(storage.roomPutCount).toBe(1);
   });
 
   it("starts a fresh canonical M1 match and stores exact seed-derived board data", async () => {
@@ -561,6 +785,87 @@ describe("legacy persisted-room migration", () => {
     expect(loaded?.roomVersion).toBe(raw.roomVersion);
     expect(loaded?.matchState?.game.mapSeed).toBe("M0-STANDARD");
     expect(storage.roomPutCount).toBe(1);
+  });
+
+  it.each([
+    {
+      name: "setup",
+      mutate(raw: Record<string, unknown>) { gameRecord(raw).setup = undefined; },
+      retained(loaded: PersistedRoom) { return loaded.matchState!.game; },
+      key: "setup"
+    },
+    {
+      name: "pendingPlayerTrade",
+      mutate(raw: Record<string, unknown>) { matchRecord(raw).pendingPlayerTrade = undefined; },
+      retained(loaded: PersistedRoom) { return loaded.matchState!; },
+      key: "pendingPlayerTrade"
+    },
+    {
+      name: "log params",
+      mutate(raw: Record<string, unknown>) { gameRecord(raw).log[0].params = undefined; },
+      retained(loaded: PersistedRoom) { return loaded.matchState!.game.log[0]; },
+      key: "params"
+    },
+    {
+      name: "log messageKey",
+      mutate(raw: Record<string, unknown>) { gameRecord(raw).log[0].messageKey = undefined; },
+      retained(loaded: PersistedRoom) { return loaded.matchState!.game.log[0]; },
+      key: "messageKey"
+    },
+    {
+      name: "longestRoadOwnerId",
+      mutate(raw: Record<string, unknown>) { gameRecord(raw).longestRoadOwnerId = undefined; },
+      retained(loaded: PersistedRoom) { return loaded.matchState!.game; },
+      key: "longestRoadOwnerId"
+    }
+  ])("preserves the released v1 own-undefined $name shape", async ({ mutate, retained, key }) => {
+    const raw = toLegacyRecord(createV2Playing());
+    mutate(raw);
+    const storage = new CountingStorage();
+    storage.values.set(ROOM_RECORD_KEY, raw);
+
+    const loaded = await new RoomStore(storage).load(10_000);
+
+    expect(loaded).toEqual(expectedMigration(raw));
+    expect(Object.hasOwn(retained(loaded!), key)).toBe(true);
+    expect((retained(loaded!) as unknown as Record<string, unknown>)[key]).toBeUndefined();
+    expect(storage.roomPutCount).toBe(1);
+    await expect(new RoomStore(storage).load(10_000)).resolves.toEqual(loaded);
+    expect(storage.roomPutCount).toBe(1);
+  });
+
+  it.each([
+    ["retained player trade", createFinishedWithRetainedTrade],
+    ["retained sealed auction", createFinishedWithRetainedAuction]
+  ] as const)("loads valid v1 and v2 finished rooms with %s", async (_name, createRoom) => {
+    for (const schema of ["v1", "v2"] as const) {
+      const room = createRoom();
+      const raw = schema === "v1"
+        ? toLegacyRecord(room)
+        : structuredClone(room) as unknown as Record<string, unknown>;
+      const storage = new CountingStorage();
+      storage.values.set(ROOM_RECORD_KEY, raw);
+
+      const loaded = await new RoomStore(storage).load(10_000);
+
+      expect(loaded).toEqual(schema === "v1" ? expectedMigration(raw) : raw);
+      expect(storage.roomPutCount).toBe(schema === "v1" ? 1 : 0);
+    }
+  });
+
+  it("rejects an inherited v1 schemaVersion without writing", async () => {
+    const raw = toLegacyRecord(createV2Playing());
+    delete raw.schemaVersion;
+    Object.setPrototypeOf(raw, { schemaVersion: 1 });
+    const before = snapshotOwnValues(raw);
+    const storage = new CountingStorage();
+    storage.values.set(ROOM_RECORD_KEY, raw);
+
+    await expect(new RoomStore(storage).load(10_000)).rejects.toBeInstanceOf(RoomSchemaError);
+
+    expect(storage.values.get(ROOM_RECORD_KEY)).toBe(raw);
+    expect(snapshotOwnValues(storage.values.get(ROOM_RECORD_KEY))).toEqual(before);
+    expect(storage.roomPutCount).toBe(0);
   });
 
   it.each([

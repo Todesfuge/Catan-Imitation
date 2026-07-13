@@ -132,7 +132,7 @@ function pendingAuctionIsConsistent(room: PersistedRoom, seats: PersistedSeat[])
   if (!Object.hasOwn(room, "pendingAuction")) return true;
   const auction = room.pendingAuction!;
   const match = room.matchState;
-  if (room.lifecycle !== "playing" || !isPersistedMatchState(match) ||
+  if (!isPersistedMatchState(match) ||
     match.guild.gathering.phase !== "auction" ||
     auction.round !== match.guild.gathering.auctionRound) return false;
 

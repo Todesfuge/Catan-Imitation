@@ -79,8 +79,8 @@ function log(
   return {
     id: context.nextLogId(),
     message,
-    messageKey,
-    params
+    ...(messageKey === undefined ? {} : { messageKey }),
+    ...(params === undefined ? {} : { params })
   };
 }
 

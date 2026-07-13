@@ -142,14 +142,15 @@ function road(value: unknown, references: GameReferences): value is UnknownRecor
 function gameLogEntry(value: unknown): value is UnknownRecord {
   if (!record(value) || !exactKeys(value, ["id", "message"], ["messageKey", "params"]) ||
     !nonEmptyString(value.id) || typeof value.message !== "string" ||
-    !optional(value, "messageKey", (candidate) => gameMessageKeys.has(String(candidate)))) {
+    (Object.hasOwn(value, "messageKey") && value.messageKey !== undefined &&
+      !gameMessageKeys.has(String(value.messageKey)))) {
     return false;
   }
-  return optional(value, "params", (candidate) => record(candidate) &&
-    Object.entries(candidate).every(([key, parameter]) => key.length > 0 &&
-      (typeof parameter === "string" ||
-        (typeof parameter === "number" && Number.isFinite(parameter) && Number.isSafeInteger(parameter))))
-  );
+  return !Object.hasOwn(value, "params") || value.params === undefined ||
+    (record(value.params) && Object.entries(value.params).every(([key, parameter]) =>
+      key.length > 0 && (typeof parameter === "string" ||
+        (typeof parameter === "number" && Number.isFinite(parameter) && Number.isSafeInteger(parameter)))
+    ));
 }
 
 function setupState(
@@ -318,7 +319,8 @@ function playerTrade(value: unknown, game: UnknownRecord, references: GameRefere
   if (!record(value) || !exactKeys(value, ["proposerId", "offered", "requested"]) ||
     !references.playerIds.has(String(value.proposerId)) || value.proposerId !== game.activePlayerId ||
     !resourceMap(value.offered) || !resourceMap(value.requested) ||
-    game.phase !== "playing" || (game.turnState as UnknownRecord).phase !== "action") {
+    (game.phase !== "playing" && game.phase !== "gameOver") ||
+    (game.turnState as UnknownRecord).phase !== "action") {
     return false;
   }
   const offered = value.offered as Record<(typeof resources)[number], number>;
@@ -398,7 +400,7 @@ function gameState(value: unknown): value is UnknownRecord {
       Object.hasOwn(value, "winnerId")) {
       return false;
     }
-  } else if (Object.hasOwn(value, "setup")) {
+  } else if (Object.hasOwn(value, "setup") && value.setup !== undefined) {
     return false;
   }
   if (value.phase === "gameOver") {
@@ -409,7 +411,9 @@ function gameState(value: unknown): value is UnknownRecord {
     return false;
   }
   return optional(value, "largestArmyOwnerId", (candidate) => references.playerIds.has(String(candidate))) &&
-    optional(value, "longestRoadOwnerId", (candidate) => references.playerIds.has(String(candidate)));
+    (!Object.hasOwn(value, "longestRoadOwnerId") ||
+      (value.longestRoadOwnerId === undefined && value.phase !== "setup") ||
+      references.playerIds.has(String(value.longestRoadOwnerId)));
 }
 
 function diceRoll(value: unknown): boolean {
@@ -436,7 +440,8 @@ export function isPersistedMatchState(value: unknown): value is MatchState {
   };
   const guildValid = commerceGuild(value.guild, game, references);
   const diceValid = value.lastDice === null || diceRoll(value.lastDice);
-  const tradeValid = optional(value, "pendingPlayerTrade", (candidate) =>
-    playerTrade(candidate, game, references));
+  const tradeValid = !Object.hasOwn(value, "pendingPlayerTrade") ||
+    (value.pendingPlayerTrade === undefined && game.phase !== "setup") ||
+    playerTrade(value.pendingPlayerTrade, game, references);
   return guildValid && diceValid && tradeValid;
 }

@@ -90,9 +90,9 @@ export function updateLongestRoadAward(game: GameState): GameState {
         : leaders.length === 1
           ? leaders[0]
           : undefined;
+  const { longestRoadOwnerId: _previousOwnerId, ...withoutOwner } = game;
 
-  return {
-    ...game,
-    longestRoadOwnerId: nextOwnerId
-  };
+  return nextOwnerId === undefined
+    ? withoutOwner
+    : { ...withoutOwner, longestRoadOwnerId: nextOwnerId };
 }

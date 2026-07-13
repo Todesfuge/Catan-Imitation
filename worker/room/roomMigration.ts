@@ -18,7 +18,9 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 export function migratePersistedRoomV1(value: unknown): PersistedRoom | undefined {
-  if (!record(value) || value.schemaVersion !== 1) return undefined;
+  if (!record(value) || !Object.hasOwn(value, "schemaVersion") || value.schemaVersion !== 1) {
+    return undefined;
+  }
 
   const legacy = value as unknown as PersistedRoomV1;
   if (legacy.lifecycle === "lobby") {
