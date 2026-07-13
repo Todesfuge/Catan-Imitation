@@ -23,7 +23,9 @@ export function gameReducer(state: AppState, command: GameCommand): AppState {
     if (command.type === "START_NEW_GAME") {
       return { ...matchState, ...createUiState(matchState.game.activePlayerId) };
     }
-    return { ...state, ...matchState, notice: null };
+    const nextState = { ...state, ...matchState, notice: null };
+    if (!matchState.pendingPlayerTrade) delete nextState.pendingPlayerTrade;
+    return nextState;
   } catch (error) {
     if (!(error instanceof RuleViolationError)) {
       throw error;

@@ -10,6 +10,7 @@ import {
 } from "../../src/app/localGameState";
 import { parseMapSeed } from "../../src/domain/mapSeed";
 import { GameTable, type GameTableView } from "../../src/ui/GameTable";
+import { createScenarioAppState } from "../fixtures/createScenarioGame";
 
 const noResources = { wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 } as const;
 const unavailable = { enabled: false, reason: "Unavailable", targets: [] } as const;
@@ -128,6 +129,45 @@ describe("shared game-table presentation boundary", () => {
       expect(restarted.selectedDiceTotal).toBe(8);
       expect(restarted.selectedPlayerId).toBe("p1");
       expect(restarted.notice).toBeNull();
+    }
+  );
+
+  it.each(["accept", "cancel"] as const)(
+    "removes a pending Local player trade after %s",
+    (resolution) => {
+      const scenario = createScenarioAppState();
+      const active = {
+        ...scenario,
+        game: {
+          ...scenario.game,
+          turnState: { phase: "action" as const, pendingDiscards: {}, developmentCardPlayed: false },
+          players: scenario.game.players.map((player) => ({
+            ...player,
+            resources: player.id === "p1"
+              ? { ...noResources, wool: 1 }
+              : player.id === "p2"
+                ? { ...noResources, ore: 1 }
+                : { ...noResources }
+          }))
+        }
+      };
+      const published = gameReducer(active, {
+        type: "PUBLISH_PLAYER_TRADE",
+        playerId: "p1",
+        offered: { ...noResources, wool: 1 },
+        requested: { ...noResources, ore: 1 }
+      });
+
+      const resolved = gameReducer(
+        published,
+        resolution === "accept"
+          ? { type: "ACCEPT_PLAYER_TRADE", playerId: "p2" }
+          : { type: "CANCEL_PLAYER_TRADE", playerId: "p1" }
+      );
+
+      expect(published.pendingPlayerTrade).toBeDefined();
+      expect(resolved.pendingPlayerTrade).toBeUndefined();
+      expect(Object.hasOwn(resolved, "pendingPlayerTrade")).toBe(false);
     }
   );
 

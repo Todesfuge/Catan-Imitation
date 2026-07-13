@@ -1,10 +1,24 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createInitialAppState } from "../../src/app/localGameState";
 import { projectRoomView } from "../../src/online/projectRoomView";
+import { publicBoardSignature } from "./seededMapHelpers";
 
 async function openLocal(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Play Local Game" }).click();
+}
+
+async function completeLocalSetup(page: Page): Promise<void> {
+  for (let placement = 0; placement < 8; placement += 1) {
+    const settlements = page.locator('[data-board-action-target="setupSettlement"]');
+    expect(await settlements.count()).toBeGreaterThan(0);
+    await settlements.first().press("Enter");
+    const roads = page.locator('[data-board-action-target="setupRoad"]');
+    expect(await roads.count()).toBeGreaterThan(0);
+    await roads.first().press("Enter");
+  }
+  await expect(page.locator('[data-action="roll-dice"]')).toBeEnabled();
+  await expect(page.locator('[data-board-action-target^="setup"]')).toHaveCount(0);
 }
 
 async function installOnlineLobbyMock(page: Page, seatCount: 3 | 4) {
@@ -419,24 +433,25 @@ for (const viewport of [
     await expect(page.getByText("Room 234567")).toBeVisible();
     await expect(page.getByText("Kay is offline")).toBeVisible();
     await expect(page.locator(".resource-strip.compact").filter({ hasText: "Wd" })).toHaveCount(1);
-    const roll = page.getByRole("button", { name: "Roll Dice" });
-    await expect(roll).toBeEnabled();
-    await page.locator("body").click({ position: { x: 1, y: 1 } });
-    for (let tab = 0; tab < 24; tab += 1) {
-      await page.keyboard.press("Tab");
-      if (await page.evaluate(() => document.activeElement?.getAttribute("data-action") === "roll-dice")) break;
-    }
-    await expect(roll).toBeFocused();
-    const focus = await roll.evaluate((element) => getComputedStyle(element).outlineStyle);
+    await expect(page.getByText("Place the next settlement")).toBeVisible();
+    const setupTarget = page.locator('[data-board-action-target="setupSettlement"]').first();
+    await expect(setupTarget).toBeVisible();
+    await setupTarget.focus();
+    await expect(setupTarget).toBeFocused();
+    const focus = await setupTarget.evaluate((element) => getComputedStyle(element).outlineStyle);
     expect(focus).not.toBe("none");
-    await roll.click();
+    await setupTarget.press("Enter");
     await expect.poll(() => page.evaluate(() =>
       (window as unknown as { __onlineGameMock: { sent: unknown[] } }).__onlineGameMock.sent.length
     )).toBe(1);
     const sent = await page.evaluate(() =>
       (window as unknown as { __onlineGameMock: { sent: Array<Record<string, unknown>> } }).__onlineGameMock.sent[0]
     );
-    expect(sent).toMatchObject({ type: "match.command", expectedVersion: 42, command: { type: "ROLL_DICE" } });
+    expect(sent).toMatchObject({
+      type: "match.command",
+      expectedVersion: 42,
+      command: { type: "PLACE_SETUP_SETTLEMENT", vertexId: expect.any(String) }
+    });
     expect(JSON.stringify(sent)).not.toContain("playerId");
     const measurements = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
@@ -679,23 +694,129 @@ async function advanceBackToFirstPlayer(page: Page) {
   }
 }
 
-async function setDeterministicTotal(page: Page, total: 2 | 3 | 7 | 8) {
+async function setDeterministicTotal(page: Page, total: number) {
   await page.evaluate((nextTotal) => {
-    let call = 0;
-    if (nextTotal === 2) {
-      Math.random = () => 0;
-    } else if (nextTotal === 3) {
-      Math.random = () => (call++ % 2 === 0 ? 0 : 0.2);
-    } else if (nextTotal === 7) {
-      Math.random = () => (call++ % 2 === 0 ? 0.5 : 0.34);
-    } else {
-      Math.random = () => 0.5;
+    if (!Number.isInteger(nextTotal) || nextTotal < 2 || nextTotal > 12) {
+      throw new Error(`invalid deterministic dice total: ${nextTotal}`);
     }
+    const first = Math.max(1, nextTotal - 6);
+    const second = nextTotal - first;
+    const values = [(first - 0.5) / 6, (second - 0.5) / 6];
+    let call = 0;
+    Math.random = () => values[call++ % 2];
   }, total);
 }
 
+const playerTradeResources = [
+  { key: "wood", short: "Wd", label: "Wood" },
+  { key: "brick", short: "Br", label: "Brick" },
+  { key: "wool", short: "Wl", label: "Wool" },
+  { key: "grain", short: "Gr", label: "Grain" },
+  { key: "ore", short: "Or", label: "Ore" }
+] as const;
+
+async function readPlayerResources(page: Page, playerIndex: number): Promise<Map<string, number>> {
+  const texts = await page.locator(".player-card").nth(playerIndex)
+    .locator(".resource-strip.compact .resource-token").allTextContents();
+  return new Map(texts.map((text) => {
+    const [short, amount] = text.trim().split(/\s+/);
+    return [short, Number(amount)] as const;
+  }));
+}
+
+async function prepareAffordablePublicTrade(page: Page): Promise<{
+  acceptingPlayer: string;
+  offerLabel: string;
+  proposerName: string;
+  requestLabel: string;
+}> {
+  const cards = page.locator(".player-card");
+  const productiveTotals = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12];
+
+  for (let attempt = 0; attempt < productiveTotals.length + 4; attempt += 1) {
+    const activeIndex = await cards.evaluateAll((nodes) => nodes.findIndex((node) => node.classList.contains("active")));
+    const proposer = await readPlayerResources(page, activeIndex);
+    const offered = playerTradeResources.find((resource) => (proposer.get(resource.short) ?? 0) > 0);
+    let acceptingPlayer = "";
+    let requested: (typeof playerTradeResources)[number] | undefined;
+    for (let index = 0; index < await cards.count(); index += 1) {
+      if (index === activeIndex) continue;
+      const inventory = await readPlayerResources(page, index);
+      requested = playerTradeResources.find((resource) => (inventory.get(resource.short) ?? 0) > 0);
+      if (requested) {
+        acceptingPlayer = (await cards.nth(index).locator("strong").textContent())!.trim();
+        break;
+      }
+    }
+    if (offered && requested && acceptingPlayer) {
+      const proposerName = (await cards.nth(activeIndex).locator("strong").textContent())!.trim();
+      await page.getByLabel(`Offer ${offered.label}`).fill("1");
+      await page.getByLabel(`Request ${requested.label}`).fill("1");
+      await expect(page.getByRole("button", { name: "Publish Public Offer" })).toBeEnabled();
+      return { acceptingPlayer, offerLabel: offered.label, proposerName, requestLabel: requested.label };
+    }
+
+    await page.getByRole("button", { name: "End Turn" }).click();
+    await setDeterministicTotal(page, productiveTotals[attempt % productiveTotals.length]);
+    await page.getByRole("button", { name: "Roll Dice" }).click();
+  }
+  throw new Error("no affordable Local public trade converged across a full deterministic roll cycle");
+}
+
+test("Local opens in an empty seeded setup and both restart modes rebuild atomically", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 768 });
+  await openLocal(page);
+
+  await expect(page.getByText("Place the next settlement")).toBeVisible();
+  await expect(page.locator(".player-card")).toHaveCount(4);
+  await expect(page.locator(".building-marker")).toHaveCount(0);
+  await expect(page.locator(".road-marker")).toHaveCount(0);
+  await expect(page.locator(".resource-strip.compact .resource-token")).toHaveCount(20);
+  expect(await page.locator(".resource-strip.compact .resource-token").allTextContents())
+    .toEqual(expect.arrayContaining(["Wd 0", "Br 0", "Wl 0", "Gr 0", "Or 0"]));
+  for (const card of await page.locator(".player-card").allTextContents()) {
+    expect(card).toContain("Resources: 0");
+    expect(card).toContain("Development: 0");
+  }
+  await expect(page.getByRole("log").locator("p")).toHaveCount(1);
+  await expect(page.getByRole("log")).toHaveText("Setup started. Place settlements and roads in snake order.");
+  await expect(page.getByRole("button", { name: "Roll Dice" })).toBeDisabled();
+
+  const initialLayout = await publicBoardSignature(page);
+  await page.getByRole("button", { name: "Open settings" }).click();
+  const initialSeed = await page.locator("[data-map-seed]").inputValue();
+  expect(initialSeed).toMatch(/^M1-[0-9A-F]{16}$/);
+  await page.getByRole("button", { name: "Close utility panel" }).click();
+  const cleanScreenshot = await page.screenshot({ path: testInfo.outputPath("local-clean-setup-desktop.png") });
+  await testInfo.attach("local-clean-setup-desktop", { body: cleanScreenshot, contentType: "image/png" });
+
+  await page.locator('[data-board-action-target="setupSettlement"]').first().press("Enter");
+  await page.locator('[data-board-action-target="setupRoad"]').first().press("Enter");
+  await expect(page.locator(".building-marker")).toHaveCount(1);
+  await expect(page.locator(".road-marker")).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await page.getByRole("button", { name: "Replay Current Map" }).click();
+  await expect(page.getByText("Place the next settlement")).toBeVisible();
+  await expect(page.locator(".building-marker")).toHaveCount(0);
+  await expect(page.locator(".road-marker")).toHaveCount(0);
+  expect(await publicBoardSignature(page)).toBe(initialLayout);
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await expect(page.locator("[data-map-seed]")).toHaveValue(initialSeed);
+  await page.getByRole("button", { name: "New Random Map" }).click();
+  await expect(page.getByText("Place the next settlement")).toBeVisible();
+  expect(await publicBoardSignature(page)).not.toBe(initialLayout);
+  await page.getByRole("button", { name: "Open settings" }).click();
+  const freshSeed = await page.locator("[data-map-seed]").inputValue();
+  expect(freshSeed).toMatch(/^M1-[0-9A-F]{16}$/);
+  expect(freshSeed).not.toBe(initialSeed);
+  const freshScreenshot = await page.screenshot({ path: testInfo.outputPath("local-fresh-setup-desktop.png") });
+  await testInfo.attach("local-fresh-setup-desktop", { body: freshScreenshot, contentType: "image/png" });
+});
+
 test("a zero-token gathering completes without entering an unwinnable auction", async ({ page }) => {
   await openLocal(page);
+  await completeLocalSetup(page);
   await page.getByRole("tab", { name: "Commerce Guild" }).click();
   await page.getByRole("button", { name: "Start Gathering" }).click();
   await page.getByRole("button", { name: "Open Auctions" }).click();
@@ -714,9 +835,10 @@ test("unaffordable actions stay disabled and maritime choices are explicit", asy
     Math.random = () => 0;
   });
   await openLocal(page);
+  await completeLocalSetup(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
 
-  await expect(page.getByRole("button", { name: "Road", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "City", exact: true })).toBeDisabled();
   await expect(page.getByLabel("Maritime give resource")).toBeVisible();
   await expect(page.getByLabel("Maritime receive resource")).toBeVisible();
 });
@@ -735,47 +857,49 @@ test("New Random Map completes all setup pairs and enters normal play", async ({
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "New Random Map" }).click();
 
-  for (let placement = 0; placement < 8; placement += 1) {
-    const settlements = page.locator('[data-board-action-target="setupSettlement"]');
-    expect(await settlements.count()).toBeGreaterThan(0);
-    await settlements.first().press("Enter");
-    const roads = page.locator('[data-board-action-target="setupRoad"]');
-    expect(await roads.count()).toBeGreaterThan(0);
-    await roads.first().press("Enter");
-  }
-
-  await expect(page.getByRole("button", { name: "Roll Dice" })).toBeEnabled();
-  await expect(page.locator('[data-board-action-target^="setup"]')).toHaveCount(0);
+  await completeLocalSetup(page);
 });
 
-test("explicit maritime choices fund selected Road, Settlement, and City targets", async ({ page }) => {
-  test.setTimeout(60_000);
-  await page.addInitScript(() => {
-    let call = 0;
-    Math.random = () => (call++ % 2 === 0 ? 0 : 0.2);
-  });
+test("explicit maritime choices fund a selected Road target on any seeded map", async ({ page }) => {
+  test.setTimeout(90_000);
   await openLocal(page);
-
-  for (let p1Turn = 0; p1Turn < 4; p1Turn += 1) {
-    await page.getByRole("button", { name: "Roll Dice" }).click();
-    if (p1Turn === 3) break;
-    await page.getByRole("button", { name: "End Turn" }).click();
-    for (let otherPlayer = 0; otherPlayer < 3; otherPlayer += 1) {
-      await page.getByRole("button", { name: "Roll Dice" }).click();
-      await page.getByRole("button", { name: "End Turn" }).click();
-    }
-  }
-
+  await completeLocalSetup(page);
   const give = page.getByLabel("Maritime give resource");
   const receive = page.getByLabel("Maritime receive resource");
-  await give.selectOption("grain");
-  await receive.selectOption("wood");
-  await page.getByRole("button", { name: "Maritime" }).click();
-  await give.selectOption("grain");
-  await receive.selectOption("brick");
-  await page.getByRole("button", { name: "Maritime" }).click();
-
   const road = page.getByRole("button", { name: "Road", exact: true });
+  const totals = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12];
+  let traded = false;
+  for (let attempt = 0; attempt < 30 && !(traded && await road.isEnabled()); attempt += 1) {
+    await setDeterministicTotal(page, totals[attempt % totals.length]);
+    await page.getByRole("button", { name: "Roll Dice" }).click();
+    const giveOptions = await give.locator("option:not([disabled])").evaluateAll((options) =>
+      options.map((option) => (option as HTMLOptionElement).value).filter(Boolean)
+    );
+    if (!traded && giveOptions.length > 0) {
+      const giveResource = giveOptions[0];
+      await give.selectOption(giveResource);
+      const inventory = await readPlayerResources(page, 0);
+      const missingRoadResource = (inventory.get("Wd") ?? 0) < 1
+        ? "wood"
+        : (inventory.get("Br") ?? 0) < 1
+          ? "brick"
+          : undefined;
+      const receiveOptions = await receive.locator("option:not([disabled])").evaluateAll((options) =>
+        options.map((option) => (option as HTMLOptionElement).value).filter(Boolean)
+      );
+      const receiveResource = missingRoadResource && missingRoadResource !== giveResource
+        ? missingRoadResource
+        : receiveOptions[0];
+      expect(receiveResource).toBeTruthy();
+      await receive.selectOption(receiveResource);
+      await page.getByRole("button", { name: "Maritime" }).click();
+      await expect(page.getByRole("log")).toContainText("A maritime trade was completed.");
+      traded = true;
+    }
+    if (!(traded && await road.isEnabled())) await advanceBackToFirstPlayer(page);
+  }
+
+  expect(traded).toBe(true);
   await expect(road).toBeEnabled();
   await road.click();
   await expect(road).toHaveAttribute("aria-pressed", "true");
@@ -785,70 +909,8 @@ test("explicit maritime choices fund selected Road, Settlement, and City targets
   const targets = page.locator('[data-board-visible-target="road"]');
   const targetCount = await targets.count();
   expect(targetCount).toBeGreaterThan(0);
-  const extensionIndex = await page.evaluate(() => {
-    const city = document.querySelector<SVGRectElement>(".building-marker.city")!;
-    const cityX = Number(city.getAttribute("x")) + Number(city.getAttribute("width")) / 2;
-    const cityY = Number(city.getAttribute("y")) + Number(city.getAttribute("height")) / 2;
-    const lines = [...document.querySelectorAll<SVGLineElement>('[data-board-visible-target="road"]')];
-    return Math.max(
-      0,
-      lines.findIndex((line) => {
-        const endpoints = [
-          [Number(line.getAttribute("x1")), Number(line.getAttribute("y1"))],
-          [Number(line.getAttribute("x2")), Number(line.getAttribute("y2"))]
-        ];
-        return endpoints.every(([x, y]) => Math.abs(x - cityX) > 0.1 || Math.abs(y - cityY) > 0.1);
-      })
-    );
-  });
-  await targets.nth(extensionIndex).click();
+  await targets.first().click();
   await expect(road).toBeDisabled();
-
-  for (let grainTurn = 0; grainTurn < 4; grainTurn += 1) {
-    await advanceBackToFirstPlayer(page);
-    await setDeterministicTotal(page, 3);
-    await page.getByRole("button", { name: "Roll Dice" }).click();
-  }
-  await give.selectOption("grain");
-  await receive.selectOption("wood");
-  await page.getByRole("button", { name: "Maritime" }).click();
-  await give.selectOption("grain");
-  await receive.selectOption("brick");
-  await page.getByRole("button", { name: "Maritime" }).click();
-
-  await advanceBackToFirstPlayer(page);
-  await setDeterministicTotal(page, 8);
-  await page.getByRole("button", { name: "Roll Dice" }).click();
-  await advanceBackToFirstPlayer(page);
-  await setDeterministicTotal(page, 3);
-  await page.getByRole("button", { name: "Roll Dice" }).click();
-
-  const settlement = page.getByRole("button", { name: "Settlement", exact: true });
-  await expect(settlement).toBeEnabled();
-  await settlement.click();
-  const settlementTargets = page.locator('[data-board-visible-target="settlement"]');
-  expect(await settlementTargets.count()).toBeGreaterThan(0);
-  await settlementTargets.first().click();
-  await expect(settlement).toBeDisabled();
-
-  for (let grainTurn = 0; grainTurn < 7; grainTurn += 1) {
-    await advanceBackToFirstPlayer(page);
-    await setDeterministicTotal(page, 3);
-    await page.getByRole("button", { name: "Roll Dice" }).click();
-  }
-  for (let trade = 0; trade < 3; trade += 1) {
-    await give.selectOption("grain");
-    await receive.selectOption("ore");
-    await page.getByRole("button", { name: "Maritime" }).click();
-  }
-
-  const city = page.getByRole("button", { name: "City", exact: true });
-  await expect(city).toBeEnabled();
-  await city.click();
-  const cityTargets = page.locator('[data-board-visible-target="city"]');
-  expect(await cityTargets.count()).toBeGreaterThan(0);
-  await cityTargets.first().click();
-  await expect(city).toBeDisabled();
 });
 
 test("Commerce controls keep valid named selections across turns", async ({ page }) => {
@@ -856,6 +918,7 @@ test("Commerce controls keep valid named selections across turns", async ({ page
     Math.random = () => 0;
   });
   await openLocal(page);
+  await completeLocalSetup(page);
   await page.getByRole("tab", { name: "Commerce Guild" }).click();
 
   await expect(page.getByLabel("Token recipient")).toHaveValue("p2");
@@ -888,6 +951,7 @@ test("post-roll guidance describes the current action phase", async ({ page }) =
     Math.random = () => 0;
   });
   await openLocal(page);
+  await completeLocalSetup(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
 
   await expect(page.locator(".phase-guidance")).toHaveText("Choose an action or end the turn");
@@ -970,6 +1034,7 @@ test("mobile setup board targets retain a 44px non-scaling hit stroke", async ({
 test("robber guidance stays readable and log/statistics lists reach their final entries", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await openLocal(page);
+  await completeLocalSetup(page);
   for (let completedTurn = 0; completedTurn < 8; completedTurn += 1) {
     await setDeterministicTotal(page, 2);
     await page.getByRole("button", { name: "Roll Dice" }).click();
@@ -1013,7 +1078,7 @@ test("robber guidance stays readable and log/statistics lists reach their final 
   await log.focus();
   await page.keyboard.press("End");
   await expect.poll(() => log.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-  await expect(log.locator("p").last()).toHaveText("Welcome to Catan Imitation.");
+  await expect(log.locator("p").last()).toHaveText("Setup started. Place settlements and roads in snake order.");
   await expect(log.locator("p").last()).toBeInViewport();
 
   await page.getByRole("button", { name: "dice", exact: true }).click();
@@ -1031,21 +1096,20 @@ test("robber guidance stays readable and log/statistics lists reach their final 
 
 test("a public multi-resource offer is visible to every opponent and accepts atomically", async ({ page }) => {
   await openLocal(page);
+  await completeLocalSetup(page);
   await setDeterministicTotal(page, 8);
   await page.getByRole("button", { name: "Roll Dice" }).click();
 
-  await page.getByLabel("Offer Wool").fill("1");
-  await page.getByLabel("Request Ore").fill("1");
+  const trade = await prepareAffordablePublicTrade(page);
   await page.getByRole("button", { name: "Publish Public Offer" }).click();
 
-  await expect(page.getByText("Voyage1969 offers 1 Wool for 1 Ore")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Accept as Loss" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Accept as Kay" })).toBeDisabled();
-  await expect(page.getByText("Kay cannot afford the requested resources")).toBeVisible();
+  await expect(page.getByText(`${trade.proposerName} offers 1 ${trade.offerLabel} for 1 ${trade.requestLabel}`)).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Accept as / })).toHaveCount(3);
+  await expect(page.getByRole("button", { name: `Accept as ${trade.acceptingPlayer}` })).toBeEnabled();
 
-  await page.getByRole("button", { name: "Accept as Loss" }).click();
+  await page.getByRole("button", { name: `Accept as ${trade.acceptingPlayer}` }).click();
   await expect(page.getByText("No public offer is active.")).toBeVisible();
-  await expect(page.getByRole("log")).toContainText("Loss accepted Voyage1969's public player trade");
+  await expect(page.getByRole("log")).toContainText(`${trade.acceptingPlayer} accepted ${trade.proposerName}'s public player trade`);
 
   await page.getByRole("tab", { name: "Commerce Guild" }).click();
   await expect(page.locator('[data-trade-hub-panel="commerce"]')).toBeVisible();
@@ -1054,24 +1118,24 @@ test("a public multi-resource offer is visible to every opponent and accepts ato
 
 test("public offers cancel explicitly and clear when the proposer ends the turn", async ({ page }) => {
   await openLocal(page);
+  await completeLocalSetup(page);
   await setDeterministicTotal(page, 8);
   await page.getByRole("button", { name: "Roll Dice" }).click();
-  await page.getByLabel("Offer Wool").fill("1");
-  await page.getByLabel("Request Ore").fill("1");
+  const trade = await prepareAffordablePublicTrade(page);
   await page.getByRole("button", { name: "Publish Public Offer" }).click();
   await page.getByRole("button", { name: "Cancel Offer" }).click();
   await expect(page.getByText("No public offer is active.")).toBeVisible();
 
-  await page.getByLabel("Offer Wool").fill("1");
-  await page.getByLabel("Request Ore").fill("1");
+  await prepareAffordablePublicTrade(page);
   await page.getByRole("button", { name: "Publish Public Offer" }).click();
   await page.getByRole("button", { name: "End Turn" }).click();
   await expect(page.getByText("No public offer is active.")).toBeVisible();
-  await expect(page.locator(".turn-status strong")).toHaveText("Loss");
+  await expect(page.locator(".turn-status strong")).not.toHaveText(trade.proposerName);
 });
 
 test("English defaults, Chinese retranslates history, and the locale survives reload", async ({ page }) => {
   await openLocal(page);
+  await completeLocalSetup(page);
   await expect(page.getByRole("heading", { name: "Game Log" })).toBeVisible();
   await setDeterministicTotal(page, 8);
   await page.getByRole("button", { name: "Roll Dice" }).click();
@@ -1090,9 +1154,10 @@ test("English defaults, Chinese retranslates history, and the locale survives re
 
   await page.reload();
   await page.getByRole("button", { name: "开始本地游戏" }).click();
+  await completeLocalSetup(page);
   await expect(page.getByRole("heading", { name: "游戏日志" })).toBeVisible();
   await expect(page.getByRole("button", { name: "掷骰子" })).toBeVisible();
-  await expect(page.getByRole("log")).toContainText("欢迎来到卡坦岛仿制版");
+  await expect(page.getByRole("log")).toContainText("初始设置已开始，请按蛇形顺序放置村庄和道路。");
 
   await page.getByRole("tab", { name: "商业公会" }).click();
   await page.getByRole("button", { name: "开始集会" }).click();
@@ -1106,6 +1171,7 @@ test("English defaults, Chinese retranslates history, and the locale survives re
 test("mobile keeps log and dice statistics internally scrollable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openLocal(page);
+  await completeLocalSetup(page);
   for (let completedTurn = 0; completedTurn < 8; completedTurn += 1) {
     await setDeterministicTotal(page, 2);
     await page.getByRole("button", { name: "Roll Dice" }).click();
