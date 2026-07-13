@@ -1,4 +1,5 @@
 import type { ResourceCost } from "../domain/expansion/commerceGuild";
+import type { MapSeed } from "../domain/mapSeed";
 import type {
   Building,
   DevelopmentCard,
@@ -66,7 +67,7 @@ export interface PublicGameView {
   round: number;
   turnState: PublicTurnView;
   targetScore: number;
-  boardLayout: "standard-v1";
+  mapSeed: MapSeed;
   buildings: Building[];
   roads: Array<{ ownerId: PlayerId; edgeId: string }>;
   robberHexId: string;
@@ -132,6 +133,7 @@ export interface PrivateSeatState {
   seatId: string;
   playerId?: PlayerId;
   seatTokenPresent: true;
+  canRestartMatch: boolean;
   resources?: ResourceMap;
   developmentCards?: DevelopmentCard[];
   ownPendingBid?: number;

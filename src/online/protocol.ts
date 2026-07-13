@@ -1,7 +1,8 @@
 import { resources, type Resource, type ResourceMap } from "../domain/types";
 import type { ResourceCost } from "../domain/expansion/commerceGuild";
+import type { MapRestartMode } from "../domain/match/types";
 
-export const PROTOCOL_SCHEMA_VERSION = 1 as const;
+export const PROTOCOL_SCHEMA_VERSION = 2 as const;
 export const MAX_WIRE_BYTES = 16 * 1024;
 export const MAX_NICKNAME_CODE_POINTS = 20;
 export const MAX_WIRE_STRING_CODE_POINTS = 128;
@@ -105,6 +106,7 @@ interface VersionedClientMessage {
 export type ClientWebSocketMessage =
   | (VersionedClientMessage & { type: "room.ready"; ready: boolean })
   | (VersionedClientMessage & { type: "room.start" })
+  | (VersionedClientMessage & { type: "room.restart"; mode: MapRestartMode })
   | (VersionedClientMessage & { type: "match.command"; command: OnlineMatchCommand })
   | (VersionedClientMessage & { type: "auction.submitBid"; amount: number })
   | { type: "connection.heartbeat" };
@@ -402,6 +404,13 @@ export function parseClientWebSocketMessage(text: string): ClientWebSocketMessag
     case "room.start":
       exactObject(object, "message", ["type", "commandId", "expectedVersion"]);
       return { type, ...versionedFields(object) };
+    case "room.restart":
+      exactObject(object, "message", ["type", "commandId", "expectedVersion", "mode"]);
+      return {
+        type,
+        ...versionedFields(object),
+        mode: literalAt(object.mode, "message.mode", ["fresh", "sameMap"])
+      };
     case "match.command":
       exactObject(object, "message", ["type", "commandId", "expectedVersion", "command"]);
       return { type, ...versionedFields(object), command: parseOnlineMatchCommand(object.command) };

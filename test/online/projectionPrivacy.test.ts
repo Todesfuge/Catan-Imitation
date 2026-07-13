@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { createCommerceGuild } from "../../src/domain/expansion/commerceGuild";
+import { createSetupMatch } from "../../src/domain/match/createMatch";
 import type { MatchState } from "../../src/domain/match/types";
+import { parseMapSeed } from "../../src/domain/mapSeed";
+import { createBoardDataForSeed } from "../../src/domain/randomBoard";
 import { calculatePlayerScore } from "../../src/domain/rules/scoring";
 import {
   emptyResources,
@@ -193,6 +196,24 @@ function createRoom(phase: GameState["phase"] = "playing"): ProjectableRoomState
   } as ProjectableRoomState & Record<string, unknown>;
 }
 
+const seededMapSeed = parseMapSeed("M1-0123456789ABCDEF");
+
+function createSeededRoom(): ProjectableRoomState {
+  const room = createRoom();
+  room.matchState = createSetupMatch(
+    room.seats.map(({ nickname }) => ({ nickname })),
+    { kind: "seed", seed: seededMapSeed },
+    {
+      random: { nextInt: () => 0 },
+      nextMapSeed: () => seededMapSeed,
+      nextLogId: () => "seeded-projection-log",
+      now: () => 1_700_000_000_000
+    }
+  );
+  delete room.pendingAuction;
+  return room;
+}
+
 describe("caller-specific room projection privacy", () => {
   it("keeps opponent hands, raw deck, credentials, losing bids, errors, and blind-box kind out of JSON", () => {
     const view = projectRoomView(createRoom(), "seat-1");
@@ -230,6 +251,7 @@ describe("caller-specific room projection privacy", () => {
       seatId: "seat-1",
       playerId: "p1",
       seatTokenPresent: true,
+      canRestartMatch: true,
       resources: { wood: 1, brick: 2, wool: 3, grain: 4, ore: 5 },
       developmentCards: [ownCard],
       ownPendingBid: 765_432,
@@ -237,6 +259,48 @@ describe("caller-specific room projection privacy", () => {
     });
     expect(view.allowedActions).toBeDefined();
     expect(JSON.stringify(view.privateState)).not.toContain("876543");
+  });
+
+  it("publishes only the canonical seed and caller-specific restart capability after start", () => {
+    const room = createSeededRoom();
+    const hostView = projectRoomView(room, "seat-1");
+    const participantView = projectRoomView(room, "seat-2");
+
+    expect(hostView.publicState).not.toHaveProperty("hostSeatId");
+    expect(hostView.publicState.game).toMatchObject({ mapSeed: seededMapSeed });
+    expect(hostView.publicState.game).not.toHaveProperty("boardLayout");
+    expect(hostView.privateState.canRestartMatch).toBe(true);
+    expect(participantView.privateState.canRestartMatch).toBe(false);
+    expect(JSON.stringify(hostView.publicState)).not.toContain("seat-1-private-card-id");
+    expect({
+      board: room.matchState!.game.board,
+      edges: room.matchState!.game.edges,
+      ports: room.matchState!.game.ports
+    }).toEqual(createBoardDataForSeed(seededMapSeed));
+  });
+
+  it.each([
+    ["terrain", (room: ProjectableRoomState) => {
+      const hex = room.matchState!.game.board[0]!;
+      hex.terrain = hex.terrain === "forest" ? "pasture" : "forest";
+    }],
+    ["number", (room: ProjectableRoomState) => {
+      const hex = room.matchState!.game.board.find(({ diceNumber }) => diceNumber !== null)!;
+      hex.diceNumber = hex.diceNumber === 12 ? 2 : hex.diceNumber! + 1;
+    }],
+    ["port", (room: ProjectableRoomState) => {
+      room.matchState!.game.ports[0]!.id = "tampered-port-id";
+    }],
+    ["edge", (room: ProjectableRoomState) => {
+      room.matchState!.game.edges[0]!.id = "tampered-edge-id";
+    }],
+    ["seed", (room: ProjectableRoomState) => {
+      room.matchState!.game.mapSeed = parseMapSeed("M1-FEDCBA9876543210");
+    }]
+  ])("rejects a stored %s mismatch before serializing a projection", (_name, mutate) => {
+    const room = createSeededRoom();
+    mutate(room);
+    expect(() => projectRoomView(room, "seat-1")).toThrow("seed-derived board data");
   });
 
   it("projects public board, bank, counts, trade, guild result, and structured safe logs", () => {
@@ -261,7 +325,8 @@ describe("caller-specific room projection privacy", () => {
         requested: { wood: 0, brick: 1, wool: 0, grain: 0, ore: 0 }
       }
     });
-    expect(view.publicState.game?.boardLayout).toBe("standard-v1");
+    expect(view.publicState.game?.mapSeed).toBe(room.matchState!.game.mapSeed);
+    expect(view.publicState.game).not.toHaveProperty("boardLayout");
     expect(view.publicState.guild?.gathering.lastAuctionResult).toEqual({
       winnerId: "p2",
       winnerName: "Loss",
@@ -542,7 +607,7 @@ describe("caller-specific room projection privacy", () => {
     expect(first).not.toBe(second);
     expect(first.publicState).not.toBe(second.publicState);
     expect(first.publicState.game).not.toBe(room.matchState!.game);
-    expect(first.publicState.game?.boardLayout).toBe("standard-v1");
+    expect(first.publicState.game?.mapSeed).toBe(room.matchState!.game.mapSeed);
     expect(first.privateState.resources).not.toBe(room.matchState!.game.players[0].resources);
     expect(first.privateState.developmentCards).not.toBe(
       room.matchState!.game.players[0].developmentCards

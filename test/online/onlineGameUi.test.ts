@@ -3,12 +3,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { createLocalGameTableView } from "../../src/app/localGameState";
 import { createStandardBoardData } from "../../src/domain/board";
+import { createSetupMatch } from "../../src/domain/match/createMatch";
+import { parseMapSeed } from "../../src/domain/mapSeed";
+import { createBoardDataForSeed } from "../../src/domain/randomBoard";
 import { resources } from "../../src/domain/types";
 import type { OnlineAllowedActions } from "../../src/online/allowedActions";
 import {
   OnlineGame,
   createOnlineGameTableController,
-  createOnlineGameTableView
+  createOnlineGameTableView,
+  readOnlineGameProjection
 } from "../../src/online/OnlineGame";
 import type { OnlineClientState } from "../../src/online/onlineReducer";
 import { MAX_WIRE_BYTES, parseServerWebSocketMessage, type ClientWebSocketMessage, type RoomSnapshotMessage } from "../../src/online/protocol";
@@ -67,7 +71,8 @@ function actions(overrides: Partial<OnlineAllowedActions> = {}): OnlineAllowedAc
 }
 
 function publicGame(): PublicGameView {
-  const local = createLocalGameTableView(createScenarioAppState()).game;
+  const scenario = createScenarioAppState();
+  const local = createLocalGameTableView(scenario).game;
   return {
     phase: local.phase,
     players: [
@@ -78,7 +83,7 @@ function publicGame(): PublicGameView {
     ],
     activePlayerId: "p1", turn: 2, round: 1,
     turnState: { phase: "action", awaitedPlayerIds: [] }, targetScore: local.targetScore,
-    boardLayout: "standard-v1",
+    mapSeed: scenario.game.mapSeed,
     buildings: local.buildings.map((value) => ({ ...value })), roads: local.roads.map(({ ownerId, edgeId }) => ({ ownerId, edgeId })),
     robberHexId: local.robberHexId, bank: { resources: { ...local.bank.resources } },
     log: [{ id: "safe-log", messageKey: "game.welcome" }], developmentDeckCount: 19, lastDice: { first: 3, second: 4, total: 7 }
@@ -106,9 +111,10 @@ function snapshotFor(seatIndex = 0, overrides: { game?: Partial<PublicGameView>;
     })) }
   };
   return {
-    type: "room.snapshot", schemaVersion: 1, roomVersion: 41,
+    type: "room.snapshot", schemaVersion: 2, roomVersion: 41,
     lifecycle: overrides.lifecycle ?? "playing", publicState: publicState as unknown as Record<string, unknown>, privateState: {
       seatId, playerId, seatTokenPresent: true,
+      canRestartMatch: seatIndex === 0,
       resources: seatIndex === 0 ? { ...callerResources } : { ...zero, wood: seatIndex + 1 },
       developmentCards: [{ id: seatIndex === 0 ? "caller-knight" : `private-card-seat-${seatIndex + 1}`, kind: "knight", purchasedTurn: 0, revealed: false }],
       ...overrides.privateState
@@ -116,6 +122,47 @@ function snapshotFor(seatIndex = 0, overrides: { game?: Partial<PublicGameView>;
     allowedActions: callerActions as unknown as Record<string, unknown>,
     presence: game.players.map((_, index) => ({ seatId: `seat-${index + 1}`, connectionCount: index === 2 ? 0 : 1, online: index !== 2 }))
   };
+}
+
+const seededProjectionMapSeed = parseMapSeed("M1-0123456789ABCDEF");
+
+function seededSnapshot(): RoomSnapshotMessage {
+  const matchState = createSetupMatch(
+    ["Caller", "North", "East", "West"].map((nickname) => ({ nickname })),
+    { kind: "seed", seed: seededProjectionMapSeed },
+    {
+      random: { nextInt: () => 0 },
+      nextMapSeed: () => seededProjectionMapSeed,
+      nextLogId: () => "seeded-adapter-log",
+      now: () => 1_700_000_000_000
+    }
+  );
+  const seats = matchState.game.players.map((player, index) => ({
+    seatId: `seeded-seat-${index + 1}`,
+    playerId: player.id,
+    nickname: player.name,
+    ready: true
+  }));
+  const projected = projectRoomView(
+    {
+      roomCode: "234567",
+      lifecycle: "playing",
+      roomVersion: 52,
+      hostSeatId: seats[0]!.seatId,
+      seats,
+      matchState
+    },
+    seats[0]!.seatId,
+    { connectedSeatIds: seats.map(({ seatId }) => seatId) }
+  );
+  return {
+    type: "room.snapshot",
+    schemaVersion: 2,
+    roomVersion: 52,
+    lifecycle: "playing",
+    ...projected,
+    presence: seats.map(({ seatId }) => ({ seatId, connectionCount: 1, online: true }))
+  } as unknown as RoomSnapshotMessage;
 }
 
 function setupSnapshot(stage: "settlement" | "road" = "settlement", playerCount: 3 | 4 = 4): RoomSnapshotMessage {
@@ -162,6 +209,98 @@ function expectIncompatibleProjection(snapshot: RoomSnapshotMessage) {
 }
 
 describe("online game projection adapter", () => {
+  it("regenerates byte-equivalent board data from the canonical public seed", () => {
+    const snapshot = seededSnapshot();
+    const expected = createBoardDataForSeed(seededProjectionMapSeed);
+    const projection = readOnlineGameProjection(snapshot);
+
+    expect(projection?.boardData).toEqual(expected);
+    const view = createOnlineGameTableView(state(snapshot));
+    expect(view.game.board).toEqual(
+      expected.board.map(({ edgeIds: _edgeIds, ...hex }) => ({
+        ...hex,
+        vertexIds: [...hex.vertexIds]
+      }))
+    );
+    expect(view.game.edges).toEqual(
+      expected.edges.map(({ hexId: _hexId, ...edge }) => ({
+        ...edge,
+        vertexIds: [...edge.vertexIds]
+      }))
+    );
+    expect(view.game.ports).toEqual(
+      expected.ports.map((port) => ({ ...port, vertexIds: [...port.vertexIds] }))
+    );
+  });
+
+  it.each([
+    ["robber hex", (snapshot: RoomSnapshotMessage, ids: { hex: string; vertex: string; edge: string }) => {
+      (snapshot.publicState.game as unknown as PublicGameView).robberHexId = ids.hex;
+    }],
+    ["building vertex", (snapshot: RoomSnapshotMessage, ids: { hex: string; vertex: string; edge: string }) => {
+      (snapshot.publicState.game as unknown as PublicGameView).buildings = [
+        { id: "invalid-building", ownerId: "p1", vertexId: ids.vertex, kind: "settlement" }
+      ];
+    }],
+    ["road edge", (snapshot: RoomSnapshotMessage, ids: { hex: string; vertex: string; edge: string }) => {
+      (snapshot.publicState.game as unknown as PublicGameView).roads = [
+        { ownerId: "p1", edgeId: ids.edge }
+      ];
+    }],
+    ["setup pending settlement", (snapshot: RoomSnapshotMessage, ids: { hex: string; vertex: string; edge: string }) => {
+      const game = snapshot.publicState.game as unknown as PublicGameView;
+      game.setup = {
+        ...game.setup!,
+        stage: "road",
+        pendingSettlement: { playerId: "p1", vertexId: ids.vertex }
+      };
+    }],
+    ["turn road target", (snapshot: RoomSnapshotMessage, ids: { hex: string; vertex: string; edge: string }) => {
+      (snapshot.allowedActions as unknown as OnlineAllowedActions).turn.road.targets = [ids.edge];
+    }],
+    ["turn settlement target", (snapshot: RoomSnapshotMessage, ids: { hex: string; vertex: string; edge: string }) => {
+      (snapshot.allowedActions as unknown as OnlineAllowedActions).turn.settlement.targets = [ids.vertex];
+    }],
+    ["setup road target", (snapshot: RoomSnapshotMessage, ids: { hex: string; vertex: string; edge: string }) => {
+      (snapshot.allowedActions as unknown as OnlineAllowedActions).setup.road.targets = [ids.edge];
+    }],
+    ["setup settlement target", (snapshot: RoomSnapshotMessage, ids: { hex: string; vertex: string; edge: string }) => {
+      (snapshot.allowedActions as unknown as OnlineAllowedActions).setup.settlement.targets = [ids.vertex];
+    }],
+    ["robber target", (snapshot: RoomSnapshotMessage, ids: { hex: string; vertex: string; edge: string }) => {
+      (snapshot.allowedActions as unknown as OnlineAllowedActions).decisions.robberHex.targets = [ids.hex];
+    }],
+    ["free-road target", (snapshot: RoomSnapshotMessage, ids: { hex: string; vertex: string; edge: string }) => {
+      (snapshot.allowedActions as unknown as OnlineAllowedActions).decisions.freeRoad.targets = [ids.edge];
+    }],
+    ["city building target", (snapshot: RoomSnapshotMessage) => {
+      (snapshot.allowedActions as unknown as OnlineAllowedActions).turn.city.targets = ["unknown-building"];
+    }]
+  ])("rejects a seed-specific projection with an invalid %s", (_name, mutate) => {
+    const generated = createBoardDataForSeed(seededProjectionMapSeed);
+    const legacy = createStandardBoardData();
+    const generatedHexIds = new Set(generated.board.map(({ id }) => id));
+    const generatedVertexIds = new Set(generated.board.flatMap(({ vertexIds }) => vertexIds));
+    const generatedEdgeIds = new Set(generated.edges.map(({ id }) => id));
+    const invalidIds = {
+      hex: legacy.board.find(({ id }) => !generatedHexIds.has(id))!.id,
+      vertex: legacy.board.flatMap(({ vertexIds }) => vertexIds).find((id) => !generatedVertexIds.has(id))!,
+      edge: legacy.edges.find(({ id }) => !generatedEdgeIds.has(id))!.id
+    };
+    const snapshot = seededSnapshot();
+    mutate(snapshot, invalidIds);
+    expect(readOnlineGameProjection(snapshot)).toBeUndefined();
+  });
+
+  it.each(["m1-0123456789ABCDEF", "M1-0123456789ABCDEG", "M2-0123456789ABCDEF"])(
+    "rejects a noncanonical or unsupported public map seed %s",
+    (mapSeed) => {
+      const snapshot = seededSnapshot();
+      (snapshot.publicState.game as Record<string, unknown>).mapSeed = mapSeed;
+      expect(readOnlineGameProjection(snapshot)).toBeUndefined();
+    }
+  );
+
   it("accepts the completed three-round auction sentinel", () => {
     const snapshot = snapshotFor();
     const publicState = snapshot.publicState as unknown as PublicRoomState;
@@ -201,7 +340,7 @@ describe("online game projection adapter", () => {
     const projected = projectRoomView({ roomCode: "234567", lifecycle: "playing", roomVersion: 42, seats,
       matchState: { game: { ...local.game, log }, guild: local.guild, lastDice: local.lastDice } }, "seat-1",
     { connectedSeatIds: seats.map((seat) => seat.seatId) });
-    const wire = JSON.stringify({ type: "room.snapshot", schemaVersion: 1, roomVersion: 42, lifecycle: "playing", ...projected,
+    const wire = JSON.stringify({ type: "room.snapshot", schemaVersion: 2, roomVersion: 42, lifecycle: "playing", ...projected,
       presence: seats.map((seat) => ({ seatId: seat.seatId, connectionCount: 1, online: true })) });
     expect(projected.publicState.game?.log).toHaveLength(6);
     expect(projected.publicState.game?.log.map((entry) => entry.id)).toEqual(
@@ -243,7 +382,7 @@ describe("online game projection adapter", () => {
       pendingAuction: { round: 3, bidsBySeatId: Object.fromEntries(seats.map((seat, index) => [seat.seatId, index + 1])) }
     }, seats[0]!.seatId,
     { connectedSeatIds: seats.map((seat) => seat.seatId) });
-    const envelope = { type: "room.snapshot" as const, schemaVersion: 1 as const, roomVersion: 999999, lifecycle: "playing" as const, ...projected,
+    const envelope = { type: "room.snapshot" as const, schemaVersion: 2 as const, roomVersion: 999999, lifecycle: "playing" as const, ...projected,
       presence: seats.map((seat) => ({ seatId: seat.seatId, connectionCount: 9, online: true })),
       acknowledgedCommandId: "00000000-0000-4000-8000-000000000099" };
     const wire = JSON.stringify(envelope);
@@ -270,7 +409,7 @@ describe("online game projection adapter", () => {
     allowed.decisions.freeRoad.targets = edges;
     allowed.decisions.yearOfPlenty.targets = [...resources];
     allowed.decisions.monopoly.targets = [...resources];
-    const envelope = { type: "room.snapshot" as const, schemaVersion: 1 as const, roomVersion: 1000000, lifecycle: "playing" as const, ...projected,
+    const envelope = { type: "room.snapshot" as const, schemaVersion: 2 as const, roomVersion: 1000000, lifecycle: "playing" as const, ...projected,
       presence: seats.map((seat) => ({ seatId: seat.seatId, connectionCount: 9, online: true })),
       acknowledgedCommandId: "10000000-0000-4000-8000-000000000099" };
     const wire = JSON.stringify(envelope);
@@ -512,7 +651,7 @@ describe("online game projection adapter", () => {
     expect(html).toContain("This game view is incompatible");
 
     const unknownLayout = snapshotFor();
-    (unknownLayout.publicState.game as Record<string, unknown>).boardLayout = "future-v2";
+    (unknownLayout.publicState.game as Record<string, unknown>).mapSeed = "M2-0123456789ABCDEF";
     const unknownSend = vi.fn(() => true);
     expect(() => createOnlineGameTableView(state(unknownLayout))).toThrow("Invalid online game projection");
     expect(createOnlineGameTableController(() => state(unknownLayout), unknownSend, crypto.randomUUID).dispatch({ type: "turn.roll" })).toBe(false);
@@ -611,12 +750,12 @@ describe("online game projection adapter", () => {
     expectIncompatibleProjection(malformed);
   });
 
-  it("labels only the exact deterministic standard-v1 geometry", () => {
+  it("projects only static board data that exactly matches the stored seed", () => {
     const local = createScenarioAppState();
     expect({ board: local.game.board, edges: local.game.edges, ports: local.game.ports }).toEqual(createStandardBoardData());
     const seats = local.game.players.map((player, index) => ({ seatId: `seat-${index + 1}`, playerId: player.id, nickname: player.name, ready: true }));
     const nonstandard = { ...local.game, board: local.game.board.map((hex, index) => index === 0 ? { ...hex, id: "different-hex" } : hex) };
     expect(() => projectRoomView({ roomCode: "234567", lifecycle: "playing", roomVersion: 1, seats,
-      matchState: { game: nonstandard, guild: local.guild, lastDice: null } }, "seat-1")).toThrow("standard-v1");
+      matchState: { game: nonstandard, guild: local.guild, lastDice: null } }, "seat-1")).toThrow("seed-derived board data");
   });
 });

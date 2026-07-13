@@ -4,7 +4,7 @@ import type { OnlineAllowedActions } from "./allowedActions";
 import type { OnlineClientState } from "./onlineReducer";
 import type { ClientWebSocketMessage, OnlineMatchCommand, RoomSnapshotMessage } from "./protocol";
 import type { PrivateSeatState, PublicGameView } from "./view";
-import { parseOnlineGameProjection, standardOnlineBoardGeometry } from "./onlineGameProjection";
+import { parseOnlineGameProjection } from "./onlineGameProjection";
 
 type SendMessage = (message: ClientWebSocketMessage) => boolean;
 
@@ -73,7 +73,7 @@ export function createOnlineGameTableView(state: OnlineClientState): GameTableVi
   const ownSeat = publicState.seats.find((seat) => seat.seatId === privateState.seatId)!;
   const tableActions = projectActions(allowedActions, connected, privateState, game);
   const required = privateState.requiredDecision;
-  const boardData = standardOnlineBoardGeometry;
+  const boardData = projected.boardData;
   return {
     game: {
       phase: game.phase,

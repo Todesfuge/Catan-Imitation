@@ -3,6 +3,7 @@ import {
   ERROR_DEFINITIONS,
   MAX_WIRE_BYTES,
   MAX_WIRE_STRING_CODE_POINTS,
+  PROTOCOL_SCHEMA_VERSION,
   STABLE_ERROR_CODES,
   parseClientWebSocketMessage,
   parseConnectionTicketResponse,
@@ -480,7 +481,11 @@ export function createOnlineRoomClient(
         } catch {
           reduce({
             type: "protocol.failed",
-            error: { code: "PROTOCOL_INCOMPATIBLE", params: { expected: 1 }, retryable: false }
+            error: {
+              code: "PROTOCOL_INCOMPATIBLE",
+              params: { expected: PROTOCOL_SCHEMA_VERSION },
+              retryable: false
+            }
           });
           clearPending();
           cleanupSocketListeners();

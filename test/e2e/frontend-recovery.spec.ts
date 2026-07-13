@@ -42,7 +42,7 @@ async function installOnlineLobbyMock(page: Page, seatCount: 3 | 4) {
     };
     const snapshot = (acknowledgedCommandId?: string) => ({
       type: "room.snapshot",
-      schemaVersion: 1,
+      schemaVersion: 2,
       roomVersion,
       lifecycle: "lobby",
       publicState: {
@@ -141,7 +141,7 @@ function callerOnlineGameSnapshot() {
     matchState: { game: local.game, guild: local.guild, lastDice: local.lastDice }
   }, "seat-1", { connectedSeatIds: seats.map((seat) => seat.seatId) });
   return {
-    type: "room.snapshot", schemaVersion: 1, roomVersion: 42, lifecycle: "playing",
+    type: "room.snapshot", schemaVersion: 2, roomVersion: 42, lifecycle: "playing",
     ...projected,
     presence: seats.map((seat, index) => ({ seatId: seat.seatId, connectionCount: index === 2 ? 0 : 1, online: index !== 2 }))
   };

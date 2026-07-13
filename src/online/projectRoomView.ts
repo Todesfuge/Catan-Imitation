@@ -3,8 +3,9 @@ import type {
   BlindBoxOutcome,
   CommerceGuildState
 } from "../domain/expansion/commerceGuild";
-import { createStandardBoardData } from "../domain/board";
 import type { MatchState } from "../domain/match/types";
+import { parseMapSeed, type MapSeed } from "../domain/mapSeed";
+import { createBoardDataForSeed } from "../domain/randomBoard";
 import { calculatePlayerScore } from "../domain/rules/scoring";
 import {
   resources,
@@ -69,13 +70,14 @@ const developmentCardKinds: readonly DevelopmentCardKind[] = [
 ];
 
 const MAX_PUBLIC_LOG_ENTRIES = 6;
-const standardBoardData = createStandardBoardData();
-const standardBoardWire = JSON.stringify(standardBoardData);
-
-function requireStandardBoardLayout(game: GameState): void {
-  if (JSON.stringify({ board: game.board, edges: game.edges, ports: game.ports }) !== standardBoardWire) {
-    throw new Error("Online projection requires the standard-v1 board layout.");
+function requireSeedDerivedBoardData(game: GameState): MapSeed {
+  const mapSeed = parseMapSeed(game.mapSeed);
+  const expected = createBoardDataForSeed(mapSeed);
+  const stored = { board: game.board, edges: game.edges, ports: game.ports };
+  if (JSON.stringify(stored) !== JSON.stringify(expected)) {
+    throw new Error("Online projection requires static seed-derived board data.");
   }
+  return mapSeed;
 }
 
 const noParamLogKeys = new Set<GameMessageKey>([
@@ -375,7 +377,7 @@ function projectGame(
   revealFinalScores: boolean
 ): PublicGameView {
   const game = match.game;
-  requireStandardBoardLayout(game);
+  const mapSeed = requireSeedDerivedBoardData(game);
   const logContext: LogProjectionContext = {
     playerNames: new Set(playerNameById.values()),
     playerNameById,
@@ -399,7 +401,7 @@ function projectGame(
     round: game.round,
     turnState: { phase: game.turnState.phase, awaitedPlayerIds: awaitedPlayerIds(game) },
     targetScore: game.targetScore,
-    boardLayout: "standard-v1",
+    mapSeed,
     buildings: game.buildings.map((building) => ({ ...building })),
     roads: game.roads.map(({ ownerId, edgeId }) => ({ ownerId, edgeId })),
     robberHexId: game.robberHexId,
@@ -475,6 +477,9 @@ function projectPrivateState(
     seatId: seat.seatId,
     ...(seat.playerId ? { playerId: seat.playerId } : {}),
     seatTokenPresent: true,
+    canRestartMatch:
+      (room.lifecycle === "playing" || room.lifecycle === "finished") &&
+      room.hostSeatId === seat.seatId,
     ...(player
       ? {
           resources: copyResourceMap(player.resources),

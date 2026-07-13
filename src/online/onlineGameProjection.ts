@@ -1,4 +1,6 @@
-import { createStandardBoardData } from "../domain/board";
+import type { StandardBoardData } from "../domain/board";
+import { parseMapSeed, type MapSeed } from "../domain/mapSeed";
+import { createBoardDataForSeed } from "../domain/randomBoard";
 import { resources } from "../domain/types";
 import type { AvailabilityReasonCode } from "../app/actionAvailability";
 import type { OnlineAllowedActions } from "./allowedActions";
@@ -6,14 +8,13 @@ import type { RoomSnapshotMessage } from "./protocol";
 import type { PrivateSeatState, ProjectedRoomView, PublicGameView, PublicGuildView, PublicRoomState } from "./view";
 
 declare const parsedProjection: unique symbol;
-export type ParsedOnlineGameProjection = ProjectedRoomView & { readonly [parsedProjection]: true };
+export type ParsedOnlineGameProjection = ProjectedRoomView & {
+  readonly boardData: StandardBoardData;
+  readonly [parsedProjection]: true;
+};
 
 const MAX_ID_POINTS = 128;
 const MAX_COUNT = 10_000;
-const geometry = createStandardBoardData();
-const hexIds = new Set(geometry.board.map((hex) => hex.id));
-const vertexIds = new Set(geometry.board.flatMap((hex) => hex.vertexIds));
-const edgeIds = new Set(geometry.edges.map((edge) => edge.id));
 const phases = new Set(["setup", "playing", "gameOver"]);
 const turnPhases = new Set(["awaitingRoll", "awaitingDiscards", "awaitingRobberPlacement", "awaitingRobberVictim", "awaitingDevelopmentEffect", "action"]);
 const developmentKinds = new Set(["knight", "victoryPoint", "roadBuilding", "yearOfPlenty", "monopoly"]);
@@ -42,6 +43,20 @@ const publicLogKeys = new Set([
 ]);
 
 type Obj = Record<string, unknown>;
+interface BoardIds {
+  readonly hexIds: ReadonlySet<string>;
+  readonly vertexIds: ReadonlySet<string>;
+  readonly edgeIds: ReadonlySet<string>;
+}
+
+function boardIdsFor(boardData: StandardBoardData): BoardIds {
+  return {
+    hexIds: new Set(boardData.board.map(({ id }) => id)),
+    vertexIds: new Set(boardData.board.flatMap(({ vertexIds }) => vertexIds)),
+    edgeIds: new Set(boardData.edges.map(({ id }) => id))
+  };
+}
+
 const object = (value: unknown): value is Obj => value !== null && typeof value === "object" && !Array.isArray(value);
 const exact = (value: Obj, required: readonly string[], optional: readonly string[] = []) => {
   const keys = Object.keys(value);
@@ -79,13 +94,19 @@ function availability(value: unknown, targetMax: number, allowedTargets?: Readon
   return !allowedTargets || value.targets.every((target) => allowedTargets.has(target));
 }
 
-function allowedActions(value: unknown, playerIds: ReadonlySet<string>, buildingIds: ReadonlySet<string>, privateCards: ReadonlyMap<string, string>): value is OnlineAllowedActions {
+function allowedActions(
+  value: unknown,
+  playerIds: ReadonlySet<string>,
+  buildingIds: ReadonlySet<string>,
+  privateCards: ReadonlyMap<string, string>,
+  boardIds: BoardIds
+): value is OnlineAllowedActions {
   if (!object(value) || !exact(value, ["turn", "maritime", "commerce", "setup", "decisions", "publicTrade", "sealedBid"]) ||
       !object(value.turn) || !exact(value.turn, ["roll", "endTurn", "road", "settlement", "city", "buyDevelopmentCard", "developmentCards"])) return false;
   const turn = value.turn;
   if (!availability(turn.roll, 0) || !availability(turn.endTurn, 0) ||
-      !availability(turn.road, 72, edgeIds, ["cost"]) || !resourceMap(turn.road.cost) ||
-      !availability(turn.settlement, 54, vertexIds, ["cost"]) || !resourceMap(turn.settlement.cost) ||
+      !availability(turn.road, 72, boardIds.edgeIds, ["cost"]) || !resourceMap(turn.road.cost) ||
+      !availability(turn.settlement, 54, boardIds.vertexIds, ["cost"]) || !resourceMap(turn.settlement.cost) ||
       !availability(turn.city, 20, buildingIds, ["cost"]) || !resourceMap(turn.city.cost) ||
       !availability(turn.buyDevelopmentCard, 0, undefined, ["cost"]) || !resourceMap(turn.buyDevelopmentCard.cost) ||
       !Array.isArray(turn.developmentCards) || turn.developmentCards.length > 4 || !turn.developmentCards.every((card) =>
@@ -117,12 +138,12 @@ function allowedActions(value: unknown, playerIds: ReadonlySet<string>, building
       !availability(value.commerce.redeemPrize, 0)) return false;
 
   if (!object(value.setup) || !exact(value.setup, ["settlement", "road"]) ||
-      !availability(value.setup.settlement, 54, vertexIds) || !availability(value.setup.road, 72, edgeIds) ||
+      !availability(value.setup.settlement, 54, boardIds.vertexIds) || !availability(value.setup.road, 72, boardIds.edgeIds) ||
       !object(value.decisions) || !exact(value.decisions, ["discard", "robberHex", "robberVictim", "freeRoad", "yearOfPlenty", "monopoly"]) ||
       !availability(value.decisions.discard, 0, undefined, ["exactCount", "maxByResource"]) ||
       !nonNegativeInt(value.decisions.discard.exactCount, 48) || !resourceMap(value.decisions.discard.maxByResource) ||
-      !availability(value.decisions.robberHex, 18, hexIds) || !availability(value.decisions.robberVictim, 3, playerIds) ||
-      !availability(value.decisions.freeRoad, 72, edgeIds, ["remainingRoads"]) || !nonNegativeInt(value.decisions.freeRoad.remainingRoads, 2) ||
+      !availability(value.decisions.robberHex, 18, boardIds.hexIds) || !availability(value.decisions.robberVictim, 3, playerIds) ||
+      !availability(value.decisions.freeRoad, 72, boardIds.edgeIds, ["remainingRoads"]) || !nonNegativeInt(value.decisions.freeRoad.remainingRoads, 2) ||
       !availability(value.decisions.yearOfPlenty, 5, new Set(resources), ["remainingPicks"]) || !nonNegativeInt(value.decisions.yearOfPlenty.remainingPicks, 2) ||
       !availability(value.decisions.monopoly, 5, new Set(resources))) return false;
 
@@ -136,8 +157,8 @@ function allowedActions(value: unknown, playerIds: ReadonlySet<string>, building
 }
 
 function privateState(value: unknown): value is PrivateSeatState {
-  if (!object(value) || !exact(value, ["seatId", "seatTokenPresent"], ["playerId", "resources", "developmentCards", "ownPendingBid", "requiredDecision"]) ||
-      !boundedString(value.seatId) || value.seatTokenPresent !== true || !boundedString(value.playerId) || !resourceMap(value.resources) ||
+  if (!object(value) || !exact(value, ["seatId", "seatTokenPresent", "canRestartMatch"], ["playerId", "resources", "developmentCards", "ownPendingBid", "requiredDecision"]) ||
+      !boundedString(value.seatId) || value.seatTokenPresent !== true || typeof value.canRestartMatch !== "boolean" || !boundedString(value.playerId) || !resourceMap(value.resources) ||
       !Array.isArray(value.developmentCards) || value.developmentCards.length > 25 || !value.developmentCards.every((card) =>
         object(card) && exact(card, ["id", "kind", "purchasedTurn", "revealed"]) && boundedString(card.id) &&
         developmentKinds.has(card.kind as string) && nonNegativeInt(card.purchasedTurn) && typeof card.revealed === "boolean") ||
@@ -152,12 +173,12 @@ function privateState(value: unknown): value is PrivateSeatState {
   return decision.kind === "chooseYearOfPlentyResource" && exact(decision, ["kind", "remainingPicks"]) && nonNegativeInt(decision.remainingPicks, 2);
 }
 
-function publicGame(value: unknown): value is PublicGameView {
+function publicGame(value: unknown, mapSeed: MapSeed, boardIds: BoardIds): value is PublicGameView {
   if (!object(value) || !exact(value,
-    ["phase", "players", "activePlayerId", "turn", "round", "turnState", "targetScore", "boardLayout", "buildings", "roads", "robberHexId", "bank", "log", "developmentDeckCount", "lastDice"],
+    ["phase", "players", "activePlayerId", "turn", "round", "turnState", "targetScore", "mapSeed", "buildings", "roads", "robberHexId", "bank", "log", "developmentDeckCount", "lastDice"],
     ["pendingPlayerTrade", "setup", "winnerId", "largestArmyOwnerId", "longestRoadOwnerId"]) ||
-    !phases.has(value.phase as string) || value.boardLayout !== "standard-v1" || !boundedString(value.activePlayerId) ||
-    !nonNegativeInt(value.turn) || !nonNegativeInt(value.round) || !nonNegativeInt(value.targetScore, 100) || !hexIds.has(value.robberHexId as string) ||
+    !phases.has(value.phase as string) || value.mapSeed !== mapSeed || !boundedString(value.activePlayerId) ||
+    !nonNegativeInt(value.turn) || !nonNegativeInt(value.round) || !nonNegativeInt(value.targetScore, 100) || !boardIds.hexIds.has(value.robberHexId as string) ||
     !object(value.turnState) || !exact(value.turnState, ["phase", "awaitedPlayerIds"]) || !turnPhases.has(value.turnState.phase as string) ||
     !stringArray(value.turnState.awaitedPlayerIds, 4) || !object(value.bank) || !exact(value.bank, ["resources"]) || !resourceMap(value.bank.resources) ||
     !nonNegativeInt(value.developmentDeckCount, 25) || (value.lastDice !== null && (!object(value.lastDice) || !exact(value.lastDice, ["first", "second", "total"]) ||
@@ -171,9 +192,9 @@ function publicGame(value: unknown): value is PublicGameView {
   if (!playerIds.has(value.activePlayerId as string) || !value.turnState.awaitedPlayerIds.every((id) => playerIds.has(id))) return false;
   if (!Array.isArray(value.buildings) || value.buildings.length > 20 || !value.buildings.every((building) => object(building) &&
       exact(building, ["id", "ownerId", "vertexId", "kind"]) && boundedString(building.id) && playerIds.has(building.ownerId as string) &&
-      vertexIds.has(building.vertexId as string) && (building.kind === "settlement" || building.kind === "city")) ||
+      boardIds.vertexIds.has(building.vertexId as string) && (building.kind === "settlement" || building.kind === "city")) ||
       !Array.isArray(value.roads) || value.roads.length > 60 || !value.roads.every((road) => object(road) && exact(road, ["ownerId", "edgeId"]) &&
-        playerIds.has(road.ownerId as string) && edgeIds.has(road.edgeId as string))) return false;
+        playerIds.has(road.ownerId as string) && boardIds.edgeIds.has(road.edgeId as string))) return false;
   if ((value.phase === "setup") !== (value.setup !== undefined)) return false;
   if (value.setup !== undefined) {
     const setup = value.setup;
@@ -190,7 +211,7 @@ function publicGame(value: unknown): value is PublicGameView {
     } else {
       const pending = setup.pendingSettlement;
       if (!object(pending) || !exact(pending, ["playerId", "vertexId"]) ||
-          pending.playerId !== value.activePlayerId || !vertexIds.has(pending.vertexId as string) ||
+          pending.playerId !== value.activePlayerId || !boardIds.vertexIds.has(pending.vertexId as string) ||
           !value.buildings.some((building) => object(building) && building.ownerId === pending.playerId &&
             building.vertexId === pending.vertexId && building.kind === "settlement")) return false;
     }
@@ -224,7 +245,17 @@ export function parseOnlineGameProjection(snapshot: RoomSnapshotMessage | undefi
   if (!snapshot || (snapshot.lifecycle !== "playing" && snapshot.lifecycle !== "finished") || !object(snapshot.publicState)) return undefined;
   const publicState = snapshot.publicState;
   const gameCandidate = publicState.game;
-  if (!privateState(snapshot.privateState) || !publicGame(gameCandidate)) return undefined;
+  if (!object(gameCandidate)) return undefined;
+  let mapSeed: MapSeed;
+  let boardData: StandardBoardData;
+  try {
+    mapSeed = parseMapSeed(gameCandidate.mapSeed);
+    boardData = createBoardDataForSeed(mapSeed);
+  } catch {
+    return undefined;
+  }
+  const boardIds = boardIdsFor(boardData);
+  if (!privateState(snapshot.privateState) || !publicGame(gameCandidate, mapSeed, boardIds)) return undefined;
   const game = gameCandidate;
   const playerIds = new Set(game.players.map((player) => player.playerId));
   if (!object(publicState) || !exact(publicState, ["roomCode", "lifecycle", "roomVersion", "seats", "game", "guild", "submittedBidSeatIds"]) ||
@@ -243,13 +274,12 @@ export function parseOnlineGameProjection(snapshot: RoomSnapshotMessage | undefi
   if (!privateSeat || privateSeat.playerId !== snapshot.privateState.playerId ||
       !publicState.submittedBidSeatIds.every((id) => seatIds.has(id)) ||
       snapshot.presence.length !== publicState.seats.length || !snapshot.presence.every((entry) => seatIds.has(entry.seatId)) ||
-      !allowedActions(snapshot.allowedActions, playerIds, buildingIds, privateCards)) return undefined;
-  const result: ProjectedRoomView = {
+      !allowedActions(snapshot.allowedActions, playerIds, buildingIds, privateCards, boardIds)) return undefined;
+  const result: ProjectedRoomView & { readonly boardData: StandardBoardData } = {
     publicState: publicState as unknown as PublicRoomState,
     privateState: snapshot.privateState,
-    allowedActions: snapshot.allowedActions
+    allowedActions: snapshot.allowedActions,
+    boardData
   };
   return result as ParsedOnlineGameProjection;
 }
-
-export { geometry as standardOnlineBoardGeometry };
