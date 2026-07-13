@@ -198,7 +198,7 @@ Steps:
 - [ ] Strengthen v2 game validation for canonical seed and exact generated board while preserving all existing room/ticket/auction semantics.
 - [ ] Update room creation to schema 2 and initial online start to fresh seeded setup.
 - [ ] Rerun the focused Worker test; expect GREEN.
-- [ ] Run `pnpm test:worker` and `pnpm build:worker`; expect all Worker tests/build GREEN.
+- [ ] Run `pnpm test:worker`; expect all Worker tests GREEN. Run `pnpm build:worker`; require every T006-owned schema, migration, fixture, and initial-start error to be GREEN, while allowing only the exact T007-owned missing-seed-context and unhandled-`room.restart` diagnostics to remain; do not hide them with defaults, optional APIs, or premature restart behavior.
 - [ ] Commit `feat: migrate rooms to seeded schema v2`.
 
 ## Task 7 — T007: Authoritative Host Restart and Concurrency
