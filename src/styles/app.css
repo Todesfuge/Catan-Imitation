@@ -1259,11 +1259,16 @@ button.primary {
 }
 
 .modal-header {
+  position: sticky;
+  top: -1rem;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.8rem;
+  background: var(--panel);
+  box-shadow: 0 1px 0 var(--line);
 }
 
 .modal-header h2 {

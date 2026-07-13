@@ -632,17 +632,37 @@ for (const visual of [
     await page.getByRole("button", { name: "Open settings" }).click();
     if (visual.locale === "zh-CN") await page.locator("[data-language-select]").selectOption("zh-CN");
     await page.getByRole("button", { name: visual.label }).click();
+    const utility = page.locator(".utility-modal");
+    const dialog = page.locator(".modal-card");
+    const header = page.locator(".modal-header");
+    const close = page.locator("[data-dialog-close]");
     const confirmation = page.locator(".restart-confirmation");
     const confirm = page.getByRole("button", { name: visual.locale === "en" ? "Confirm Restart" : "确认重新开始" });
     await expect(confirmation).toBeVisible();
     await expect(page.getByRole("button", { name: visual.locale === "en" ? "Cancel" : "取消" })).toBeFocused();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(visual.width);
-    const [dialogBox, confirmBox] = await Promise.all([
-      page.locator(".modal-card").boundingBox(),
-      confirm.boundingBox()
+    const [utilityBox, dialogBox, headerBox, closeBox, confirmBox, scrollTop] = await Promise.all([
+      utility.boundingBox(),
+      dialog.boundingBox(),
+      header.boundingBox(),
+      close.boundingBox(),
+      confirm.boundingBox(),
+      dialog.evaluate((element) => element.scrollTop)
     ]);
+    if (visual.width === 390) expect(scrollTop).toBeGreaterThan(0);
+    expect(utilityBox).not.toBeNull();
     expect(dialogBox).not.toBeNull();
+    expect(headerBox).not.toBeNull();
+    expect(closeBox).not.toBeNull();
     expect(confirmBox).not.toBeNull();
+    expect(utilityBox!.y).toBeGreaterThanOrEqual(0);
+    expect(dialogBox!.y).toBeGreaterThanOrEqual(0);
+    expect(headerBox!.y).toBeGreaterThanOrEqual(0);
+    expect(headerBox!.y + headerBox!.height).toBeLessThanOrEqual(visual.height);
+    expect(closeBox!.y).toBeGreaterThanOrEqual(0);
+    expect(closeBox!.y + closeBox!.height).toBeLessThanOrEqual(visual.height);
+    await expect(header).toBeInViewport();
+    await expect(close).toBeInViewport();
     expect(confirmBox!.y + confirmBox!.height).toBeLessThanOrEqual(
       Math.min(visual.height, dialogBox!.y + dialogBox!.height)
     );
