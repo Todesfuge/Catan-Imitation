@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { createCommerceGuild } from "../../src/domain/expansion/commerceGuild";
+import {
+  createCommerceGuild,
+  createInitialGatheringCooldown,
+  createPostGatheringCooldown
+} from "../../src/domain/expansion/commerceGuild";
 import {
   LEGACY_STANDARD_MAP_SEED,
   parseMapSeed
@@ -285,7 +289,8 @@ function transitionRoom(
 }
 
 function createFinishedWithRetainedTrade(): PersistedRoom {
-  const room = createProductionPlaying();
+  const source = createV2Playing();
+  const { pendingAuction: _pendingAuction, ...room } = source;
   const prepared = {
     ...room,
     matchState: {
@@ -321,18 +326,36 @@ function createFinishedWithRetainedAuction(): PersistedRoom {
   return transitionRoom(prepared, { type: "REDEEM_PRIZE", playerId: "p2" });
 }
 
-function toLegacyRecord(room: PersistedRoom): Record<string, unknown> {
+function toLegacyRecord(room: PersistedRoom, schemaVersion: 1 | 2 = 1): Record<string, unknown> {
   const legacy = structuredClone(room) as Record<string, any>;
-  legacy.schemaVersion = 1;
-  if (legacy.matchState) delete legacy.matchState.game.mapSeed;
+  legacy.schemaVersion = schemaVersion;
+  if (legacy.matchState) {
+    delete legacy.matchState.guild.gatheringCooldown;
+    legacy.matchState.guild.lastAutoGatheringRound = Math.min(3, legacy.matchState.game.round);
+    if (schemaVersion === 1) delete legacy.matchState.game.mapSeed;
+  }
   if (legacy.pendingAuction === undefined) delete legacy.pendingAuction;
   return legacy;
 }
 
 function expectedMigration(raw: Record<string, unknown>): PersistedRoom {
   const expected = structuredClone(raw) as Record<string, any>;
-  expected.schemaVersion = 2;
-  if (expected.matchState) expected.matchState.game.mapSeed = "M0-STANDARD";
+  expected.schemaVersion = 3;
+  if (expected.matchState) {
+    if (!Object.hasOwn(expected.matchState.game, "mapSeed")) {
+      expected.matchState.game.mapSeed = "M0-STANDARD";
+    }
+    const { lastAutoGatheringRound: _obsolete, ...guild } = expected.matchState.guild;
+    const playerCount = expected.matchState.game.players.length;
+    const turn = expected.matchState.game.turn;
+    const phase = guild.gathering.phase;
+    expected.matchState.guild = {
+      ...guild,
+      gatheringCooldown: phase === "idle" || phase === "complete"
+        ? createInitialGatheringCooldown(turn, playerCount)
+        : createPostGatheringCooldown(turn, playerCount)
+    };
+  }
   return expected as PersistedRoom;
 }
 
@@ -543,8 +566,8 @@ const rawValidationMatrix = invalidStoredRoomCases.flatMap((testCase) => [
   { name: `v2 ${testCase.name}`, schema: "v2" as const, testCase }
 ]);
 
-describe("persisted room schema v2", () => {
-  it("creates and writes schema-v2 lobbies without match state", async () => {
+describe("persisted room schema v3", () => {
+  it("creates and writes schema-v3 lobbies without match state", async () => {
     const room = createLobby({
       roomCode: "ABC234",
       seatId: "seat-1",
@@ -552,7 +575,7 @@ describe("persisted room schema v2", () => {
       tokenHash: HASH
     }, 1_000);
 
-    expect(room.schemaVersion).toBe(2);
+    expect(room.schemaVersion).toBe(3);
     expect(Object.hasOwn(room, "matchState")).toBe(false);
     const storage = new CountingStorage();
     await expect(new RoomStore(storage).createIfEmpty(room)).resolves.toBe("created");
@@ -696,7 +719,7 @@ describe("persisted room schema v2", () => {
     }
 
     const started = startLobby(room, room.hostSeatId, executionContext(), 10_000);
-    expect(started.schemaVersion).toBe(2);
+    expect(started.schemaVersion).toBe(3);
     expect(started.matchState?.game.mapSeed).toBe(M1_SEED);
     await expect(new RoomStore(new CountingStorage()).save(started)).resolves.toBeUndefined();
   });
@@ -705,7 +728,7 @@ describe("persisted room schema v2", () => {
     "m1-0000000000000001",
     "M1-000000000000001",
     "M2-0000000000000001"
-  ])("rejects malformed or unsupported v2 seed %s without writing", async (mapSeed) => {
+  ])("rejects malformed or unsupported v3 seed %s without writing", async (mapSeed) => {
     const storage = new CountingStorage();
     const room = createV2Playing();
     await expect(new RoomStore(new CountingStorage()).save(room)).resolves.toBeUndefined();
@@ -725,7 +748,7 @@ describe("persisted room schema v2", () => {
     expect(storage.roomPutCount).toBe(0);
   });
 
-  it("rejects missing seeds and seed/board mismatches in v2 playing and finished rooms", async () => {
+  it("rejects missing seeds and seed/board mismatches in v3 playing and finished rooms", async () => {
     await expect(new RoomStore(new CountingStorage()).save(createV2Playing()))
       .resolves.toBeUndefined();
     const playing = structuredClone(createV2Playing()) as Record<string, any>;
@@ -755,7 +778,7 @@ describe("complete raw persisted match validation", () => {
       const room = testCase.createRoom?.() ?? createV2Playing();
       const raw = schema === "v1"
         ? toLegacyRecord(room)
-        : structuredClone(room) as unknown as Record<string, unknown>;
+        : toLegacyRecord(room, 2);
       testCase.mutate(raw);
       const before = snapshotOwnValues(raw);
       const storage = new CountingStorage();
@@ -775,7 +798,7 @@ describe("complete raw persisted match validation", () => {
     async (schema) => {
       const raw = schema === "v1"
         ? toLegacyRecord(createV2Lobby())
-        : structuredClone(createV2Lobby()) as unknown as Record<string, unknown>;
+        : toLegacyRecord(createV2Lobby(), 2);
       raw.matchState = undefined;
       const before = snapshotOwnValues(raw);
       const storage = new CountingStorage();
@@ -907,14 +930,14 @@ describe("legacy persisted-room migration", () => {
       const room = createRoom();
       const raw = schema === "v1"
         ? toLegacyRecord(room)
-        : structuredClone(room) as unknown as Record<string, unknown>;
+        : toLegacyRecord(room, 2);
       const storage = new CountingStorage();
       storage.values.set(ROOM_RECORD_KEY, raw);
 
       const loaded = await new RoomStore(storage).load(10_000);
 
-      expect(loaded).toEqual(schema === "v1" ? expectedMigration(raw) : raw);
-      expect(storage.roomPutCount).toBe(schema === "v1" ? 1 : 0);
+      expect(loaded).toEqual(expectedMigration(raw));
+      expect(storage.roomPutCount).toBe(1);
     }
   });
 
@@ -979,13 +1002,13 @@ describe("legacy persisted-room migration", () => {
       kind: "active",
       value: "updated",
       room: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         roomVersion: (raw.roomVersion as number) + 1,
         connectionTickets: [{ ticketHash: "Y".repeat(43) }]
       }
     });
     expect(storage.roomPutCount).toBe(1);
-    await expect(new RoomStore(storage).load(10_000)).resolves.toMatchObject({ schemaVersion: 2 });
+    await expect(new RoomStore(storage).load(10_000)).resolves.toMatchObject({ schemaVersion: 3 });
     expect(storage.roomPutCount).toBe(1);
   });
 });

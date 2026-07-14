@@ -101,7 +101,7 @@ export function createLobby(
 ): PersistedRoom {
   const host = makeSeat(input, now, 1);
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     roomCode: normalizeRoomCode(input.roomCode),
     lifecycle: "lobby",
     createdAt: now,

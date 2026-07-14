@@ -191,7 +191,7 @@ describe("pure lobby lifecycle", () => {
     const room = roomWithSeats();
 
     expect(room).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       roomCode: "ABC234",
       lifecycle: "lobby",
       hostSeatId: "seat-1",
@@ -416,7 +416,7 @@ describe("RoomStore", () => {
 
   it("rejects incompatible and malformed persisted schema", async () => {
     for (const invalid of [
-      { ...roomWithSeats(), schemaVersion: 3 },
+      { ...roomWithSeats(), schemaVersion: 4 },
       { ...roomWithSeats(), hostSeatId: "missing" },
       { ...roomWithSeats(), presence: [] },
       {
@@ -1062,7 +1062,7 @@ describe("room HTTP routes and authenticated sockets", () => {
     const snapshot = await nextMessage(first);
     expect(snapshot).toMatchObject({
       type: "room.snapshot",
-      schemaVersion: 2,
+      schemaVersion: 3,
       lifecycle: "lobby",
       privateState: { seatId: host.seatId, seatTokenPresent: true }
     });
@@ -1661,7 +1661,7 @@ describe("room eviction recovery and expiry alarms", () => {
     await rooms.seed("incompatible-recovery", roomWithSeats());
     await rooms.state("incompatible-recovery").storage.put(ROOM_RECORD_KEY, {
       ...roomWithSeats(),
-      schemaVersion: 3
+      schemaVersion: 4
     });
     rooms.evict("incompatible-recovery");
 
@@ -1678,7 +1678,7 @@ describe("room eviction recovery and expiry alarms", () => {
     await expect(response.json()).resolves.toEqual({
       error: {
         code: "PROTOCOL_INCOMPATIBLE",
-        params: { expected: 2 },
+        params: { expected: 3 },
         retryable: false
       }
     });

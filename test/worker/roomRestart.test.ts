@@ -322,7 +322,7 @@ describe("authoritative room restart lifecycle", () => {
 
       expect(room).toEqual(original);
       expect(restarted).toMatchObject({
-        schemaVersion: 2,
+        schemaVersion: 3,
         roomCode: room.roomCode,
         lifecycle: "playing",
         hostSeatId: room.hostSeatId,
@@ -636,7 +636,7 @@ describe("room restart command pipeline", () => {
     expect([...peers.messages.values()].flat()).toHaveLength(3);
   });
 
-  it("broadcasts one complete caller-specific v2 setup snapshot per live seat and audits room.restart", async () => {
+  it("broadcasts one complete caller-specific v3 setup snapshot per live seat and audits room.restart", async () => {
     const room = scenarioRoom("sealed auction");
     const store = new MemoryCommandStore(room);
     const peers = recipientSet("seat-1", "seat-2", "seat-3");
@@ -658,7 +658,7 @@ describe("room restart command pipeline", () => {
       expect(peers.messages.get(seatId)).toHaveLength(1);
       expect(peers.messages.get(seatId)?.[0]).toMatchObject({
         type: "room.snapshot",
-        schemaVersion: 2,
+        schemaVersion: 3,
         roomVersion: room.roomVersion + 1,
         lifecycle: "playing",
         acknowledgedCommandId: COMMAND_IDS[0],

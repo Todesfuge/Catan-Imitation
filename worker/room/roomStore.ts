@@ -1,6 +1,6 @@
 import type { ConnectionTicket, PersistedRoom, PersistedSeat } from "./roomTypes";
 import { hashesMatch } from "../crypto";
-import { migratePersistedRoomV1 } from "./roomMigration";
+import { migratePersistedRoom } from "./roomMigration";
 import { isPersistedMatchState } from "./roomValidation";
 import {
   joinLobby,
@@ -148,7 +148,7 @@ function assertPersistedRoomSemantics(value: unknown): asserts value is Persiste
     "schemaVersion", "roomCode", "lifecycle", "createdAt", "lastActivityAt", "expiresAt",
     "hostSeatId", "nextJoinOrder", "roomVersion", "seats", "connectionTickets"
   ], ["matchState", "pendingAuction"]) ||
-    value.schemaVersion !== 2 || typeof value.roomCode !== "string" ||
+    value.schemaVersion !== 3 || typeof value.roomCode !== "string" ||
     !/^[A-HJ-NP-Z2-9]{6}$/.test(value.roomCode) ||
     !["lobby", "playing", "finished"].includes(String(value.lifecycle)) ||
     !integer(value.createdAt) || !integer(value.lastActivityAt) || !integer(value.expiresAt) ||
@@ -224,11 +224,11 @@ async function readStoredRoom(
 
   let replacementRequired = false;
   let room: PersistedRoom;
-  if (record(value) && value.schemaVersion === 2) {
+  if (record(value) && value.schemaVersion === 3) {
     assertPersistedRoomSemantics(value);
     room = value;
   } else {
-    const migrated = migratePersistedRoomV1(value);
+    const migrated = migratePersistedRoom(value);
     if (migrated === undefined) throw new RoomSchemaError();
     assertPersistedRoomSemantics(migrated);
     room = migrated;
@@ -304,7 +304,6 @@ export class RoomStore {
       if (current.kind !== "active") return current;
       const result = mutation(current.room);
       if (result.kind === "unchanged") {
-        await persistReadReplacement(storage, current);
         return { kind: "active", room: current.room, value: result.value };
       }
       assertPersistedRoom(result.room);

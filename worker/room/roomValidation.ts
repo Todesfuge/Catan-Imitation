@@ -1,3 +1,7 @@
+import {
+  createInitialGatheringCooldown,
+  createPostGatheringCooldown
+} from "../../src/domain/expansion/commerceGuild";
 import { LEGACY_STANDARD_MAP_SEED, parseMapSeed } from "../../src/domain/mapSeed";
 import type { MatchState } from "../../src/domain/match/types";
 import { matchesBoardDataForSeed } from "../../src/domain/randomBoard";
@@ -300,9 +304,21 @@ function gatheringState(value: unknown, references: GameReferences): boolean {
   });
 }
 
-function commerceGuild(value: unknown, game: UnknownRecord, references: GameReferences): boolean {
-  if (!record(value) || !exactKeys(value, ["tradeSlots", "usedTradePlayerIds", "gathering"], [
-    "lastAutoGatheringRound"
+function gatheringCooldown(value: unknown, playerCount: number): boolean {
+  if (!record(value) || !exactKeys(value, ["availableAtTurn", "displayDuration"]) ||
+    !safeInteger(value.availableAtTurn, 1) || !safeInteger(value.displayDuration, 1)) {
+    return false;
+  }
+  const allowedDurations = [
+    createInitialGatheringCooldown(1, playerCount).displayDuration,
+    createPostGatheringCooldown(1, playerCount).displayDuration
+  ];
+  return allowedDurations.includes(value.displayDuration);
+}
+
+function commerceGuild(value: unknown, references: GameReferences): boolean {
+  if (!record(value) || !exactKeys(value, [
+    "tradeSlots", "usedTradePlayerIds", "gathering", "gatheringCooldown"
   ]) || !Array.isArray(value.tradeSlots) || value.tradeSlots.length !== 3 ||
     !value.tradeSlots.every((slot) => record(slot) && exactKeys(slot, ["id", "requires", "tokenReward"]) &&
       nonEmptyString(slot.id) && resourceCost(slot.requires) && safeInteger(slot.tokenReward, 1)) ||
@@ -310,12 +326,11 @@ function commerceGuild(value: unknown, game: UnknownRecord, references: GameRefe
     !Array.isArray(value.usedTradePlayerIds) || !value.usedTradePlayerIds.every(nonEmptyString) ||
     !unique(value.usedTradePlayerIds) ||
     value.usedTradePlayerIds.some((id) => !references.playerIds.has(id)) ||
-    !gatheringState(value.gathering, references)) {
+    !gatheringState(value.gathering, references) ||
+    !gatheringCooldown(value.gatheringCooldown, references.playerIds.size)) {
     return false;
   }
-  return optional(value, "lastAutoGatheringRound", (candidate) =>
-    safeInteger(candidate, 1) && candidate <= (game.round as number)
-  );
+  return true;
 }
 
 function playerTrade(value: unknown, game: UnknownRecord, references: GameReferences): boolean {
@@ -443,7 +458,7 @@ export function isPersistedMatchState(value: unknown): value is MatchState {
     vertexIds: new Set(board.flatMap((candidate) => candidate.vertexIds as string[])),
     edgeIds: new Set((game.edges as UnknownRecord[]).map((candidate) => candidate.id as string))
   };
-  const guildValid = commerceGuild(value.guild, game, references);
+  const guildValid = commerceGuild(value.guild, references);
   const diceValid = value.lastDice === null || diceRoll(value.lastDice);
   const allowLegacyOwnUndefined = game.mapSeed === LEGACY_STANDARD_MAP_SEED;
   const tradeValid = !Object.hasOwn(value, "pendingPlayerTrade") ||

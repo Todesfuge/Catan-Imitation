@@ -490,18 +490,8 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
                   .sort((left, right) => left - right)
               );
           if (parsed.expectedVersion !== room.roomVersion) {
-            if (parsed.type === "room.restart") {
-              return {
-                kind: "unchanged",
-                value: {
-                  kind: "rejected", commandId: parsed.commandId,
-                  code: "VERSION_CONFLICT", includeSnapshot: true
-                }
-              };
-            }
             return {
-              kind: "updated",
-              room: admittedRoom,
+              kind: "unchanged",
               value: {
                 kind: "rejected", commandId: parsed.commandId,
                 code: "VERSION_CONFLICT", includeSnapshot: true
@@ -535,14 +525,7 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
               commandId: parsed.commandId,
               code: rejectionCode(caught)
             };
-            if (parsed.type === "room.restart") {
-              return { kind: "unchanged", value: rejected };
-            }
-            return {
-              kind: "updated",
-              room: admittedRoom,
-              value: rejected
-            };
+            return { kind: "unchanged", value: rejected };
           }
         });
       } catch (caught) {

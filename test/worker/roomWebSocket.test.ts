@@ -391,10 +391,10 @@ describe("authoritative room command pipeline", () => {
 
     await pipeline.handle({ seatId: "seat-1", rawMessage: command(ids[0], 0), now: 100, presence: noPresence, recipients: peers.recipients });
 
-    expect(store.commits).toBe(1);
+    expect(store.commits).toBe(0);
     expect(store.room!.roomVersion).toBe(lobbyRoom().roomVersion);
     expect(store.room!.lastActivityAt).toBe(lobbyRoom().lastActivityAt);
-    expect(store.room!.seats[0].commandAttemptTimestamps).toEqual([100]);
+    expect(store.room!.seats[0].commandAttemptTimestamps).toEqual([]);
     expect(peers.messages.get("seat-1")?.[0]).toMatchObject({
       type: "command.rejected", commandId: ids[0], error: { code: "VERSION_CONFLICT" },
       snapshot: { type: "room.snapshot", roomVersion: store.room!.roomVersion }
@@ -420,13 +420,13 @@ describe("authoritative room command pipeline", () => {
         now: 100, presence: noPresence, recipients: peers.recipients
       });
 
-      expect(store.commits).toBe(1);
+      expect(store.commits).toBe(0);
       expect(store.room!.roomVersion).toBe(original.roomVersion);
       expect(store.room!.lastActivityAt).toBe(original.lastActivityAt);
       expect(store.room!.expiresAt).toBe(original.expiresAt);
       expect(store.room!.matchState).toEqual(original.matchState);
       expect(store.room!.seats[0].acceptedCommandIds).toEqual(original.seats[0].acceptedCommandIds);
-      expect(store.room!.seats[0].commandAttemptTimestamps).toEqual([100]);
+      expect(store.room!.seats[0].commandAttemptTimestamps).toEqual([]);
       expect(peers.messages.get("seat-1")?.[0]).toMatchObject({
         type: "command.rejected",
         error: { code: failure instanceof RuleViolationError ? "RULE_VIOLATION" : "INTERNAL_ERROR" }
@@ -449,10 +449,10 @@ describe("authoritative room command pipeline", () => {
       presence: noPresence, recipients: peers.recipients
     });
 
-    expect(store.commits).toBe(1);
+    expect(store.commits).toBe(0);
     expect(store.room!.roomVersion).toBe(lobbyRoom().roomVersion);
     expect(store.room!.lastActivityAt).toBe(lobbyRoom().lastActivityAt);
-    expect(store.room!.seats[0].commandAttemptTimestamps).toEqual([100]);
+    expect(store.room!.seats[0].commandAttemptTimestamps).toEqual([]);
     expect(peers.messages.get("seat-1")?.[0]).toMatchObject({
       type: "command.rejected", error: { code: "INTERNAL_ERROR" }
     });

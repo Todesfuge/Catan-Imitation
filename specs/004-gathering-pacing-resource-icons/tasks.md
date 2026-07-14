@@ -181,25 +181,25 @@ Interfaces:
 
 Steps:
 
-- [ ] Add v2 lobby migration proving no `matchState` or cooldown is fabricated and every non-schema field is preserved.
-- [ ] Add v2 idle and complete match migrations proving `2n` windows anchored at `game.turn`, removal of `lastAutoGatheringRound`, and preservation of last auction result.
-- [ ] Add v2 redemption and auction migrations proving live phase/redemptions/results/sealed bids remain intact and an `n` window excluding the current turn is established.
-- [ ] Add three- and four-player migration vectors, reconnect-after-migration, and storage-eviction reconstruction of the same public remaining value.
-- [ ] Add invalid v2 cases for malformed turn/player count/cooldown-adjacent data; assert migration failure leaves raw storage byte-equivalent and emits no snapshot.
-- [ ] Add a v1 fixed-map regression proving the existing map-seed migration chains into a valid v3 cooldown state; retain corrupt-v1 rejection.
-- [ ] Add authenticated start tests: current caller success, non-current caller rejection, unresolved phase, pending trade, nonzero cooldown, stale version, duplicate command id, and direct actor-field protocol rejection.
-- [ ] For every rejected command, assert no storage mutation, room-version increment, accepted-command record, or recipient broadcast; for success, assert one persisted version and converged recipient snapshots.
-- [ ] Run `pnpm exec vitest run --config vitest.worker.config.ts test/worker/gatheringMigration.test.ts test/worker/gatheringAuthority.test.ts`; expect RED on schema literal, migration, validation, and transaction behavior.
-- [ ] Change current room/lifecycle creation to schema 3 and confine legacy v1/v2 types to `roomMigration.ts`.
-- [ ] Reuse Commerce Guild initial/post window helpers in migration; do not duplicate formulas in Worker code.
-- [ ] Refactor room-store version dispatch to validate legacy input, construct the entire v3 candidate, validate current schema, and perform one replacement write.
-- [ ] Require exact current guild keys including `gatheringCooldown`; reject obsolete automatic metadata and impossible window values.
-- [ ] Update current Worker fixtures/smoke expectations to 3 while retaining explicit legacy test fixtures at their original versions.
-- [ ] Rerun the two focused Worker files; expect GREEN.
-- [ ] Run `pnpm test:worker` and `pnpm build:worker`; expect every Worker test and Worker TypeScript check GREEN.
-- [ ] Run `pnpm test`, `pnpm build`, and `pnpm smoke:worker`; expect main regression, app build, and Worker smoke GREEN.
-- [ ] Review migration for one complete-candidate write and command flow for persistence-before-broadcast; confirm no business formula was added to Worker facades.
-- [ ] Commit `feat: migrate gathering state to schema v3`.
+- [x] Add v2 lobby migration proving no `matchState` or cooldown is fabricated and every non-schema field is preserved.
+- [x] Add v2 idle and complete match migrations proving `2n` windows anchored at `game.turn`, removal of `lastAutoGatheringRound`, and preservation of last auction result.
+- [x] Add v2 redemption and auction migrations proving live phase/redemptions/results/sealed bids remain intact and an `n` window excluding the current turn is established.
+- [x] Add three- and four-player migration vectors, reconnect-after-migration, and storage-eviction reconstruction of the same public remaining value.
+- [x] Add invalid v2 cases for malformed turn/player count/cooldown-adjacent data; assert migration failure leaves raw storage byte-equivalent and emits no snapshot.
+- [x] Add a v1 fixed-map regression proving the existing map-seed migration chains into a valid v3 cooldown state; retain corrupt-v1 rejection.
+- [x] Add authenticated start tests: current caller success, non-current caller rejection, unresolved phase, pending trade, nonzero cooldown, stale version, duplicate command id, and direct actor-field protocol rejection.
+- [x] For every rejected command, assert no storage mutation, room-version increment, accepted-command record, or recipient broadcast; for success, assert one persisted version and converged recipient snapshots.
+- [x] Run `pnpm exec vitest run --config vitest.worker.config.ts test/worker/gatheringMigration.test.ts test/worker/gatheringAuthority.test.ts`; expect RED on schema literal, migration, validation, and transaction behavior.
+- [x] Change current room/lifecycle creation to schema 3 and confine legacy v1/v2 types to `roomMigration.ts`.
+- [x] Reuse Commerce Guild initial/post window helpers in migration; do not duplicate formulas in Worker code.
+- [x] Refactor room-store version dispatch to validate legacy input, construct the entire v3 candidate, validate current schema, and perform one replacement write.
+- [x] Require exact current guild keys including `gatheringCooldown`; reject obsolete automatic metadata and impossible window values.
+- [x] Update current Worker fixtures/smoke expectations to 3 while retaining explicit legacy test fixtures at their original versions.
+- [x] Rerun the two focused Worker files; expect GREEN.
+- [x] Run `pnpm test:worker` and `pnpm build:worker`; expect every Worker test and Worker TypeScript check GREEN.
+- [x] Run `pnpm test`, `pnpm build`, and `pnpm smoke:worker`; expect main regression, app build, and Worker smoke GREEN.
+- [x] Review migration for one complete-candidate write and command flow for persistence-before-broadcast; confirm no business formula was added to Worker facades.
+- [x] Commit `feat: migrate gathering state to schema v3`.
 
 ## Task 5 — T005: Shared resource badges and operational controls
 

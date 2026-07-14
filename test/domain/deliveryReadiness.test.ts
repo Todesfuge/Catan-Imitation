@@ -45,8 +45,8 @@ describe("delivery readiness", () => {
     expect(readme).not.toContain("pnpm exec wrangler versions upload");
     expect(quickstart).toContain("pnpm exec wrangler deploy --name catan-imitation-preview");
     expect(quickstart).not.toContain("pnpm exec wrangler versions upload");
-    expect(workerSmoke).toContain("healthBody.schemaVersion !== 2");
-    expect(workerSmoke).not.toContain("healthBody.schemaVersion !== 1");
+    expect(workerSmoke).toContain("healthBody.schemaVersion !== 3");
+    expect(workerSmoke).not.toContain("healthBody.schemaVersion !== 2");
   });
 
   it("keeps collaboration templates and roadmap visible to reviewers", () => {

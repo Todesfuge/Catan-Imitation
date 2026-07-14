@@ -97,7 +97,7 @@ let browser;
 try {
   const health = await waitForHealth();
   const healthBody = await health.json();
-  if (healthBody.ok !== true || healthBody.schemaVersion !== 2) throw new Error("invalid health response");
+  if (healthBody.ok !== true || healthBody.schemaVersion !== 3) throw new Error("invalid health response");
   requireHeader(health, "cache-control", "no-store");
   requireHeader(health, "x-content-type-options", "nosniff");
   requireHeader(health, "referrer-policy", "no-referrer");
