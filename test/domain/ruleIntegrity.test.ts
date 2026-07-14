@@ -58,6 +58,46 @@ function gameWithRoadLengths(
 }
 
 describe("core rule integrity", () => {
+  it("rejects an unaffordable second-settlement grant without changing any setup state", () => {
+    const initial = createSetupGame();
+    if (!initial.setup) {
+      throw new Error("Expected a setup game.");
+    }
+    const placementIndex = initial.setup.order.lastIndexOf("p4");
+    const game = {
+      ...initial,
+      activePlayerId: "p4",
+      bank: { resources: { wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 } },
+      setup: {
+        order: initial.setup.order,
+        placementIndex,
+        stage: "settlement" as const
+      }
+    };
+    const vertexId = game.board
+      .flatMap((hex) => hex.vertexIds)
+      .find((candidate) =>
+        game.board.some((hex) => hex.resource && hex.vertexIds.includes(candidate))
+      );
+    expect(vertexId).toBeDefined();
+    const before = structuredClone(game);
+    const setupCommandBytes = (value: GameState) => JSON.stringify({
+      buildings: value.buildings,
+      hand: value.players.find((player) => player.id === "p4")?.resources,
+      bank: value.bank.resources,
+      setupStage: value.setup?.stage,
+      setupIndex: value.setup?.placementIndex,
+      pendingSettlement: value.setup?.pendingSettlement,
+      activePlayerId: value.activePlayerId
+    });
+    const beforeBytes = setupCommandBytes(before);
+
+    expect(() => placeSetupSettlement(game, "p4", vertexId ?? "")).toThrow(/bank/i);
+
+    expect(setupCommandBytes(game)).toBe(beforeBytes);
+    expect(game).toEqual(before);
+  });
+
   it("requires a normal settlement to connect to one of the player's roads", () => {
     const game = withPlayerResources(createScenarioGame(), "p1", {
       wood: 1,

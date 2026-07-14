@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createInitialAppState, gameReducer } from "../../src/app/gameReducer";
+import { createLocalGameTableView } from "../../src/app/localGameState";
 import { formatM1MapSeed } from "../../src/domain/mapSeed";
 import { createSetupMatch } from "../../src/domain/match/createMatch";
 import { DeterministicRandomSource } from "../../src/domain/match/random";
@@ -9,6 +10,30 @@ import {
 } from "../../src/domain/rules/building";
 
 describe("complete local-game setup interaction", () => {
+  it("leaves player and bank resources unchanged after the first setup settlement", () => {
+    const state = gameReducer(createInitialAppState(), {
+      type: "START_NEW_GAME",
+      mode: "sameMap"
+    });
+    const playerId = state.game.activePlayerId;
+    const playerResources = structuredClone(
+      state.game.players.find((player) => player.id === playerId)?.resources
+    );
+    const bankResources = structuredClone(state.game.bank.resources);
+    const vertexId = getLegalSetupSettlementVertexIds(state.game, playerId)[0];
+
+    const settled = gameReducer(state, {
+      type: "PLACE_SETUP_SETTLEMENT",
+      playerId,
+      vertexId
+    });
+
+    expect(settled.game.players.find((player) => player.id === playerId)?.resources).toEqual(
+      playerResources
+    );
+    expect(settled.game.bank.resources).toEqual(bankResources);
+  });
+
   it("completes a three-player setup using the generated snake order", () => {
     const mapSeed = formatM1MapSeed(0x0123_4567, 0x89ab_cdef);
     const match = createSetupMatch(
@@ -109,6 +134,96 @@ describe("complete local-game setup interaction", () => {
     expect(state.game.buildings).toHaveLength(8);
     expect(state.game.roads).toHaveLength(8);
     expect(Object.hasOwn(state.game, "setup")).toBe(false);
+  });
+
+  it("grants second-settlement resources exactly once across later setup transitions and projection", () => {
+    let state = gameReducer(createInitialAppState(), {
+      type: "START_NEW_GAME",
+      mode: "sameMap"
+    });
+
+    while (state.game.setup?.placementIndex !== state.game.players.length) {
+      const playerId = state.game.activePlayerId;
+      if (state.game.setup?.stage === "settlement") {
+        state = gameReducer(state, {
+          type: "PLACE_SETUP_SETTLEMENT",
+          playerId,
+          vertexId: getLegalSetupSettlementVertexIds(state.game, playerId)[0]
+        });
+      } else {
+        state = gameReducer(state, {
+          type: "PLACE_SETUP_ROAD",
+          playerId,
+          edgeId: getLegalSetupRoadEdgeIds(state.game, playerId)[0]
+        });
+      }
+    }
+
+    const awardedPlayerId = state.game.activePlayerId;
+    const producingVertexId = getLegalSetupSettlementVertexIds(
+      state.game,
+      awardedPlayerId
+    ).find((vertexId) =>
+      state.game.board.some((hex) => hex.resource && hex.vertexIds.includes(vertexId))
+    );
+    expect(producingVertexId).toBeDefined();
+    state = gameReducer(state, {
+      type: "PLACE_SETUP_SETTLEMENT",
+      playerId: awardedPlayerId,
+      vertexId: producingVertexId ?? ""
+    });
+    const awardedResources = structuredClone(
+      state.game.players.find((player) => player.id === awardedPlayerId)?.resources
+    );
+    expect(Object.values(awardedResources ?? {}).reduce((total, count) => total + count, 0)).toBeGreaterThan(0);
+
+    state = gameReducer(state, {
+      type: "PLACE_SETUP_ROAD",
+      playerId: awardedPlayerId,
+      edgeId: getLegalSetupRoadEdgeIds(state.game, awardedPlayerId)[0]
+    });
+    expect(state.game.players.find((player) => player.id === awardedPlayerId)?.resources).toEqual(
+      awardedResources
+    );
+
+    const nextPlayerId = state.game.activePlayerId;
+    state = gameReducer(state, {
+      type: "PLACE_SETUP_SETTLEMENT",
+      playerId: nextPlayerId,
+      vertexId: getLegalSetupSettlementVertexIds(state.game, nextPlayerId)[0]
+    });
+    expect(state.game.players.find((player) => player.id === awardedPlayerId)?.resources).toEqual(
+      awardedResources
+    );
+
+    const projected = createLocalGameTableView(state);
+    expect(
+      projected.controlledPlayers.find((player) => player.displayName === "Amias")?.resources
+    ).toEqual(awardedResources);
+    expect(state.game.players.find((player) => player.id === awardedPlayerId)?.resources).toEqual(
+      awardedResources
+    );
+
+    while (state.game.phase === "setup") {
+      const playerId = state.game.activePlayerId;
+      if (state.game.setup?.stage === "settlement") {
+        state = gameReducer(state, {
+          type: "PLACE_SETUP_SETTLEMENT",
+          playerId,
+          vertexId: getLegalSetupSettlementVertexIds(state.game, playerId)[0]
+        });
+      } else {
+        state = gameReducer(state, {
+          type: "PLACE_SETUP_ROAD",
+          playerId,
+          edgeId: getLegalSetupRoadEdgeIds(state.game, playerId)[0]
+        });
+      }
+    }
+
+    expect(state.game.players.find((player) => player.id === awardedPlayerId)?.resources).toEqual(
+      awardedResources
+    );
   });
 
   it("restarts a completed game without a page reload", () => {

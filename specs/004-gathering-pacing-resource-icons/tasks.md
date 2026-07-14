@@ -86,20 +86,20 @@ Interfaces:
 
 Steps:
 
-- [ ] Add a first-placement test proving player and bank resource maps remain unchanged after the first setup settlement.
-- [ ] Add a second-placement test that selects a legal vertex adjacent to producing hexes and asserts one card per adjacent hex with an equal bank debit.
-- [ ] Add a vector where two adjacent hexes share a resource and assert both cards are granted.
-- [ ] Add a desert-adjacent vector and assert the desert contributes zero while other adjacent hexes still contribute.
-- [ ] Add exact-once assertions proving the paired setup road, the next player's placement, projection, and setup completion do not repeat the grant.
-- [ ] Add an insufficient-bank test with a cloned before-state; expect the complete settlement command to throw and buildings, hand, bank, setup stage/index, pending settlement, and active player to remain byte-equivalent.
-- [ ] Run `pnpm vitest run test/domain/setupInteraction.test.ts test/domain/coreRulesBacklog.test.ts test/domain/ruleIntegrity.test.ts`; expect RED because second settlements currently award nothing.
-- [ ] In `placeSetupSettlement`, determine second placement before mutation, derive the adjacent resource multiset, and preflight the complete bank debit.
-- [ ] Apply player credit, bank debit, settlement append, pending settlement, and stage change in the same returned state; keep first placement unchanged and do not modify road placement.
-- [ ] Rerun the focused command; expect all grant and existing setup tests GREEN.
-- [ ] Run `pnpm vitest run test/domain/matchTransition.test.ts test/domain/production.test.ts test/domain/portGameplay.test.ts`; expect setup command, resource conservation, and board adjacency regressions GREEN.
-- [ ] Run `pnpm test` and `pnpm build`; expect all main tests and app build GREEN.
-- [ ] Review the diff to confirm no award code exists in Local, Online, Worker, projection, or road transitions.
-- [ ] Commit `feat: grant second-settlement resources`.
+- [x] Add a first-placement test proving player and bank resource maps remain unchanged after the first setup settlement.
+- [x] Add a second-placement test that selects a legal vertex adjacent to producing hexes and asserts one card per adjacent hex with an equal bank debit.
+- [x] Add a vector where two adjacent hexes share a resource and assert both cards are granted.
+- [x] Add a desert-adjacent vector and assert the desert contributes zero while other adjacent hexes still contribute.
+- [x] Add exact-once assertions proving the paired setup road, the next player's placement, projection, and setup completion do not repeat the grant.
+- [x] Add an insufficient-bank test with a cloned before-state; expect the complete settlement command to throw and buildings, hand, bank, setup stage/index, pending settlement, and active player to remain byte-equivalent.
+- [x] Run `pnpm vitest run test/domain/setupInteraction.test.ts test/domain/coreRulesBacklog.test.ts test/domain/ruleIntegrity.test.ts`; expect RED because second settlements currently award nothing.
+- [x] In `placeSetupSettlement`, determine second placement before mutation, derive the adjacent resource multiset, and preflight the complete bank debit.
+- [x] Apply player credit, bank debit, settlement append, pending settlement, and stage change in the same returned state; keep first placement unchanged and do not modify road placement.
+- [x] Rerun the focused command; expect all grant and existing setup tests GREEN.
+- [x] Run `pnpm vitest run test/domain/matchTransition.test.ts test/domain/production.test.ts test/domain/portGameplay.test.ts`; expect setup command, resource conservation, and board adjacency regressions GREEN.
+- [x] Run `pnpm test` and `pnpm build`; expect all main tests and app build GREEN.
+- [x] Review the diff to confirm no award code exists in Local, Online, Worker, projection, or road transitions.
+- [x] Commit `feat: grant second-settlement resources`.
 
 ## Task 3 — T003: Protocol-v3 public cooldown and authenticated actor boundary
 

@@ -12,7 +12,14 @@ import {
   placeSetupRoad,
   placeSetupSettlement
 } from "../../src/domain/rules/building";
-import type { GameState, PlayerId, ResourceMap } from "../../src/domain/types";
+import {
+  emptyResources,
+  type GameState,
+  type PlayerId,
+  type Resource,
+  type ResourceMap,
+  type VertexId
+} from "../../src/domain/types";
 
 function withPlayerResources(game: GameState, playerId: string, resources: Partial<ResourceMap>) {
   return {
@@ -54,7 +61,105 @@ function placeSetupPairOnHex(game: GameState, playerId: PlayerId, hexId: string)
   throw new Error(`No legal setup pair found for ${playerId} on ${hexId}`);
 }
 
+function asSecondSetupPlacement(game: GameState, playerId: PlayerId): GameState {
+  if (!game.setup) {
+    throw new Error("Expected a setup game.");
+  }
+  const placementIndex = game.setup.order.lastIndexOf(playerId);
+  return {
+    ...game,
+    activePlayerId: playerId,
+    setup: {
+      order: game.setup.order,
+      placementIndex,
+      stage: "settlement"
+    }
+  };
+}
+
+function adjacentResources(game: GameState, vertexId: VertexId): Resource[] {
+  return game.board.flatMap((hex) =>
+    hex.vertexIds.includes(vertexId) && hex.resource ? [hex.resource] : []
+  );
+}
+
+function countResources(values: readonly Resource[]): ResourceMap {
+  const counts = emptyResources();
+  for (const resource of values) {
+    counts[resource] += 1;
+  }
+  return counts;
+}
+
 describe("post-MVP core Catan rules", () => {
+  it("grants one card per productive hex adjacent to a second setup settlement and debits the bank equally", () => {
+    const game = asSecondSetupPlacement(createSetupGame(), "p4");
+    const vertexId = game.board
+      .flatMap((hex) => hex.vertexIds)
+      .find((candidate) => adjacentResources(game, candidate).length >= 2);
+    expect(vertexId).toBeDefined();
+    const expected = countResources(adjacentResources(game, vertexId ?? ""));
+
+    const settled = placeSetupSettlement(game, "p4", vertexId ?? "");
+    const player = settled.players.find((candidate) => candidate.id === "p4");
+
+    expect(player?.resources).toEqual(expected);
+    expect(settled.bank.resources).toEqual({
+      wood: game.bank.resources.wood - expected.wood,
+      brick: game.bank.resources.brick - expected.brick,
+      wool: game.bank.resources.wool - expected.wool,
+      grain: game.bank.resources.grain - expected.grain,
+      ore: game.bank.resources.ore - expected.ore
+    });
+  });
+
+  it("grants both cards when two adjacent hexes share a resource", () => {
+    const game = asSecondSetupPlacement(createSetupGame(), "p4");
+    const vertexId = game.board
+      .flatMap((hex) => hex.vertexIds)
+      .find((candidate) => {
+        const adjacent = adjacentResources(game, candidate);
+        return adjacent.some(
+          (resource, index) => adjacent.indexOf(resource) !== index
+        );
+      });
+    expect(vertexId).toBeDefined();
+    const adjacent = adjacentResources(game, vertexId ?? "");
+    const sharedResource = adjacent.find(
+      (resource, index) => adjacent.indexOf(resource) !== index
+    );
+    expect(sharedResource).toBeDefined();
+
+    const settled = placeSetupSettlement(game, "p4", vertexId ?? "");
+
+    expect(settled.players.find((player) => player.id === "p4")?.resources[sharedResource ?? "wood"]).toBe(2);
+    expect(settled.bank.resources[sharedResource ?? "wood"]).toBe(
+      game.bank.resources[sharedResource ?? "wood"] - 2
+    );
+  });
+
+  it("ignores an adjacent desert while granting the other adjacent resources", () => {
+    const game = asSecondSetupPlacement(createSetupGame(), "p4");
+    const vertexId = game.board
+      .flatMap((hex) => hex.vertexIds)
+      .find(
+        (candidate) =>
+          game.board.some(
+            (hex) => hex.resource === null && hex.vertexIds.includes(candidate)
+          ) && adjacentResources(game, candidate).length > 0
+      );
+    expect(vertexId).toBeDefined();
+    const expected = countResources(adjacentResources(game, vertexId ?? ""));
+
+    const settled = placeSetupSettlement(game, "p4", vertexId ?? "");
+    const playerResources = settled.players.find((player) => player.id === "p4")?.resources;
+
+    expect(playerResources).toEqual(expected);
+    expect(Object.values(playerResources ?? {}).reduce((total, count) => total + count, 0)).toBe(
+      adjacentResources(game, vertexId ?? "").length
+    );
+  });
+
   it("runs setup in settlement-road pairs using snake player order before normal play", () => {
     let game = createSetupGame();
 

@@ -2,6 +2,7 @@
   addResourceMaps,
   emptyResources,
   resources,
+  scaleResources,
   type BoardEdge,
   type EdgeId,
   type GameState,
@@ -344,8 +345,35 @@ export function placeSetupSettlement(
   getPlayer(game, playerId);
   assertSettlementLocation(game, vertexId);
 
+  const isSecondPlacement = game.setup.order
+    .slice(0, game.setup.placementIndex)
+    .includes(playerId);
+  const setupResources = emptyResources();
+  if (isSecondPlacement) {
+    for (const hex of game.board) {
+      if (hex.resource && hex.vertexIds.includes(vertexId)) {
+        setupResources[hex.resource] += 1;
+      }
+    }
+    if (resources.some((resource) => game.bank.resources[resource] < setupResources[resource])) {
+      throw new RuleViolationError("The bank cannot grant this setup settlement's resources.");
+    }
+  }
+
+  const awardedGame = isSecondPlacement
+    ? {
+        ...updatePlayer(game, playerId, (player) => ({
+          ...player,
+          resources: addResourceMaps(player.resources, setupResources)
+        })),
+        bank: {
+          resources: addResourceMaps(game.bank.resources, scaleResources(setupResources, -1))
+        }
+      }
+    : game;
+
   return {
-    ...addSettlement(game, playerId, vertexId, "setup-settlement"),
+    ...addSettlement(awardedGame, playerId, vertexId, "setup-settlement"),
     setup: {
       ...game.setup,
       stage: "road",
