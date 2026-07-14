@@ -230,6 +230,9 @@ const messages = {
   "commerce.tokenAmount": { en: "Token amount", "zh-CN": "代币数量" },
   "commerce.send": { en: "Send", "zh-CN": "发送" },
   "commerce.startGathering": { en: "Start Gathering", "zh-CN": "开始集会" },
+  "commerce.gatheringCooldown": { en: "Gathering cooldown", "zh-CN": "集会冷却" },
+  "commerce.gatheringReady": { en: "Ready", "zh-CN": "可开启" },
+  "commerce.gatheringCooldownRemaining": { en: "{count} turn(s) remaining", "zh-CN": "还需 {count} 个回合" },
   "commerce.gatheringPlayer": { en: "Gathering player", "zh-CN": "集会玩家" },
   "commerce.redemptions": { en: "{count} redemptions remaining", "zh-CN": "还可兑换 {count} 次" },
   "commerce.bank": { en: "{count} bank", "zh-CN": "银行剩余 {count}" },
@@ -291,7 +294,6 @@ const messages = {
   "trade.player.published": { en: "{proposerName} published a public player trade.", "zh-CN": "{proposerName} 发布了一项公开玩家交易。" },
   "trade.player.cancelled": { en: "{proposerName} cancelled the public player trade.", "zh-CN": "{proposerName} 取消了公开玩家交易。" },
   "trade.player.accepted": { en: "{acceptingPlayerName} accepted {proposerName}'s public player trade.", "zh-CN": "{acceptingPlayerName} 接受了 {proposerName} 的公开玩家交易。" },
-  "guild.gatheringAutoStarted": { en: "The Commerce Guild gathering has started automatically.", "zh-CN": "商业公会集会已自动开始。" },
   "guild.slotCompleted": { en: "Commerce Guild trade completed and the slot refreshed.", "zh-CN": "商业公会交易已完成，交易位已刷新。" },
   "guild.tokensTransferred": { en: "{fromName} transferred {amount} guild token(s) to {toName}.", "zh-CN": "{fromName} 向 {toName} 转移了 {amount} 枚公会代币。" },
   "guild.gatheringStarted": { en: "The Commerce Guild gathering has started.", "zh-CN": "商业公会集会已开始。" },
@@ -524,6 +526,8 @@ const exactRuleTranslations: Record<string, string> = {
 export function translateRuleText(locale: Locale, message: string | null | undefined): string {
   if (!message || locale === "en") return message ?? "";
   if (exactRuleTranslations[message]) return exactRuleTranslations[message];
+  const gatheringCooldown = message.match(/^The gathering is available in (\d+) turn\(s\)\.$/);
+  if (gatheringCooldown) return `集会还需 ${gatheringCooldown[1]} 个回合才能开启。`;
   const cannotAfford = message.match(/^(.+) cannot afford the requested resources\.$/);
   if (cannotAfford) return `${cannotAfford[1]} 无法支付所索取的资源。`;
   const buildAfford = message.match(/^(.+) cannot afford (?:this build|a development card)\.$/);

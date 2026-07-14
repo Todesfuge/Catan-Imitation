@@ -143,7 +143,7 @@ function createMatchState(phase: GameState["phase"] = "playing"): MatchState {
       }
     ]
   };
-  const guild = createCommerceGuild();
+  const guild = createCommerceGuild(game.players.length, game.turn);
 
   return {
     game,

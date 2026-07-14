@@ -112,7 +112,6 @@ export type GameMessageKey =
   | "trade.player.published"
   | "trade.player.cancelled"
   | "trade.player.accepted"
-  | "guild.gatheringAutoStarted"
   | "guild.slotCompleted"
   | "guild.tokensTransferred"
   | "guild.gatheringStarted"

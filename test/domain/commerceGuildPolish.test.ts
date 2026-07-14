@@ -20,8 +20,20 @@ function withPlayer(game: GameState, playerId: string, update: (player: Player) 
   };
 }
 
+function gatheringGuild(game: GameState) {
+  const actionGame = {
+    ...game,
+    turnState: { phase: "action" as const, pendingDiscards: {} }
+  };
+  const guild = createCommerceGuild(game.players.length, game.turn);
+  return startGuildGathering(actionGame, {
+    ...guild,
+    gatheringCooldown: { availableAtTurn: game.turn, displayDuration: game.players.length }
+  }, game.activePlayerId, false);
+}
+
 describe("Commerce Guild polish", () => {
-  it("auto-starts a gathering after every six completed rounds and not before", () => {
+  it("does not auto-start a gathering at the former six-round boundary", () => {
     const state = createScenarioAppState();
     const beforeInterval = {
       ...state,
@@ -49,8 +61,7 @@ describe("Commerce Guild polish", () => {
     const triggered = gameReducer(intervalBoundary, { type: "END_TURN", playerId: "p4" });
 
     expect(triggered.game.round).toBe(7);
-    expect(triggered.guild.gathering.phase).toBe("redemption");
-    expect(triggered.game.log[0].message).toContain("Commerce Guild gathering");
+    expect(triggered.guild.gathering.phase).toBe("idle");
   });
 
   it("rejects invalid auction bids with player names and records a visible result summary", () => {
@@ -62,10 +73,11 @@ describe("Commerce Guild polish", () => {
         guildTokens: player.id === "p2" ? 4 : 0
       }))
     };
+    const gathering = gatheringGuild(game);
     const guild = {
-      ...startGuildGathering(createCommerceGuild()),
+      ...gathering,
       gathering: {
-        ...startGuildGathering(createCommerceGuild()).gathering,
+        ...gathering.gathering,
         phase: "auction" as const
       }
     };
@@ -88,10 +100,11 @@ describe("Commerce Guild polish", () => {
       "p2",
       (player) => ({ ...player, guildTokens: 4 })
     );
+    const gathering = gatheringGuild(game);
     const guild = {
-      ...startGuildGathering(createCommerceGuild()),
+      ...gathering,
       gathering: {
-        ...startGuildGathering(createCommerceGuild()).gathering,
+        ...gathering.gathering,
         phase: "auction" as const
       }
     };

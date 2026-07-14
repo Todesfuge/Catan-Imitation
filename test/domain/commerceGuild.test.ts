@@ -25,10 +25,22 @@ function withPlayerResources(game: GameState, playerId: string, resources: Parti
   };
 }
 
+function gatheringGuild(game: GameState) {
+  const actionGame = {
+    ...game,
+    turnState: { phase: "action" as const, pendingDiscards: {} }
+  };
+  const guild = createCommerceGuild(game.players.length, game.turn);
+  return startGuildGathering(actionGame, {
+    ...guild,
+    gatheringCooldown: { availableAtTurn: game.turn, displayDuration: game.players.length }
+  }, game.activePlayerId, false);
+}
+
 describe("Commerce Guild", () => {
   it("starts with three trade slots and refreshes a used slot after a once-per-turn trade", () => {
     const game = withPlayerResources(createScenarioGame(), "p1", { wood: 2, brick: 1 });
-    const guild = createCommerceGuild([
+    const guild = createCommerceGuild(game.players.length, game.turn, [
       { id: "slot-a", requires: { wood: 2 }, tokenReward: 3 },
       { id: "slot-b", requires: { brick: 1 }, tokenReward: 1 },
       { id: "slot-c", requires: { grain: 1 }, tokenReward: 2 }
@@ -55,7 +67,7 @@ describe("Commerce Guild", () => {
         player.id === "p1" ? { ...player, guildTokens: 6 } : player
       )
     };
-    const guild = startGuildGathering(createCommerceGuild());
+    const guild = gatheringGuild(game);
 
     const transferred = transferGuildTokens(game, "p1", "p2", 2);
     const redeemed = redeemGatheringResources(transferred, guild, "p1", {
@@ -85,10 +97,11 @@ describe("Commerce Guild", () => {
         vouchers: player.id === "p2" ? 2 : 0
       }))
     };
+    const gathering = gatheringGuild(game);
     const guild = {
-      ...startGuildGathering(createCommerceGuild()),
+      ...gathering,
       gathering: {
-        ...startGuildGathering(createCommerceGuild()).gathering,
+        ...gathering.gathering,
         phase: "auction" as const
       }
     };

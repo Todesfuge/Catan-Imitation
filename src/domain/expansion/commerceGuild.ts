@@ -44,11 +44,24 @@ export interface GatheringState {
   lastAuctionResult?: AuctionSummaryData;
 }
 
+export interface GatheringCooldownWindow {
+  availableAtTurn: number;
+  displayDuration: number;
+}
+
+export type GatheringStartBlocker =
+  | "notPlaying"
+  | "unresolvedAction"
+  | "notCurrentPlayer"
+  | "pendingTrade"
+  | "gatheringInProgress"
+  | "cooldown";
+
 export interface CommerceGuildState {
   tradeSlots: TradeSlot[];
   usedTradePlayerIds: PlayerId[];
   gathering: GatheringState;
-  lastAutoGatheringRound?: number;
+  gatheringCooldown: GatheringCooldownWindow;
 }
 
 export interface GuildResult {
@@ -87,7 +100,60 @@ function createIdleGathering(): GatheringState {
   };
 }
 
-export function createCommerceGuild(tradeSlots: TradeSlot[] = defaultTradeSlots): CommerceGuildState {
+function assertPositiveSafeInteger(value: number, label: string): void {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new RuleViolationError(`${label} must be a positive safe integer.`);
+  }
+}
+
+export function createInitialGatheringCooldown(
+  currentTurn: number,
+  playerCount: number
+): GatheringCooldownWindow {
+  assertPositiveSafeInteger(currentTurn, "Current turn");
+  assertPositiveSafeInteger(playerCount, "Player count");
+  const displayDuration = 2 * playerCount;
+  const availableAtTurn = currentTurn + displayDuration;
+  assertPositiveSafeInteger(displayDuration, "Gathering display duration");
+  assertPositiveSafeInteger(availableAtTurn, "Gathering available turn");
+  return {
+    availableAtTurn,
+    displayDuration
+  };
+}
+
+export function createPostGatheringCooldown(
+  currentTurn: number,
+  playerCount: number
+): GatheringCooldownWindow {
+  assertPositiveSafeInteger(currentTurn, "Current turn");
+  assertPositiveSafeInteger(playerCount, "Player count");
+  const availableAtTurn = currentTurn + playerCount + 1;
+  assertPositiveSafeInteger(availableAtTurn, "Gathering available turn");
+  return {
+    availableAtTurn,
+    displayDuration: playerCount
+  };
+}
+
+export function getGatheringCooldownRemaining(
+  window: GatheringCooldownWindow,
+  currentTurn: number
+): number {
+  assertPositiveSafeInteger(currentTurn, "Current turn");
+  assertPositiveSafeInteger(window.availableAtTurn, "Gathering available turn");
+  assertPositiveSafeInteger(window.displayDuration, "Gathering display duration");
+  return Math.min(
+    window.displayDuration,
+    Math.max(0, window.availableAtTurn - currentTurn)
+  );
+}
+
+export function createCommerceGuild(
+  playerCount: number,
+  currentTurn: number,
+  tradeSlots: TradeSlot[] = defaultTradeSlots
+): CommerceGuildState {
   if (tradeSlots.length !== 3) {
     throw new RuleViolationError("Commerce Guild requires exactly three trade slots.");
   }
@@ -95,7 +161,8 @@ export function createCommerceGuild(tradeSlots: TradeSlot[] = defaultTradeSlots)
   return {
     tradeSlots,
     usedTradePlayerIds: [],
-    gathering: createIdleGathering()
+    gathering: createIdleGathering(),
+    gatheringCooldown: createInitialGatheringCooldown(currentTurn, playerCount)
   };
 }
 
@@ -249,9 +316,47 @@ export function transferGuildTokens(
   };
 }
 
-export function startGuildGathering(guild: CommerceGuildState): CommerceGuildState {
+export function getGatheringStartBlocker(
+  game: GameState,
+  guild: CommerceGuildState,
+  playerId: PlayerId,
+  hasPendingTrade: boolean
+): GatheringStartBlocker | undefined {
+  if (game.phase !== "playing") return "notPlaying";
+  if (game.turnState.phase !== "action") return "unresolvedAction";
+  if (game.activePlayerId !== playerId) return "notCurrentPlayer";
+  if (hasPendingTrade) return "pendingTrade";
+  if (guild.gathering.phase !== "idle") return "gatheringInProgress";
+  if (getGatheringCooldownRemaining(guild.gatheringCooldown, game.turn) > 0) {
+    return "cooldown";
+  }
+  return undefined;
+}
+
+function gatheringStartError(blocker: GatheringStartBlocker): string {
+  switch (blocker) {
+    case "notPlaying": return "A Commerce Guild gathering is available only during normal play.";
+    case "unresolvedAction": return "Complete the current turn requirement before starting a gathering.";
+    case "notCurrentPlayer": return "Only the active player may start a Commerce Guild gathering.";
+    case "pendingTrade": return "Close the pending player trade before starting a gathering.";
+    case "gatheringInProgress": return "A Commerce Guild gathering is already in progress.";
+    case "cooldown": return "The Commerce Guild gathering is still cooling down.";
+  }
+}
+
+export function startGuildGathering(
+  game: GameState,
+  guild: CommerceGuildState,
+  playerId: PlayerId,
+  hasPendingTrade: boolean
+): CommerceGuildState {
+  const blocker = getGatheringStartBlocker(game, guild, playerId, hasPendingTrade);
+  if (blocker) {
+    throw new RuleViolationError(gatheringStartError(blocker));
+  }
   return {
     ...guild,
+    gatheringCooldown: createPostGatheringCooldown(game.turn, game.players.length),
     gathering: {
       phase: "redemption",
       redemptions: {},
@@ -261,23 +366,14 @@ export function startGuildGathering(guild: CommerceGuildState): CommerceGuildSta
   };
 }
 
-export function maybeStartGuildGathering(
-  game: GameState,
-  guild: CommerceGuildState,
-  intervalRounds = 6
-): CommerceGuildState {
-  const isIntervalBoundary = game.round > 1 && (game.round - 1) % intervalRounds === 0;
-  if (
-    guild.gathering.phase !== "idle" ||
-    !isIntervalBoundary ||
-    guild.lastAutoGatheringRound === game.round
-  ) {
-    return guild;
-  }
-
+export function closeCompletedGuildGathering(guild: CommerceGuildState): CommerceGuildState {
+  if (guild.gathering.phase !== "complete") return guild;
   return {
-    ...startGuildGathering(guild),
-    lastAutoGatheringRound: game.round
+    ...guild,
+    gathering: {
+      ...guild.gathering,
+      phase: "idle"
+    }
   };
 }
 

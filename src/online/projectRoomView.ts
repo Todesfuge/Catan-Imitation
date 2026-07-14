@@ -85,7 +85,6 @@ const noParamLogKeys = new Set<GameMessageKey>([
   "setup.started",
   "setup.newGameStarted",
   "robber.sevenRolled",
-  "guild.gatheringAutoStarted",
   "guild.slotCompleted",
   "guild.gatheringStarted",
   "guild.auctionOpened",

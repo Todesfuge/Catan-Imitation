@@ -123,6 +123,7 @@ function snapshot(
 function trustedCommand(command: OnlineMatchCommand, playerId: string): MatchCommand {
   switch (command.type) {
     case "START_GATHERING":
+      return { ...command, playerId };
     case "OPEN_AUCTION":
       return command;
     case "TRANSFER_TOKENS":

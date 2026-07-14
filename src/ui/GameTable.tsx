@@ -167,6 +167,7 @@ export interface GameTableView {
     readonly gathering: {
       readonly phase: "idle" | "redemption" | "auction" | "complete";
       readonly auctionRound: number;
+      readonly cooldownRemaining: number;
       readonly lastAuctionResult?: { readonly winnerName: string; readonly round: number; readonly winningBid: number; readonly outcome: { readonly kind: "resources" | "voucher" | "developmentCard"; readonly resourceCardCount?: number } };
     };
   };

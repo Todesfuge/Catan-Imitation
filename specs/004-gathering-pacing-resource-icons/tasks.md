@@ -43,27 +43,27 @@ Interfaces:
 
 Steps:
 
-- [ ] Add deterministic tests for three-player initial `6` and four-player initial `8`, proving fresh-map and same-map restart both reset the baseline and setup settlement/road transitions leave the value unchanged.
-- [ ] Add post-start vectors for `n = 3` and `n = 4`: start turn shows `n`, initiator end turn still shows `n`, each subsequent accepted end turn decrements once, and the `n`th subsequent turn reaches zero.
-- [ ] Add blocker tests for non-playing state, unresolved turn decision/roll, non-current player, pending player trade, non-idle gathering, and nonzero table cooldown; include overlapping blockers to prove the approved highest-priority reason and assert every rejected command leaves the input state structurally unchanged.
-- [ ] Add a success test proving the current player in a clean action phase starts redemption, replaces the prior cooldown window, and writes one start log entry.
-- [ ] Add a twelve-turn four-player regression proving no automatic gathering starts and no automatic-start log appears.
-- [ ] Add a complete-phase test proving the phase stays `complete` until an accepted `END_TURN`, then becomes `idle` without clearing the cooldown or last auction result.
-- [ ] Run `pnpm vitest run test/domain/gatheringCooldown.test.ts test/domain/actionAvailability.test.ts test/domain/matchTransition.test.ts`; expect RED on missing cooldown types/helpers, missing actor, unrestricted start, and automatic trigger behavior.
-- [ ] Add the window type and pure initial/post/remaining helpers in `commerceGuild.ts`; validate player count/current turn as finite safe integers and keep one table window only.
-- [ ] Change `createCommerceGuild` to receive current turn and player count explicitly, initialize `2n`, and update all listed constructors/fixtures without adding a legacy overload.
-- [ ] Add the shared blocker with stable priority and make `startGuildGathering` validate it before entering redemption and assigning the post-gathering `n` window.
-- [ ] Add a Commerce Guild helper that changes `complete` to `idle` while retaining the last auction result and cooldown.
-- [ ] Delete `maybeStartGuildGathering`, `lastAutoGatheringRound`, the automatic-start log key, and every production call/branch that references them.
-- [ ] Require `playerId` on domain `START_GATHERING`; in Local control dispatch, inject the current active controlled player rather than accepting an intent actor.
-- [ ] In `applyMatchCommand`, pass `pendingPlayerTrade !== undefined` to the shared blocker/start transition and close a complete gathering only in the accepted end-turn transition.
-- [ ] Map blockers in `actionAvailability.ts`, including `GATHERING_COOLDOWN` with `{ remainingTurns }`; use the same derived remaining value for the Local view.
-- [ ] Add English and Simplified-Chinese cooldown/ready/disabled strings and delete obsolete automatic-start translations.
-- [ ] Rerun the focused command; expect all focused tests GREEN.
-- [ ] Run `pnpm vitest run test/domain/commerceGuild.test.ts test/domain/commerceGuildIntegrity.test.ts test/domain/commerceGuildPolish.test.ts test/domain/auctionNoBid.test.ts`; expect all existing guild behavior GREEN.
-- [ ] Run `pnpm test` and `pnpm build`; expect all main tests and app TypeScript/build GREEN.
-- [ ] Review the diff to confirm `applyMatchCommand.ts`, React, and Worker facades contain no cooldown formula and no player-keyed cooldown state exists.
-- [ ] Commit `feat: pace Commerce Guild gatherings`.
+- [x] Add deterministic tests for three-player initial `6` and four-player initial `8`, proving fresh-map and same-map restart both reset the baseline and setup settlement/road transitions leave the value unchanged.
+- [x] Add post-start vectors for `n = 3` and `n = 4`: start turn shows `n`, initiator end turn still shows `n`, each subsequent accepted end turn decrements once, and the `n`th subsequent turn reaches zero.
+- [x] Add blocker tests for non-playing state, unresolved turn decision/roll, non-current player, pending player trade, non-idle gathering, and nonzero table cooldown; include overlapping blockers to prove the approved highest-priority reason and assert every rejected command leaves the input state structurally unchanged.
+- [x] Add a success test proving the current player in a clean action phase starts redemption, replaces the prior cooldown window, and writes one start log entry.
+- [x] Add a twenty-eight-turn four-player regression crossing the old six-round boundary and proving no automatic gathering starts or automatic-start log appears.
+- [x] Add a complete-phase test proving the phase stays `complete` until an accepted `END_TURN`, then becomes `idle` without clearing the cooldown or last auction result.
+- [x] Run `pnpm vitest run test/domain/gatheringCooldown.test.ts test/domain/actionAvailability.test.ts test/domain/matchTransition.test.ts`; expect RED on missing cooldown types/helpers, missing actor, unrestricted start, and automatic trigger behavior.
+- [x] Add the window type and pure initial/post/remaining helpers in `commerceGuild.ts`; validate player count/current turn as finite safe integers and keep one table window only.
+- [x] Change `createCommerceGuild` to receive current turn and player count explicitly, initialize `2n`, and update all listed constructors/fixtures without adding a legacy overload.
+- [x] Add the shared blocker with stable priority and make `startGuildGathering` validate it before entering redemption and assigning the post-gathering `n` window.
+- [x] Add a Commerce Guild helper that changes `complete` to `idle` while retaining the last auction result and cooldown.
+- [x] Delete `maybeStartGuildGathering`, `lastAutoGatheringRound`, the automatic-start log key, and every production call/branch that references them.
+- [x] Require `playerId` on domain `START_GATHERING`; in Local control dispatch, inject the current active controlled player rather than accepting an intent actor.
+- [x] In `applyMatchCommand`, pass `pendingPlayerTrade !== undefined` to the shared blocker/start transition and close a complete gathering only in the accepted end-turn transition.
+- [x] Map blockers in `actionAvailability.ts`, including `GATHERING_COOLDOWN` with `{ remainingTurns }`; use the same derived remaining value for the Local view.
+- [x] Add English and Simplified-Chinese cooldown/ready/disabled strings and delete obsolete automatic-start translations.
+- [x] Rerun the focused command; expect all focused tests GREEN.
+- [x] Run `pnpm vitest run test/domain/commerceGuild.test.ts test/domain/commerceGuildIntegrity.test.ts test/domain/commerceGuildPolish.test.ts test/domain/auctionNoBid.test.ts`; expect all existing guild behavior GREEN.
+- [x] Run `pnpm test` and `pnpm build`; expect all main tests and app TypeScript/build GREEN.
+- [x] Review the diff to confirm `applyMatchCommand.ts`, React, and Worker facades contain no cooldown formula and no player-keyed cooldown state exists.
+- [x] Commit `feat: pace Commerce Guild gatherings`.
 
 ## Task 2 — T002: Atomic second-settlement starting resources
 

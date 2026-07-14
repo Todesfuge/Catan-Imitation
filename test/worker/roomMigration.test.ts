@@ -131,7 +131,7 @@ function createRichMatch(): MatchState {
       ]
     },
     guild: {
-      ...createCommerceGuild(),
+      ...createCommerceGuild(scenario.players.length, 17),
       usedTradePlayerIds: ["p3"],
       gathering: {
         phase: "auction",
@@ -251,11 +251,22 @@ function createV2M1Playing(): PersistedRoom {
 function createProductionPlaying(): PersistedRoom {
   const playing = createV2Playing();
   const { pendingAuction: _pendingAuction, ...room } = playing;
+  const {
+    pendingPlayerTrade: _pendingPlayerTrade,
+    ...matchState
+  } = playing.matchState!;
+  const guild = createCommerceGuild(matchState.game.players.length, matchState.game.turn);
   return {
     ...room,
     matchState: {
-      ...playing.matchState!,
-      guild: createCommerceGuild()
+      ...matchState,
+      guild: {
+        ...guild,
+        gatheringCooldown: {
+          availableAtTurn: matchState.game.turn,
+          displayDuration: matchState.game.players.length
+        }
+      }
     }
   };
 }
@@ -598,14 +609,17 @@ describe("persisted room schema v2", () => {
     },
     {
       name: "guild-start log without params",
-      create: () => transitionRoom(createProductionPlaying(), { type: "START_GATHERING" })
+      create: () => transitionRoom(createProductionPlaying(), {
+        type: "START_GATHERING",
+        playerId: "p2"
+      })
     },
     {
       name: "guild-open log without params",
       create() {
         const started = transitionRoom(
           createProductionPlaying(),
-          { type: "START_GATHERING" },
+          { type: "START_GATHERING", playerId: "p2" },
           executionContext(M1_SEED, [], "guild-start-log")
         );
         return transitionRoom(

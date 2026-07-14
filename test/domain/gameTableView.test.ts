@@ -34,7 +34,7 @@ function callerOnlyFixture(): GameTableView {
       log: [{ id: "safe-log", fallbackText: "Safe public event." }],
       developmentDeckCount: 20
     },
-    guild: { tradeSlots: [], gathering: { phase: "idle", auctionRound: 1 } },
+    guild: { tradeSlots: [], gathering: { phase: "idle", auctionRound: 1, cooldownRemaining: 0 } },
     controlledPlayers: [{
       controlId: "caller-control",
       displaySlot: 0,
@@ -83,7 +83,7 @@ describe("shared game-table presentation boundary", () => {
 
     expect(state.game.phase).toBe("setup");
     expect(state.game.players.map((player) => player.name)).toEqual([
-      "Voyage1969",
+      "Earnest",
       "Loss",
       "Kay",
       "Amias"

@@ -3,6 +3,7 @@ import {
   getActionAvailability,
   getActionAvailabilityFacts
 } from "./actionAvailability";
+import { getGatheringCooldownRemaining } from "../domain/expansion/commerceGuild";
 import { formatM1MapSeed } from "../domain/mapSeed";
 import { createSetupMatch, defaultMatchSeats } from "../domain/match/createMatch";
 import type { MatchCommand, MatchExecutionContext, MatchState } from "../domain/match/types";
@@ -47,7 +48,10 @@ class LocalRandomSource implements RandomSource {
 
 let logCounter = 0;
 
-export const localMatchSeats = defaultMatchSeats;
+export const localMatchSeats = [
+  { nickname: "Earnest" },
+  ...defaultMatchSeats.slice(1)
+] as const;
 
 export const localMatchExecutionContext: MatchExecutionContext = {
   random: new LocalRandomSource(),
@@ -246,6 +250,10 @@ export function createLocalGameTableView(state: AppState): GameTableView {
       gathering: {
         phase: state.guild.gathering.phase,
         auctionRound: state.guild.gathering.auctionRound,
+        cooldownRemaining: getGatheringCooldownRemaining(
+          state.guild.gatheringCooldown,
+          state.game.turn
+        ),
         ...(state.guild.gathering.lastAuctionResult
           ? { lastAuctionResult: {
               winnerName: state.guild.gathering.lastAuctionResult.winnerName,
@@ -406,7 +414,7 @@ export function createLocalGameTableController(
         case "trade.respond": dispatchCommand({ type: intent.response === "accept" ? "ACCEPT_PLAYER_TRADE" : "CANCEL_PLAYER_TRADE", playerId: actorForControl(intent.controlId) }); return;
         case "commerce.completeSlot": dispatchCommand({ type: "COMPLETE_TRADE_SLOT", playerId: active(), slotId: intent.slotId }); return;
         case "commerce.transfer": dispatchCommand({ type: "TRANSFER_TOKENS", fromPlayerId: active(), toPlayerId: intent.recipientId, amount: intent.amount }); return;
-        case "commerce.startGathering": dispatchCommand({ type: "START_GATHERING" }); return;
+        case "commerce.startGathering": dispatchCommand({ type: "START_GATHERING", playerId: active() }); return;
         case "commerce.redeem": dispatchCommand({ type: "REDEEM_GATHERING", playerId: actorForControl(intent.controlId), resources: { ...intent.resources } }); return;
         case "commerce.openAuction": dispatchCommand({ type: "OPEN_AUCTION" }); return;
         case "commerce.redeemPrize": dispatchCommand({ type: "REDEEM_PRIZE", playerId: active() }); return;

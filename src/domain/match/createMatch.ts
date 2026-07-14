@@ -131,9 +131,10 @@ export function createSetupMatch(
     throw new TypeError("A fresh setup requires an M1 map seed.");
   }
 
+  const game = createSetupGameState(seats, mapSeed, shuffleDevelopmentDeck(context));
   return {
-    game: createSetupGameState(seats, mapSeed, shuffleDevelopmentDeck(context)),
-    guild: createCommerceGuild(),
+    game,
+    guild: createCommerceGuild(game.players.length, game.turn),
     lastDice: null
   };
 }

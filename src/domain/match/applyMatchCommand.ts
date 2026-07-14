@@ -1,7 +1,6 @@
 import {
   completeTradeSlot,
-  createCommerceGuild,
-  maybeStartGuildGathering,
+  closeCompletedGuildGathering,
   openGuildAuction,
   redeemGatheringResources,
   redeemPrizeCards,
@@ -265,30 +264,14 @@ export function applyMatchCommand(
     case "END_TURN": {
       assertCanUseTurnAction(state.game, command.playerId);
       const nextGame = resetTurnFlow(advanceTurn(state.game));
-      const resetGuild = { ...state.guild, usedTradePlayerIds: [] };
-      const nextGuild =
-        nextGame.round > state.game.round
-          ? maybeStartGuildGathering(nextGame, resetGuild)
-          : resetGuild;
-      const gatheringStarted =
-        resetGuild.gathering.phase === "idle" &&
-        nextGuild.gathering.phase === "redemption";
+      const nextGuild = closeCompletedGuildGathering({
+        ...state.guild,
+        usedTradePlayerIds: []
+      });
       const { pendingPlayerTrade: _pendingPlayerTrade, ...withoutPendingPlayerTrade } = state;
       return {
         ...withoutPendingPlayerTrade,
-        game: {
-          ...nextGame,
-          log: gatheringStarted
-            ? [
-                log(
-                  context,
-                  "The Commerce Guild gathering has started automatically.",
-                  "guild.gatheringAutoStarted"
-                ),
-                ...nextGame.log
-              ]
-            : nextGame.log
-        },
+        game: nextGame,
         guild: nextGuild,
         lastDice: null
       };
@@ -649,10 +632,14 @@ export function applyMatchCommand(
         };
       }
     case "START_GATHERING":
-      assertGameInProgress(state.game);
       return {
         ...state,
-        guild: startGuildGathering(state.guild),
+        guild: startGuildGathering(
+          state.game,
+          state.guild,
+          command.playerId,
+          state.pendingPlayerTrade !== undefined
+        ),
         game: {
           ...state.game,
           log: [

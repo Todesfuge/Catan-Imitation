@@ -24,8 +24,16 @@ function withGuildTokens(game: GameState, tokenCounts: Record<string, number>): 
   };
 }
 
-function gatheringGuild(auctionRound = 1): CommerceGuildState {
-  const guild = startGuildGathering(createCommerceGuild());
+function gatheringGuild(auctionRound = 1, game: GameState = createScenarioGame()): CommerceGuildState {
+  const actionGame = {
+    ...game,
+    turnState: { phase: "action" as const, pendingDiscards: {} }
+  };
+  const initialGuild = createCommerceGuild(game.players.length, game.turn);
+  const guild = startGuildGathering(actionGame, {
+    ...initialGuild,
+    gatheringCooldown: { availableAtTurn: game.turn, displayDuration: game.players.length }
+  }, game.activePlayerId, false);
   return {
     ...guild,
     gathering: {
@@ -40,7 +48,7 @@ describe("Commerce Guild auctions without bids", () => {
   it("completes immediately when no player owns a guild token", () => {
     const game = withGuildTokens(createScenarioGame(), {});
 
-    const guild = openGuildAuction(game, startGuildGathering(createCommerceGuild()));
+    const guild = openGuildAuction(game, gatheringGuild(1, game));
 
     expect(guild.gathering.phase).toBe("complete");
     expect(guild.gathering.auctionRound).toBe(1);
@@ -90,7 +98,7 @@ describe("Commerce Guild auctions without bids", () => {
     const noEligibleState = {
       ...initial,
       game: withGuildTokens(initial.game, {}),
-      guild: startGuildGathering(initial.guild)
+      guild: gatheringGuild(1, initial.game)
     };
 
     const completed = gameReducer(noEligibleState, { type: "OPEN_AUCTION" });

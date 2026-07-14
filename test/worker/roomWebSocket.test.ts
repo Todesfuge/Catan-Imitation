@@ -321,7 +321,10 @@ describe("authoritative room command pipeline", () => {
     });
 
     expect(created).toHaveBeenCalledWith(123);
-    expect(executed.mock.calls[0][1]).toEqual({ type: "START_GATHERING" });
+    expect(executed.mock.calls[0][1]).toEqual({
+      type: "START_GATHERING",
+      playerId: room.seats[0].playerId
+    });
     expect(executed.mock.calls[0][2]).toBe(context);
   });
 

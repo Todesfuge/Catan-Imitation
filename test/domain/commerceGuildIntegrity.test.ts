@@ -29,8 +29,20 @@ function resultPlayerResource(game: GameState, playerId: PlayerId, resource: Res
   return game.players.find((player) => player.id === playerId)?.resources[resource] ?? 0;
 }
 
-function auctionGuild(): CommerceGuildState {
-  const gathering = startGuildGathering(createCommerceGuild());
+function gatheringGuild(game: GameState = createScenarioGame()): CommerceGuildState {
+  const actionGame = {
+    ...game,
+    turnState: { phase: "action" as const, pendingDiscards: {} }
+  };
+  const guild = createCommerceGuild(game.players.length, game.turn);
+  return startGuildGathering(actionGame, {
+    ...guild,
+    gatheringCooldown: { availableAtTurn: game.turn, displayDuration: game.players.length }
+  }, game.activePlayerId, false);
+}
+
+function auctionGuild(game: GameState = createScenarioGame()): CommerceGuildState {
+  const gathering = gatheringGuild(game);
   return {
     ...gathering,
     gathering: {
@@ -52,7 +64,7 @@ describe("Commerce Guild resource integrity", () => {
         ...player,
         resources: { ...player.resources, [resource]: 2 }
       }));
-      const guild = createCommerceGuild([
+      const guild = createCommerceGuild(game.players.length, game.turn, [
         { id: "target", requires: { [resource]: 2 }, tokenReward: 2 },
         { id: "aux-brick", requires: { brick: 1 }, tokenReward: 1 },
         { id: "aux-ore", requires: { ore: 1 }, tokenReward: 1 }
@@ -78,7 +90,7 @@ describe("Commerce Guild resource integrity", () => {
         "p1",
         (player) => ({ ...player, guildTokens: 2 })
       );
-      const guild = startGuildGathering(createCommerceGuild());
+      const guild = gatheringGuild(game);
 
       const redeemed = redeemGatheringResources(game, guild, "p1", { [resource]: 1 });
       expect(redeemed.game.bank.resources[resource]).toBe(0);
@@ -183,7 +195,7 @@ describe("Commerce Guild resource integrity", () => {
 
   it("rejects redemption when no positive transfer is possible", () => {
     const noTokensGame = createScenarioGame();
-    const guild = startGuildGathering(createCommerceGuild());
+    const guild = gatheringGuild(noTokensGame);
     expect(() => redeemGatheringResources(noTokensGame, guild, "p1", { wood: 1 })).toThrow(
       /token/i
     );
@@ -224,7 +236,7 @@ describe("Commerce Guild resource integrity", () => {
       ...player,
       guildTokens: 4
     }));
-    const redemptionGuild = startGuildGathering(createCommerceGuild());
+    const redemptionGuild = gatheringGuild(game);
     const auctionState = auctionGuild();
     const beforeGame = structuredClone(game);
     const beforeRedemptionGuild = structuredClone(redemptionGuild);
@@ -250,12 +262,12 @@ describe("Commerce Guild resource integrity", () => {
       ...player,
       resources: { ...player.resources, wood: 4 }
     }));
-    const fractionalCostGuild = createCommerceGuild([
+    const fractionalCostGuild = createCommerceGuild(richGame.players.length, richGame.turn, [
       { id: "bad-cost", requires: { wood: 1.5 }, tokenReward: 1 },
       { id: "brick", requires: { brick: 1 }, tokenReward: 1 },
       { id: "ore", requires: { ore: 1 }, tokenReward: 1 }
     ]);
-    const fractionalRewardGuild = createCommerceGuild([
+    const fractionalRewardGuild = createCommerceGuild(richGame.players.length, richGame.turn, [
       { id: "bad-reward", requires: { wood: 1 }, tokenReward: 1.5 },
       { id: "brick", requires: { brick: 1 }, tokenReward: 1 },
       { id: "ore", requires: { ore: 1 }, tokenReward: 1 }

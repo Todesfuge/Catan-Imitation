@@ -1,4 +1,10 @@
-import type { CommerceGuildState, ResourceCost } from "../domain/expansion/commerceGuild";
+import {
+  getGatheringCooldownRemaining,
+  getGatheringStartBlocker,
+  type CommerceGuildState,
+  type GatheringStartBlocker,
+  type ResourceCost
+} from "../domain/expansion/commerceGuild";
 import type { PlayerTradeOffer } from "../domain/rules/playerTrade";
 import {
   buildCosts,
@@ -41,6 +47,7 @@ export type AvailabilityReasonCode =
   | "NO_RECIPIENT"
   | "GATHERING_ONLY_DURING_PLAY"
   | "GATHERING_IN_PROGRESS"
+  | "GATHERING_COOLDOWN"
   | "REDEMPTION_NOT_OPEN"
   | "REDEMPTION_CAP_REACHED"
   | "NO_BANK_STOCK"
@@ -243,6 +250,39 @@ function normalActionReason(game: GameState, playerId: PlayerId): AvailabilityRe
   if (game.turnState.phase === "action") return undefined;
   if (game.turnState.phase === "awaitingRoll") return { code: "ROLL_REQUIRED" };
   return { code: "REQUIRED_DECISION" };
+}
+
+function gatheringStartReason(
+  state: ActionAvailabilityState,
+  playerId: PlayerId
+): AvailabilityReason | undefined {
+  const blocker = getGatheringStartBlocker(
+    state.game,
+    state.guild,
+    playerId,
+    state.pendingPlayerTrade !== undefined
+  );
+  if (!blocker) return undefined;
+
+  const reasons: Record<GatheringStartBlocker, () => AvailabilityReason> = {
+    notPlaying: () => ({ code: "GATHERING_ONLY_DURING_PLAY" }),
+    unresolvedAction: () => ({
+      code: state.game.turnState.phase === "awaitingRoll" ? "ROLL_REQUIRED" : "REQUIRED_DECISION"
+    }),
+    notCurrentPlayer: () => ({ code: "NOT_YOUR_TURN" }),
+    pendingTrade: () => ({ code: "PLAYER_TRADE_ALREADY_OPEN" }),
+    gatheringInProgress: () => ({ code: "GATHERING_IN_PROGRESS" }),
+    cooldown: () => ({
+      code: "GATHERING_COOLDOWN",
+      params: {
+        remainingTurns: getGatheringCooldownRemaining(
+          state.guild.gatheringCooldown,
+          state.game.turn
+        )
+      }
+    })
+  };
+  return reasons[blocker]();
 }
 
 function fromReason(reason: AvailabilityReason | undefined): AvailabilityFact {
@@ -513,12 +553,7 @@ export function getActionAvailabilityFacts(
               ? disabled("NO_RECIPIENT")
               : enabled())
       },
-      startGathering:
-        game.phase !== "playing"
-          ? disabled("GATHERING_ONLY_DURING_PLAY")
-          : guild.gathering.phase !== "idle"
-            ? disabled("GATHERING_IN_PROGRESS")
-            : enabled(),
+      startGathering: fromReason(gatheringStartReason(state, playerId)),
       openAuction:
         game.phase !== "playing"
           ? disabled("GATHERING_ONLY_DURING_PLAY")
@@ -695,6 +730,8 @@ const reasonMessages: Record<AvailabilityReasonCode, (params?: AvailabilityReaso
   NO_RECIPIENT: () => "No recipient is available.",
   GATHERING_ONLY_DURING_PLAY: () => "A gathering is available only during normal play.",
   GATHERING_IN_PROGRESS: () => "A gathering is already in progress.",
+  GATHERING_COOLDOWN: (params) =>
+    `The gathering is available in ${params?.remainingTurns ?? 0} turn(s).`,
   REDEMPTION_NOT_OPEN: () => "Resource redemption is not open.",
   REDEMPTION_CAP_REACHED: () => "The gathering redemption cap has been reached.",
   NO_BANK_STOCK: () => "The bank has no redeemable stock.",

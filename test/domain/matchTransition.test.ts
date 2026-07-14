@@ -186,8 +186,7 @@ function createDirtyMatch(seed = MAP_SEED_A): MatchState {
           winningBid: 2,
           outcome: { kind: "voucher" }
         }
-      },
-      lastAutoGatheringRound: 3
+      }
     },
     lastDice: { first: 3, second: 4, total: 7 },
     pendingPlayerTrade: {
@@ -249,7 +248,7 @@ function expectCompleteSetupReset(
   expect(match.game).not.toHaveProperty("winnerId");
   expect(match.game).not.toHaveProperty("largestArmyOwnerId");
   expect(match.game).not.toHaveProperty("longestRoadOwnerId");
-  expect(match.guild).toEqual(createCommerceGuild());
+  expect(match.guild).toEqual(createCommerceGuild(3, 1));
   expect(match.lastDice).toBeNull();
   expect(match).not.toHaveProperty("pendingPlayerTrade");
   expect(match.game.log.map((entry) => entry.id)).not.toContain("dirty-log");
@@ -678,14 +677,22 @@ describe("match transition foundations", () => {
     const base = toMatchState();
     const funded = {
       ...base,
+      guild: {
+        ...base.guild,
+        gatheringCooldown: {
+          availableAtTurn: base.game.turn,
+          displayDuration: base.game.players.length
+        }
+      },
       game: {
         ...base.game,
+        turnState: { phase: "action" as const, pendingDiscards: {} },
         players: base.game.players.map((player) =>
           player.id === "p1" ? { ...player, guildTokens: 1 } : player
         )
       }
     };
-    const started = apply(funded, { type: "START_GATHERING" });
+    const started = apply(funded, { type: "START_GATHERING", playerId: "p1" });
     const redeemed = apply(started, {
       type: "REDEEM_GATHERING",
       playerId: "p1",

@@ -68,7 +68,7 @@ export type MatchCommand =
   | { type: "STEAL_ROBBER_RESOURCE"; playerId: PlayerId; victimId: PlayerId }
   | { type: "COMPLETE_TRADE_SLOT"; playerId: PlayerId; slotId: string }
   | { type: "TRANSFER_TOKENS"; fromPlayerId: PlayerId; toPlayerId: PlayerId; amount: number }
-  | { type: "START_GATHERING" }
+  | { type: "START_GATHERING"; playerId: PlayerId }
   | { type: "OPEN_AUCTION" }
   | { type: "REDEEM_GATHERING"; playerId: PlayerId; resources: ResourceCost }
   | { type: "RESOLVE_AUCTION"; bids: Record<PlayerId, number> }

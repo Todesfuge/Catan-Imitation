@@ -115,7 +115,7 @@ export function createScenarioAppState(): AppState {
   const game = createScenarioGame();
   return {
     game,
-    guild: createCommerceGuild(),
+    guild: createCommerceGuild(game.players.length, game.turn),
     lastDice: null,
     selectedDiceTotal: 8,
     selectedPlayerId: game.activePlayerId,

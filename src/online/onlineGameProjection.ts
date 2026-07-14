@@ -33,7 +33,7 @@ const reasonCodes = new Set<AvailabilityReasonCode>([
   "REQUIRED_PLAYER_OFFLINE", "AUCTION_NOT_OPEN", "BID_ALREADY_SUBMITTED"
 ]);
 const publicLogKeys = new Set([
-  "game.welcome", "setup.started", "setup.newGameStarted", "robber.sevenRolled", "guild.gatheringAutoStarted",
+  "game.welcome", "setup.started", "setup.newGameStarted", "robber.sevenRolled",
   "guild.slotCompleted", "guild.gatheringStarted", "guild.auctionOpened", "guild.auctionNoEligibleBidders",
   "dice.rolled", "robber.discardCompleted", "robber.moved", "robber.stolen", "development.played",
   "development.bought", "development.knightPlayed", "development.freeRoadPlaced", "development.yearOfPlentyLog",

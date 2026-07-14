@@ -108,6 +108,7 @@ export function createOnlineGameTableView(state: OnlineClientState): GameTableVi
     guild: {
       tradeSlots: guild.tradeSlots.map((slot) => ({ id: slot.id, requires: { ...slot.requires }, tokenReward: slot.tokenReward })),
       gathering: { phase: guild.gathering.phase, auctionRound: guild.gathering.auctionRound,
+        cooldownRemaining: 0,
         ...(guild.gathering.lastAuctionResult ? { lastAuctionResult: { ...guild.gathering.lastAuctionResult, outcome: { ...guild.gathering.lastAuctionResult.outcome } } } : {}) }
     },
     controlledPlayers: [{
