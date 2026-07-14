@@ -106,6 +106,7 @@ export interface PublicGuildView {
     phase: "idle" | "redemption" | "auction" | "complete";
     auctionRound: number;
     auctionResults: PublicBlindBoxOutcomeView[];
+    cooldownRemaining: number;
     lastAuctionResult?: PublicAuctionResultView;
   };
 }

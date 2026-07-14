@@ -26,8 +26,8 @@ function wire(value: unknown): string {
 
 describe("HTTP protocol bodies", () => {
   it("parses every JSON HTTP body shape", () => {
-    expect(PROTOCOL_SCHEMA_VERSION).toBe(2);
-    expect(parseHealthResponse(wire({ ok: true, schemaVersion: 2 }))).toEqual({
+    expect(PROTOCOL_SCHEMA_VERSION).toBe(3);
+    expect(parseHealthResponse(wire({ ok: true, schemaVersion: 3 }))).toEqual({
       ok: true,
       schemaVersion: PROTOCOL_SCHEMA_VERSION
     });
@@ -54,9 +54,11 @@ describe("HTTP protocol bodies", () => {
     expect(() =>
       parseConnectionTicketResponse(wire({ ticket: "ticket", expiresInMs: 1.5 }))
     ).toThrow("expiresInMs");
-    expect(() => parseHealthResponse(wire({ ok: true, schemaVersion: 1 }))).toThrow(
-      "schemaVersion"
-    );
+    for (const schemaVersion of [1, 2]) {
+      expect(() => parseHealthResponse(wire({ ok: true, schemaVersion }))).toThrow(
+        "schemaVersion"
+      );
+    }
   });
 
   it("applies the approved Unicode code-point string bounds", () => {
@@ -168,6 +170,25 @@ describe("client WebSocket messages", () => {
   ])("parses actorless match command $type", (command) => {
     const message = { type: "match.command", commandId, expectedVersion: 0, command };
     expect(parseClientWebSocketMessage(wire(message))).toEqual(message);
+  });
+
+  it.each([
+    { playerId: "attacker" },
+    { seatId: "seat-attacker" },
+    { availableAtTurn: 40 },
+    { remainingTurns: 0 },
+    { unknown: true }
+  ])("rejects START_GATHERING actor, timer, and unknown payload %#", (extra) => {
+    expect(() =>
+      parseClientWebSocketMessage(
+        wire({
+          type: "match.command",
+          commandId,
+          expectedVersion: 0,
+          command: { type: "START_GATHERING", ...extra }
+        })
+      )
+    ).toThrow(ProtocolValidationError);
   });
 
   it("requires canonical UUID command IDs and non-negative integer versions", () => {
@@ -319,7 +340,7 @@ describe("server WebSocket messages", () => {
   const expiredError = { code: "ROOM_EXPIRED", params: {}, retryable: false };
   const incompatibleError = {
     code: "PROTOCOL_INCOMPATIBLE",
-    params: { expected: 2 },
+    params: { expected: 3 },
     retryable: false
   };
 
@@ -327,7 +348,7 @@ describe("server WebSocket messages", () => {
     [
       {
         type: "room.snapshot",
-        schemaVersion: 2,
+        schemaVersion: 3,
         roomVersion: 32,
         lifecycle: "playing",
         publicState: {},
@@ -365,21 +386,23 @@ describe("server WebSocket messages", () => {
     ).toThrow("snapshot");
   });
 
-  it("rejects schema-v1 snapshots and incompatible envelopes", () => {
-    expect(() =>
-      parseServerWebSocketMessage(
-        wire({
-          type: "room.snapshot",
-          schemaVersion: 1,
-          roomVersion: 0,
-          lifecycle: "lobby",
-          publicState: {},
-          privateState: {},
-          allowedActions: {},
-          presence: []
-        })
-      )
-    ).toThrow("schemaVersion");
+  it("rejects schema-v1/v2 snapshots and incompatible envelopes", () => {
+    for (const schemaVersion of [1, 2]) {
+      expect(() =>
+        parseServerWebSocketMessage(
+          wire({
+            type: "room.snapshot",
+            schemaVersion,
+            roomVersion: 0,
+            lifecycle: "lobby",
+            publicState: {},
+            privateState: {},
+            allowedActions: {},
+            presence: []
+          })
+        )
+      ).toThrow("schemaVersion");
+    }
     expect(() =>
       parseServerWebSocketMessage(
         wire({
@@ -419,7 +442,7 @@ describe("server WebSocket messages", () => {
       },
       {
         type: "room.snapshot",
-        schemaVersion: 2,
+        schemaVersion: 3,
         roomVersion: 0,
         lifecycle: "unknown",
         publicState: {},

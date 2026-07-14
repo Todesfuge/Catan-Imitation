@@ -39,7 +39,7 @@ function memoryStorage(): StorageLike & { values: Map<string, string> } {
 function snapshot(version: number): RoomSnapshotMessage {
   return {
     type: "room.snapshot",
-    schemaVersion: 2,
+    schemaVersion: 3,
     roomVersion: version,
     lifecycle: "playing",
     publicState: { marker: `public-${version}` },
@@ -519,7 +519,7 @@ describe("online reducer", () => {
       type: "server.message",
       message: {
         type: "protocol.incompatible",
-        error: { code: "PROTOCOL_INCOMPATIBLE", params: { expected: 2 }, retryable: false }
+        error: { code: "PROTOCOL_INCOMPATIBLE", params: { expected: 3 }, retryable: false }
       }
     });
     expect(expired.status).toBe("expired");

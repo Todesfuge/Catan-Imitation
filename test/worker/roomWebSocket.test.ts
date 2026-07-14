@@ -132,7 +132,7 @@ describe("authoritative room command pipeline", () => {
     const small: ServerWebSocketMessage = { type: "presence.changed", presence: [] };
     const snapshot = {
       type: "room.snapshot",
-      schemaVersion: 2,
+      schemaVersion: 3,
       roomVersion: 1,
       lifecycle: "lobby",
       publicState: {},

@@ -215,6 +215,56 @@ function createSeededRoom(): ProjectableRoomState {
 }
 
 describe("caller-specific room projection privacy", () => {
+  it("projects one public cooldown without exposing its window or player-keyed state", () => {
+    const room = createRoom();
+    const turn = room.matchState!.game.turn;
+    room.matchState!.guild.gatheringCooldown = {
+      availableAtTurn: turn + 3,
+      displayDuration: 8
+    };
+    (room.matchState!.guild as unknown as Record<string, unknown>).gatheringCooldownByPlayer = {
+      p1: 111_111,
+      p2: 222_222
+    };
+
+    const view = projectRoomView(room, "seat-1");
+    const serialized = JSON.stringify(view);
+
+    expect(view.publicState.guild?.gathering.cooldownRemaining).toBe(3);
+    expect(serialized).not.toContain("availableAtTurn");
+    expect(serialized).not.toContain("displayDuration");
+    expect(serialized).not.toContain("gatheringCooldownByPlayer");
+    expect(view.privateState).not.toHaveProperty("cooldownRemaining");
+  });
+
+  it("shares the public ready value while authorizing only the qualified current caller", () => {
+    const room = createRoom();
+    const turn = room.matchState!.game.turn;
+    room.matchState!.game.turnState = { phase: "action", pendingDiscards: {} };
+    room.matchState!.pendingPlayerTrade = undefined;
+    room.matchState!.guild.gatheringCooldown = {
+      availableAtTurn: turn,
+      displayDuration: 8
+    };
+    room.matchState!.guild.gathering = {
+      ...room.matchState!.guild.gathering,
+      phase: "idle",
+      auctionResults: []
+    };
+
+    const current = projectRoomView(room, "seat-1");
+    const other = projectRoomView(room, "seat-2");
+
+    expect(current.publicState.roomVersion).toBe(other.publicState.roomVersion);
+    expect(current.publicState.guild?.gathering.cooldownRemaining).toBe(0);
+    expect(other.publicState.guild?.gathering.cooldownRemaining).toBe(0);
+    expect(current.allowedActions?.commerce.startGathering.enabled).toBe(true);
+    expect(other.allowedActions?.commerce.startGathering).toMatchObject({
+      enabled: false,
+      disabledReason: { code: "NOT_YOUR_TURN" }
+    });
+  });
+
   it("keeps opponent hands, raw deck, credentials, losing bids, errors, and blind-box kind out of JSON", () => {
     const view = projectRoomView(createRoom(), "seat-1");
     const serialized = JSON.stringify(view);

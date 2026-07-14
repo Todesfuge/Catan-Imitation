@@ -3,6 +3,7 @@ import type {
   BlindBoxOutcome,
   CommerceGuildState
 } from "../domain/expansion/commerceGuild";
+import { getGatheringCooldownRemaining } from "../domain/expansion/commerceGuild";
 import type { MatchState } from "../domain/match/types";
 import { parseMapSeed, type MapSeed } from "../domain/mapSeed";
 import { matchesBoardDataForSeed } from "../domain/randomBoard";
@@ -312,7 +313,8 @@ function projectOutcome(outcome: BlindBoxOutcome): PublicBlindBoxOutcomeView | u
 
 function projectGuild(
   guild: CommerceGuildState,
-  playerNameById: ReadonlyMap<string, string>
+  playerNameById: ReadonlyMap<string, string>,
+  currentTurn: number
 ): PublicGuildView {
   const last = guild.gathering.lastAuctionResult;
   const lastOutcome = last ? projectOutcome(last.outcome) : undefined;
@@ -344,6 +346,10 @@ function projectGuild(
       auctionResults: guild.gathering.auctionResults
         .map(projectOutcome)
         .filter((outcome): outcome is PublicBlindBoxOutcomeView => outcome !== undefined),
+      cooldownRemaining: getGatheringCooldownRemaining(
+        guild.gatheringCooldown,
+        currentTurn
+      ),
       ...(safeLast ? { lastAuctionResult: safeLast } : {})
     }
   };
@@ -533,7 +539,16 @@ export function projectRoomView(
     roomVersion: room.roomVersion,
     ...(room.lifecycle === "lobby" && room.hostSeatId ? { hostSeatId: room.hostSeatId } : {}),
     seats,
-    ...(game ? { game, guild: projectGuild(room.matchState!.guild, playerNameById) } : {}),
+    ...(game
+      ? {
+          game,
+          guild: projectGuild(
+            room.matchState!.guild,
+            playerNameById,
+            room.matchState!.game.turn
+          )
+        }
+      : {}),
     submittedBidSeatIds: room.pendingAuction
       ? room.seats
           .filter((seat) => Object.hasOwn(room.pendingAuction!.bidsBySeatId, seat.seatId))

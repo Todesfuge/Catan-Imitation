@@ -92,7 +92,7 @@ function publicGame(): PublicGameView {
 }
 
 function guild(): PublicGuildView {
-  return { tradeSlots: [{ id: "slot-1", requires: { wood: 1 }, tokenReward: 1 }], usedTradePlayerIds: [], gathering: { phase: "idle", auctionRound: 1, auctionResults: [] } };
+  return { tradeSlots: [{ id: "slot-1", requires: { wood: 1 }, tokenReward: 1 }], usedTradePlayerIds: [], gathering: { phase: "idle", auctionRound: 1, auctionResults: [], cooldownRemaining: 0 } };
 }
 
 function snapshotFor(seatIndex = 0, overrides: { game?: Partial<PublicGameView>; privateState?: Partial<PrivateSeatState>; allowedActions?: OnlineAllowedActions; lifecycle?: "playing" | "finished" } = {}): RoomSnapshotMessage {
@@ -112,7 +112,7 @@ function snapshotFor(seatIndex = 0, overrides: { game?: Partial<PublicGameView>;
     })) }
   };
   return {
-    type: "room.snapshot", schemaVersion: 2, roomVersion: 41,
+    type: "room.snapshot", schemaVersion: 3, roomVersion: 41,
     lifecycle: overrides.lifecycle ?? "playing", publicState: publicState as unknown as Record<string, unknown>, privateState: {
       seatId, playerId, seatTokenPresent: true,
       canRestartMatch: seatIndex === 0,
@@ -158,7 +158,7 @@ function seededSnapshot(): RoomSnapshotMessage {
   );
   return {
     type: "room.snapshot",
-    schemaVersion: 2,
+    schemaVersion: 3,
     roomVersion: 52,
     lifecycle: "playing",
     ...projected,
@@ -210,6 +210,72 @@ function expectIncompatibleProjection(snapshot: RoomSnapshotMessage) {
 }
 
 describe("online game projection adapter", () => {
+  it("passes the authoritative public cooldown to the shared game table view", () => {
+    const snapshot = snapshotFor();
+    (snapshot.publicState as unknown as PublicRoomState).guild!.gathering.cooldownRemaining = 3;
+    const allowed = snapshot.allowedActions as unknown as OnlineAllowedActions;
+    allowed.commerce.startGathering = {
+      enabled: false,
+      disabledReason: { code: "GATHERING_COOLDOWN", params: { remainingTurns: 3 } },
+      targets: []
+    };
+    const view = createOnlineGameTableView(state(snapshot));
+    expect(view.guild.gathering.cooldownRemaining).toBe(3);
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["negative", -1],
+    ["fractional", 1.5],
+    ["above 2n", 9]
+  ])("rejects a %s public gathering cooldown", (_name, value) => {
+    const snapshot = snapshotFor();
+    const gathering = (snapshot.publicState as unknown as PublicRoomState).guild!.gathering as unknown as Record<string, unknown>;
+    if (value === undefined) delete gathering.cooldownRemaining;
+    else gathering.cooldownRemaining = value;
+    expectIncompatibleProjection(snapshot);
+  });
+
+  it.each(["availableAtTurn", "displayDuration", "cooldownByPlayer"])(
+    "rejects internal gathering field %s",
+    (field) => {
+      const snapshot = snapshotFor();
+      const gathering = (snapshot.publicState as unknown as PublicRoomState).guild!.gathering as unknown as Record<string, unknown>;
+      gathering[field] = field === "cooldownByPlayer" ? { p1: 3 } : 3;
+      expectIncompatibleProjection(snapshot);
+    }
+  );
+
+  it("accepts an exact bounded gathering cooldown reason", () => {
+    const allowed = actions();
+    allowed.commerce.startGathering = {
+      enabled: false,
+      disabledReason: { code: "GATHERING_COOLDOWN", params: { remainingTurns: 3 } },
+      targets: []
+    };
+    expect(() => createOnlineGameTableView(state(snapshotFor(0, { allowedActions: allowed })))).not.toThrow();
+  });
+
+  it.each([
+    undefined,
+    {},
+    { remainingTurns: -1 },
+    { remainingTurns: 1.5 },
+    { remainingTurns: 9 },
+    { remainingTurns: 3, availableAtTurn: 40 }
+  ])("rejects malformed gathering cooldown reason params %#", (params) => {
+    const allowed = actions();
+    allowed.commerce.startGathering = {
+      enabled: false,
+      disabledReason: {
+        code: "GATHERING_COOLDOWN",
+        ...(params === undefined ? {} : { params })
+      },
+      targets: []
+    } as OnlineAllowedActions["commerce"]["startGathering"];
+    expectIncompatibleProjection(snapshotFor(0, { allowedActions: allowed }));
+  });
+
   it("regenerates byte-equivalent board data from the canonical public seed", () => {
     const snapshot = seededSnapshot();
     const expected = createBoardDataForSeed(seededProjectionMapSeed);
@@ -331,7 +397,8 @@ describe("online game projection adapter", () => {
         { kind: "developmentCard" },
         { kind: "voucher" },
         { kind: "resources", resourceCardCount: 2 }
-      ]
+      ],
+      cooldownRemaining: 0
     };
     (snapshot.allowedActions as unknown as OnlineAllowedActions).sealedBid = {
       enabled: false,
@@ -360,7 +427,7 @@ describe("online game projection adapter", () => {
     const projected = projectRoomView({ roomCode: "234567", lifecycle: "playing", roomVersion: 42, seats,
       matchState: { game: { ...local.game, log }, guild: local.guild, lastDice: local.lastDice } }, "seat-1",
     { connectedSeatIds: seats.map((seat) => seat.seatId) });
-    const wire = JSON.stringify({ type: "room.snapshot", schemaVersion: 2, roomVersion: 42, lifecycle: "playing", ...projected,
+    const wire = JSON.stringify({ type: "room.snapshot", schemaVersion: 3, roomVersion: 42, lifecycle: "playing", ...projected,
       presence: seats.map((seat) => ({ seatId: seat.seatId, connectionCount: 1, online: true })) });
     expect(projected.publicState.game?.log).toHaveLength(6);
     expect(projected.publicState.game?.log.map((entry) => entry.id)).toEqual(
@@ -402,7 +469,7 @@ describe("online game projection adapter", () => {
       pendingAuction: { round: 3, bidsBySeatId: Object.fromEntries(seats.map((seat, index) => [seat.seatId, index + 1])) }
     }, seats[0]!.seatId,
     { connectedSeatIds: seats.map((seat) => seat.seatId) });
-    const envelope = { type: "room.snapshot" as const, schemaVersion: 2 as const, roomVersion: 999999, lifecycle: "playing" as const, ...projected,
+    const envelope = { type: "room.snapshot" as const, schemaVersion: 3 as const, roomVersion: 999999, lifecycle: "playing" as const, ...projected,
       presence: seats.map((seat) => ({ seatId: seat.seatId, connectionCount: 9, online: true })),
       acknowledgedCommandId: "00000000-0000-4000-8000-000000000099" };
     const wire = JSON.stringify(envelope);
@@ -429,7 +496,7 @@ describe("online game projection adapter", () => {
     allowed.decisions.freeRoad.targets = edges;
     allowed.decisions.yearOfPlenty.targets = [...resources];
     allowed.decisions.monopoly.targets = [...resources];
-    const envelope = { type: "room.snapshot" as const, schemaVersion: 2 as const, roomVersion: 1000000, lifecycle: "playing" as const, ...projected,
+    const envelope = { type: "room.snapshot" as const, schemaVersion: 3 as const, roomVersion: 1000000, lifecycle: "playing" as const, ...projected,
       presence: seats.map((seat) => ({ seatId: seat.seatId, connectionCount: 9, online: true })),
       acknowledgedCommandId: "10000000-0000-4000-8000-000000000099" };
     const wire = JSON.stringify(envelope);
@@ -655,6 +722,9 @@ describe("online game projection adapter", () => {
       "REDEEM_PRIZE", "auction.submitBid"
     ]);
     expect(sent.every((message) => !JSON.stringify(message).includes("playerId"))).toBe(true);
+    expect(sent.find((message) =>
+      message.type === "match.command" && message.command.type === "START_GATHERING"
+    )).toMatchObject({ command: { type: "START_GATHERING" } });
     expect(sent.every((message) => "commandId" in message && message.commandId === "11111111-1111-4111-8111-111111111111")).toBe(true);
     expect(getState().snapshot?.roomVersion).toBe(41);
   });

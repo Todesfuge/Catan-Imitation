@@ -44,7 +44,7 @@ function elementByLabel(node: ReactNode, label: string): ReactElement {
 function lobbySnapshot(overrides: Partial<RoomSnapshotMessage> = {}): RoomSnapshotMessage {
   return {
     type: "room.snapshot",
-    schemaVersion: 2,
+    schemaVersion: 3,
     roomVersion: 7,
     lifecycle: "lobby",
     publicState: {

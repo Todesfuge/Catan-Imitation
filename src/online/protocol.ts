@@ -2,7 +2,7 @@ import { resources, type Resource, type ResourceMap } from "../domain/types";
 import type { ResourceCost } from "../domain/expansion/commerceGuild";
 import type { MapRestartMode } from "../domain/match/types";
 
-export const PROTOCOL_SCHEMA_VERSION = 2 as const;
+export const PROTOCOL_SCHEMA_VERSION = 3 as const;
 export const MAX_WIRE_BYTES = 16 * 1024;
 export const MAX_NICKNAME_CODE_POINTS = 20;
 export const MAX_WIRE_STRING_CODE_POINTS = 128;

@@ -133,22 +133,22 @@ Interfaces:
 
 Steps:
 
-- [ ] Add protocol tests requiring schema version 3 and exact no-payload `START_GATHERING`.
-- [ ] Add adversarial command tests containing `playerId`, `seatId`, `availableAtTurn`, `remainingTurns`, and unknown fields; expect strict rejection.
-- [ ] Add projection tests requiring one public non-negative `cooldownRemaining`, rejecting missing/negative/fractional/too-large/internal-target fields.
-- [ ] Add two-caller projection tests proving the public remaining value is identical while only the qualified current caller receives enabled `startGathering`.
-- [ ] Add privacy tests proving `availableAtTurn`, `displayDuration`, and any player-keyed cooldown map are absent from public/private snapshots.
-- [ ] Add adapter tests proving the shared `GameTableView` receives the public value and dispatches a no-actor intent.
-- [ ] Run `pnpm vitest run test/online/protocol.test.ts test/online/projectionPrivacy.test.ts test/online/onlineGameUi.test.ts test/online/onlineClient.test.ts`; expect RED on schema version, projection shape, actor enrichment, and parser validation.
-- [ ] Set `PROTOCOL_SCHEMA_VERSION = 3` and retain exact `START_GATHERING` command parsing with no payload.
-- [ ] Add `cooldownRemaining` to public view/projector/parser/adapter, deriving it once from the Commerce Guild helper and validating the exact public shape.
-- [ ] Keep caller-specific availability in `allowedActions` and validate `GATHERING_COOLDOWN.params.remainingTurns` without adding private timer data.
-- [ ] Change only `trustedCommand` so `START_GATHERING` receives the authenticated seat's player id; keep `OPEN_AUCTION` behavior unchanged and do not add a parallel handler.
-- [ ] Mechanically update all listed main/E2E typed protocol fixtures to version 3 while retaining explicit version-2 incompatibility cases.
-- [ ] Rerun the focused command; expect all protocol/projection/client tests GREEN.
-- [ ] Run `pnpm test` and `pnpm build`; expect main TypeScript/tests/build GREEN.
-- [ ] Inspect recipient projections to confirm same room version yields one public cooldown and distinct authorization only through existing allowed actions.
-- [ ] Commit `feat: project gathering cooldown over protocol v3`.
+- [x] Add protocol tests requiring schema version 3 and exact no-payload `START_GATHERING`.
+- [x] Add adversarial command tests containing `playerId`, `seatId`, `availableAtTurn`, `remainingTurns`, and unknown fields; expect strict rejection.
+- [x] Add projection tests requiring one public non-negative `cooldownRemaining`, rejecting missing/negative/fractional/too-large/internal-target fields.
+- [x] Add two-caller projection tests proving the public remaining value is identical while only the qualified current caller receives enabled `startGathering`.
+- [x] Add privacy tests proving `availableAtTurn`, `displayDuration`, and any player-keyed cooldown map are absent from public/private snapshots.
+- [x] Add adapter tests proving the shared `GameTableView` receives the public value and dispatches a no-actor intent.
+- [x] Run `pnpm vitest run test/online/protocol.test.ts test/online/projectionPrivacy.test.ts test/online/onlineGameUi.test.ts test/online/onlineClient.test.ts`; expect RED on schema version, projection shape, actor enrichment, and parser validation.
+- [x] Set `PROTOCOL_SCHEMA_VERSION = 3` and retain exact `START_GATHERING` command parsing with no payload.
+- [x] Add `cooldownRemaining` to public view/projector/parser/adapter, deriving it once from the Commerce Guild helper and validating the exact public shape.
+- [x] Keep caller-specific availability in `allowedActions` and validate `GATHERING_COOLDOWN.params.remainingTurns` without adding private timer data.
+- [x] Change only `trustedCommand` so `START_GATHERING` receives the authenticated seat's player id; keep `OPEN_AUCTION` behavior unchanged and do not add a parallel handler.
+- [x] Mechanically update all listed main/E2E typed protocol fixtures to version 3 while retaining explicit version-2 incompatibility cases.
+- [x] Rerun the focused command; expect all protocol/projection/client tests GREEN.
+- [x] Run `pnpm test` and `pnpm build`; expect main TypeScript/tests/build GREEN.
+- [x] Inspect recipient projections to confirm same room version yields one public cooldown and distinct authorization only through existing allowed actions.
+- [x] Commit `feat: project gathering cooldown over protocol v3`.
 
 ## Task 4 — T004: Persisted schema-v3 migration and online atomicity
 

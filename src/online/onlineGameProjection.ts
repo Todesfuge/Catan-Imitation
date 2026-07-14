@@ -24,7 +24,7 @@ const reasonCodes = new Set<AvailabilityReasonCode>([
   "GAME_SETUP", "GAME_OVER", "NOT_YOUR_TURN", "ROLL_REQUIRED", "ALREADY_ROLLED", "REQUIRED_DECISION",
   "INSUFFICIENT_RESOURCES", "NO_LEGAL_TARGET", "DEVELOPMENT_DECK_EMPTY", "DEVELOPMENT_CARD_PHASE",
   "NO_ELIGIBLE_DEVELOPMENT_CARD", "NO_MARITIME_TRADE", "GUILD_TRADE_ALREADY_USED", "NO_GUILD_TOKENS",
-  "NO_RECIPIENT", "GATHERING_ONLY_DURING_PLAY", "GATHERING_IN_PROGRESS", "REDEMPTION_NOT_OPEN",
+  "NO_RECIPIENT", "GATHERING_ONLY_DURING_PLAY", "GATHERING_IN_PROGRESS", "GATHERING_COOLDOWN", "REDEMPTION_NOT_OPEN",
   "REDEMPTION_CAP_REACHED", "NO_BANK_STOCK", "VOUCHERS_REQUIRED", "SETUP_NOT_ACTIVE",
   "SETUP_SETTLEMENT_REQUIRED", "SETUP_ROAD_REQUIRED", "NO_REQUIRED_DISCARD", "ROBBER_MOVE_NOT_PENDING",
   "ROBBER_VICTIM_NOT_PENDING", "DEVELOPMENT_EFFECT_NOT_PENDING", "NO_PENDING_PLAYER_TRADE",
@@ -81,6 +81,10 @@ function resourceCost(value: unknown): boolean {
 
 function reason(value: unknown): boolean {
   if (!object(value) || !exact(value, ["code"], ["params"]) || !reasonCodes.has(value.code as AvailabilityReasonCode)) return false;
+  if (value.code === "GATHERING_COOLDOWN") {
+    return object(value.params) && exact(value.params, ["remainingTurns"]) &&
+      nonNegativeInt(value.params.remainingTurns);
+  }
   if (value.params === undefined) return true;
   return object(value.params) && Object.keys(value.params).length <= 8 && Object.entries(value.params).every(([key, entry]) =>
     boundedString(key, 32) && (boundedString(entry) || nonNegativeInt(entry) || typeof entry === "boolean" || stringArray(entry, 4))
@@ -136,6 +140,14 @@ function allowedActions(
       !availability(value.commerce.redeemGathering, 5, new Set(resources), ["maxAmount", "bankStock"]) ||
       !nonNegativeInt(value.commerce.redeemGathering.maxAmount, 4) || !resourceMap(value.commerce.redeemGathering.bankStock) ||
       !availability(value.commerce.redeemPrize, 0)) return false;
+  const gatheringReason = object(value.commerce.startGathering) &&
+    object(value.commerce.startGathering.disabledReason) &&
+    value.commerce.startGathering.disabledReason.code === "GATHERING_COOLDOWN"
+      ? value.commerce.startGathering.disabledReason
+      : undefined;
+  if (gatheringReason &&
+      (!object(gatheringReason.params) ||
+        !nonNegativeInt(gatheringReason.params.remainingTurns, playerIds.size * 2))) return false;
 
   if (!object(value.setup) || !exact(value.setup, ["settlement", "road"]) ||
       !availability(value.setup.settlement, 54, boardIds.vertexIds) || !availability(value.setup.road, 72, boardIds.edgeIds) ||
@@ -240,8 +252,9 @@ function publicGuild(value: unknown, playerIds: ReadonlySet<string>): value is P
   if (!object(value) || !exact(value, ["tradeSlots", "usedTradePlayerIds", "gathering"]) || !Array.isArray(value.tradeSlots) || value.tradeSlots.length > 16 ||
       !value.tradeSlots.every((slot) => object(slot) && exact(slot, ["id", "requires", "tokenReward"]) && boundedString(slot.id) && resourceCost(slot.requires) && nonNegativeInt(slot.tokenReward)) ||
       !stringArray(value.usedTradePlayerIds, 4) || !value.usedTradePlayerIds.every((id) => playerIds.has(id)) || !object(value.gathering) ||
-      !exact(value.gathering, ["phase", "auctionRound", "auctionResults"], ["lastAuctionResult"]) || !gatheringPhases.has(value.gathering.phase as string) ||
+      !exact(value.gathering, ["phase", "auctionRound", "auctionResults", "cooldownRemaining"], ["lastAuctionResult"]) || !gatheringPhases.has(value.gathering.phase as string) ||
       !nonNegativeInt(value.gathering.auctionRound, 4) ||
+      !nonNegativeInt(value.gathering.cooldownRemaining, playerIds.size * 2) ||
       (value.gathering.phase === "auction" && (value.gathering.auctionRound as number) > 3) ||
       !Array.isArray(value.gathering.auctionResults) || value.gathering.auctionResults.length > 3) return false;
   const outcome = (candidate: unknown) => object(candidate) && exact(candidate, ["kind"], ["resourceCardCount"]) &&
