@@ -96,7 +96,7 @@ try {
     "Gathering player",
     "New Random Map",
     "Standard maritime ports",
-    "2:1 "
+    "data-port-resource"
     ,"Publish Public Offer"
     ,"Simplified Chinese"
     ,"游戏日志"
@@ -108,7 +108,8 @@ try {
   for (const text of [
     ".board-zone",
     ".activity-shell",
-    ".terrain-icon",
+    ".board-resource-icon",
+    ".resource-bundle",
     ".board-hex",
     ".road-marker",
     ".turn-flow-panel",
@@ -128,6 +129,8 @@ try {
   }
   assert(js.includes("board-svg"), "Expected JavaScript bundle to render the SVG board.");
   assert(js.includes("board-hex"), "Expected JavaScript bundle to render SVG hex polygons.");
+  assert(!css.includes(".terrain-icon"), "Expected obsolete terrain abbreviation CSS to be absent.");
+  assert(!css.includes(".hex-resource"), "Expected obsolete visible terrain-name CSS to be absent.");
   assert(js.includes("road-marker"), "Expected JavaScript bundle to render road markers.");
   assert(!js.includes("edge-guide"), "Expected JavaScript bundle not to render every possible edge guide.");
   assert(!css.includes("clip-path"), "Expected board rendering not to rely on clipped CSS boxes.");

@@ -84,6 +84,19 @@ describe("English and Simplified Chinese localization", () => {
     ).toBe("Loss 以 3 枚代币赢得第 2 轮拍卖：资源：木材 2, 粮食 1。");
   });
 
+  it("keeps complete resource names in natural-language logs after operational labels become icons", () => {
+    const entry = {
+      id: "log-maritime",
+      message: "Earnest completed a maritime trade: wood for ore.",
+      messageKey: "trade.maritime" as const,
+      params: { playerName: "Earnest", give: "wood", receive: "ore" }
+    };
+
+    expect(formatGameLogEntry(entry, "en")).toContain("Wood for Ore");
+    expect(formatGameLogEntry(entry, "zh-CN")).toContain(translate("zh-CN", "resource.wood"));
+    expect(formatGameLogEntry(entry, "zh-CN")).toContain(translate("zh-CN", "resource.ore"));
+  });
+
   it("keeps every seed and restart message complete with English as the default locale", () => {
     const keys = [
       "settings.mapSeed",

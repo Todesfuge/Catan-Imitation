@@ -267,7 +267,9 @@ describe("product polish UI", () => {
 
     expect(html.match(/data-port-id=/g)).toHaveLength(9);
     expect(html).toContain("3:1");
-    expect(html).toContain("2:1 Wood");
+    expect(html).toContain('aria-label="2:1 Wood port"');
+    expect(html).toContain('data-port-resource="wood"');
+    expect(html).not.toContain(">2:1 Wood</text>");
     for (const label of ["Wood 4:1", "Brick 4:1", "Wool 4:1", "Grain 4:1", "Ore 4:1"]) {
       expect(html).toContain(label);
     }
@@ -327,22 +329,23 @@ describe("product polish UI", () => {
     expect(css).toContain(".map-seed-value");
   });
 
-  it("renders terrain icons and number-token pips for board inspectability", () => {
+  it("renders produced-resource icons and number-token pips for board inspectability", () => {
     const html = renderToString(createElement(App));
 
-    expect(html).toContain("terrain-icon");
+    expect(html).toContain('data-board-resource="wood"');
+    expect(html).toContain('data-resource-icon="wood"');
     expect(html).toContain("dice-pips");
-    expect(html).toContain("Forest");
-    expect(html).toContain("Mountain");
+    expect(html).not.toContain('class="terrain-icon"');
+    expect(html).not.toContain('class="hex-resource"');
   });
 
   it("formats fractional yield values for readable tables", () => {
     const html = renderScenarioTable();
 
-    expect(html).toContain("Grain 0.11");
-    expect(html).toContain("Wool 0.28");
-    expect(html).not.toContain("Grain 0.111111");
-    expect(html).not.toContain("Wool 0.277777");
+    expect(html).toContain('aria-label="Grain: 0.11"');
+    expect(html).toContain('aria-label="Wool: 0.28"');
+    expect(html).not.toContain('data-resource-quantity="0.111111');
+    expect(html).not.toContain('data-resource-quantity="0.277777');
   });
 
   it("shows actual built roads without drawing every possible edge", () => {
@@ -388,6 +391,10 @@ describe("product polish UI", () => {
     expect(css).toContain(".development-card-controls");
     expect(css).toContain(".development-resource-buttons");
     expect(css).toContain(".road-building-target");
+    expect(css).toContain(".resource-bundle");
+    expect(css).toContain(".board-resource-icon");
+    expect(css).toMatch(/\.player-metrics span:nth-last-child\(-n \+ 2\)[\s\S]*grid-column:\s*span 2/);
+    expect(css).toMatch(/\.maritime-selectors\s*{[^}]*grid-template-columns:\s*1fr/);
     expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
   });
 

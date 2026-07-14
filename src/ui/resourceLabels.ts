@@ -8,14 +8,6 @@ export const resourceLabels: Record<Resource, string> = {
   ore: "Ore"
 };
 
-export const resourceShortLabels: Record<Resource, string> = {
-  wood: "Wd",
-  brick: "Br",
-  wool: "Wl",
-  grain: "Gr",
-  ore: "Or"
-};
-
 export function formatResourceQuantity(quantity: number): string {
   return Number.isInteger(quantity)
     ? String(quantity)

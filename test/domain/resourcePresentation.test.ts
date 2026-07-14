@@ -11,7 +11,7 @@ import {
   ResourceBundle,
   ResourceIcon
 } from "../../src/ui/ResourceBadge";
-import { I18nProvider } from "../../src/ui/i18n";
+import { I18nProvider, translate } from "../../src/ui/i18n";
 import { createScenarioAppState } from "../fixtures/createScenarioGame";
 
 function renderWithLocale(node: React.ReactNode, locale: "en" | "zh-CN" = "en") {
@@ -179,6 +179,125 @@ describe("shared resource presentation", () => {
     expect(html).toContain('data-gathering-cooldown="3"');
     expect(html).toContain('3 turn(s) remaining');
     expect(html).toContain('aria-describedby="gathering-start-unavailable-reason"');
+  });
+
+  it("renders complete private and bank inventories as five semantic resource badges", () => {
+    const html = renderWithLocale(
+      createElement(GameTable, {
+        view: createLocalGameTableView(createScenarioAppState()),
+        dispatch: () => undefined
+      })
+    );
+    const privateInventory = html.match(
+      /data-resource-inventory="private">([\s\S]*?)<\/div>/
+    )?.[1] ?? "";
+    const bankInventory = html.match(
+      /data-resource-inventory="bank">([\s\S]*?)<\/div>/
+    )?.[1] ?? "";
+
+    expect(html.match(/data-resource-inventory="private"/g)).toHaveLength(4);
+    expect(privateInventory.match(/data-resource-badge=/g)).toHaveLength(5);
+    expect(bankInventory.match(/data-resource-badge=/g)).toHaveLength(5);
+    expect(html).toContain('aria-label="Wood: 0, Brick: 0, Wool: 0, Grain: 0, Ore: 0"');
+    expect(html).toContain('data-resource-inventory="bank"');
+  });
+
+  it("renders statistics with icon bundles, decimal quantities, and semantic matrix headers", () => {
+    const html = renderWithLocale(
+      createElement(GameTable, {
+        view: createLocalGameTableView(createScenarioAppState()),
+        dispatch: () => undefined
+      })
+    );
+    const source = readFileSync("src/ui/GameTable.tsx", "utf8");
+
+    expect(html).toContain('data-stat-resource-bundle="gain"');
+    expect(html).toContain('data-resource-quantity="0.11"');
+    expect(source).toContain('data-stat-resource-bundle="dice"');
+    expect(source).toContain("<ResourceIcon resource={resource}");
+    expect(source).toContain('scope="col"');
+    expect(source).toContain('t("stats.noGain")');
+    expect(source).not.toContain("formatResourceMap(row.resources");
+    expect(source).not.toContain("formatResourceMap(row.expected");
+    expect(source).not.toContain("formatResourceMap(diceIncome");
+  });
+
+  it("renders produced-resource and resource-port icons without visible terrain words", () => {
+    const html = renderWithLocale(
+      createElement(GameTable, {
+        view: createLocalGameTableView(createScenarioAppState()),
+        dispatch: () => undefined
+      })
+    ).replaceAll("<!-- -->", "");
+    const nonDesertHexes = createScenarioAppState().game.board.filter((hex) => hex.resource);
+    const desertHexes = createScenarioAppState().game.board.filter((hex) => !hex.resource);
+
+    expect(html.match(/data-board-resource=/g)).toHaveLength(nonDesertHexes.length);
+    expect(html.match(/data-board-resource="desert"/g) ?? []).toHaveLength(0);
+    expect(desertHexes).toHaveLength(1);
+    expect(html).toContain('class="dice-pips"');
+    expect(html).not.toContain('class="terrain-icon"');
+    expect(html).not.toContain('class="hex-resource"');
+    expect(html).toContain('data-port-kind="generic"');
+    expect(html).toContain('data-port-kind="resource"');
+    expect(html).toContain('data-port-resource="wood"');
+    expect(html).toContain('aria-label="2:1 Wood port"');
+    expect(html).toContain('<title>2:1 Wood port</title>');
+    expect(html).toContain('<title>Forest; Wood</title>');
+    expect(html).toContain('>2:1</text>');
+    expect(html).not.toContain('>2:1 Wood</text>');
+  });
+
+  it.each(["en", "zh-CN"] as const)(
+    "names each board hex terrain and produced resource in %s accessible semantics",
+    (locale) => {
+      const state = createScenarioAppState();
+      const html = renderWithLocale(
+        createElement(GameTable, {
+          view: createLocalGameTableView(state),
+          dispatch: () => undefined
+        }),
+        locale
+      );
+      const semantics = [...html.matchAll(
+        /<g aria-label="([^"]+)" class="hex-tile"[^>]*><title>([^<]+)<\/title>/g
+      )].map((match) => ({ ariaLabel: match[1], title: match[2] }));
+
+      expect(semantics).toHaveLength(state.game.board.length);
+      expect(semantics).toEqual(state.game.board.map((hex) => {
+        const terrain = translate(locale, `terrain.${hex.terrain}`);
+        const label = hex.resource
+          ? `${terrain}; ${translate(locale, `resource.${hex.resource}`)}`
+          : terrain;
+        return { ariaLabel: label, title: label };
+      }));
+      expect(html.match(/data-board-resource=/g)).toHaveLength(
+        state.game.board.filter((hex) => hex.resource).length
+      );
+      expect(html).not.toContain('data-board-resource="desert"');
+    }
+  );
+
+  it("keeps bilingual icon semantics and resource layouts contained at narrow widths", () => {
+    const chinese = renderWithLocale(
+      createElement(GameTable, {
+        view: createLocalGameTableView(createScenarioAppState()),
+        dispatch: () => undefined
+      }),
+      "zh-CN"
+    );
+    const wood = translate("zh-CN", "resource.wood");
+    const forest = translate("zh-CN", "terrain.forest");
+    const css = readFileSync("src/styles/app.css", "utf8");
+
+    expect(chinese).toContain(`data-resource-icon="wood"`);
+    expect(chinese).toContain(translate("zh-CN", "resource.quantity", { resource: wood, quantity: 0 }));
+    expect(chinese).toContain(
+      `aria-label="${forest}; ${wood}"`
+    );
+    expect(css).toMatch(/\.resource-strip\s*{[^}]*max-width:\s*100%/);
+    expect(css).toMatch(/\.resource-bundle\s*{[^}]*flex-wrap:\s*wrap/);
+    expect(css).toContain("@media (max-width: 640px)");
   });
 
   it("renders Commerce costs, redemption controls, and sealed resource counts without resource words", () => {

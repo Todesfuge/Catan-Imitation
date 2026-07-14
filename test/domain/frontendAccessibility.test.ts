@@ -19,15 +19,16 @@ describe("frontend accessibility and responsive contracts", () => {
     expect(html).toContain('aria-describedby="maritime-unavailable-reason"');
   });
 
-  it("exposes selected modes, live notices, and distinct Wood/Wool abbreviations", () => {
+  it("exposes selected modes, live notices, and complete icon semantics", () => {
     const html = renderToString(createElement(App));
     const source = readFileSync("src/ui/GameTable.tsx", "utf8");
 
     expect(html).toContain('aria-pressed="true"');
     expect(source).toContain('role="status"');
     expect(source).toContain('aria-live="polite"');
-    expect(html).toContain("Wd 0");
-    expect(html).toContain("Wl 0");
+    expect(html).toContain('aria-label="Wood: 0, Brick: 0, Wool: 0, Grain: 0, Ore: 0"');
+    expect(html).not.toContain("Wd 0");
+    expect(html).not.toContain("Wl 0");
   });
 
   it("defines clear disabled, touch, and narrow action-layout states", () => {

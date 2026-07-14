@@ -281,24 +281,24 @@ Interfaces:
 
 Steps:
 
-- [ ] Add render tests proving private hands and bank render five icon-plus-quantity badges, including semantically named zero values.
-- [ ] Add statistics tests proving player/dice resource bundles and matrix headers use shared icons with accessible names and preserve decimal quantities.
-- [ ] Add board SVG tests proving every non-desert hex has its produced-resource icon, desert has none, dice tokens remain, and no visible terrain name/abbreviation text node exists.
-- [ ] Add port tests proving generic ports show only `3:1`, resource ports show `2:1` plus the correct icon, and enclosing groups retain localized accessible labels.
-- [ ] Add English/Chinese and narrow-layout assertions proving no horizontal overflow contract regression and no resource meaning depends on color or table position.
-- [ ] Add English/Chinese regression assertions proving rulebook/help text and natural-language game logs still contain complete resource names after operational abbreviations are removed.
-- [ ] Run `pnpm vitest run test/domain/resourcePresentation.test.ts test/domain/productPolish.test.ts test/domain/frontendAccessibility.test.ts test/domain/gameTableView.test.ts test/domain/stats.test.ts`; expect RED on remaining text/abbreviations and missing SVG icons.
-- [ ] Replace player private resource strips and bank stock with `ResourceBadge`, retaining all five zero quantities where inventory state matters.
-- [ ] Replace player/dice statistic bundle strings and matrix word headers with shared bundle/icon rendering; retain `stats.noGain` prose for an empty bundle.
-- [ ] Delete `terrainMarks`; on each non-desert hex render the shared resource icon at the former label area and retain the number token/robber visuals.
-- [ ] Render resource-specific ports with ratio text plus the shared icon; keep generic ports ratio-only and retain localized group labels/tooltips.
-- [ ] Remove obsolete terrain text/icon and abbreviation CSS; add nested SVG icon sizing/contrast rules and responsive containment.
-- [ ] Delete `resourceShortLabels` after repository search confirms no production consumer remains; keep full-name prose formatting for logs/rules.
-- [ ] Rerun the focused command; expect all GameTable, statistics, SVG, and accessibility tests GREEN.
-- [ ] Run `rg -n "resourceShortLabels|terrainMarks|className=\"terrain-icon\"|className=\"hex-resource\"" src`; expect no matches.
-- [ ] Run `pnpm test`, `pnpm build`, and `pnpm smoke:ui`; expect main regression/build/UI smoke GREEN.
-- [ ] Inspect desktop/tablet/mobile Local renders in both languages before commit; record any reproducible defect for T007 browser coverage.
-- [ ] Commit `feat: use resource icons across the game table`.
+- [x] Add render tests proving private hands and bank render five icon-plus-quantity badges, including semantically named zero values.
+- [x] Add statistics tests proving player/dice resource bundles and matrix headers use shared icons with accessible names and preserve decimal quantities.
+- [x] Add board SVG tests proving every non-desert hex has its produced-resource icon, desert has none, dice tokens remain, and no visible terrain name/abbreviation text node exists.
+- [x] Add port tests proving generic ports show only `3:1`, resource ports show `2:1` plus the correct icon, and enclosing groups retain localized accessible labels.
+- [x] Add English/Chinese and narrow-layout assertions proving no horizontal overflow contract regression and no resource meaning depends on color or table position.
+- [x] Add English/Chinese regression assertions proving rulebook/help text and natural-language game logs still contain complete resource names after operational abbreviations are removed.
+- [x] Run `pnpm vitest run test/domain/resourcePresentation.test.ts test/domain/productPolish.test.ts test/domain/frontendAccessibility.test.ts test/domain/gameTableView.test.ts test/domain/stats.test.ts`; expect RED on remaining text/abbreviations and missing SVG icons.
+- [x] Replace player private resource strips and bank stock with `ResourceBadge`, retaining all five zero quantities where inventory state matters.
+- [x] Replace player/dice statistic bundle strings and matrix word headers with shared bundle/icon rendering; retain `stats.noGain` prose for an empty bundle.
+- [x] Delete `terrainMarks`; on each non-desert hex render the shared resource icon at the former label area and retain the number token/robber visuals.
+- [x] Render resource-specific ports with ratio text plus the shared icon; keep generic ports ratio-only and retain localized group labels/tooltips.
+- [x] Remove obsolete terrain text/icon and abbreviation CSS; add nested SVG icon sizing/contrast rules and responsive containment.
+- [x] Delete `resourceShortLabels` after repository search confirms no production consumer remains; keep full-name prose formatting for logs/rules.
+- [x] Rerun the focused command; expect all GameTable, statistics, SVG, and accessibility tests GREEN.
+- [x] Run `rg -n "resourceShortLabels|terrainMarks|className=\"terrain-icon\"|className=\"hex-resource\"" src`; expect no matches.
+- [x] Run `pnpm test`, `pnpm build`, and `pnpm smoke:ui`; expect main regression/build/UI smoke GREEN.
+- [x] Inspect desktop/tablet/mobile Local renders in both languages before commit; record any reproducible defect for T007 browser coverage.
+- [x] Commit `feat: use resource icons across the game table`.
 
 ## Task 7 — T007: Browser convergence, documentation, review, and release gates
 

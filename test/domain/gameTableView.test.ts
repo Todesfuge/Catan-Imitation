@@ -243,7 +243,7 @@ describe("shared game-table presentation boundary", () => {
 
     expect(html).toContain("Caller");
     expect(html).toContain("Opponent");
-    expect(html).toContain("Wd 1");
+    expect(html).toContain('aria-label="Wood: 1, Brick: 0, Wool: 0, Grain: 0, Ore: 0"');
     expect(html).not.toContain("opponent-secret-ore-4");
   });
 

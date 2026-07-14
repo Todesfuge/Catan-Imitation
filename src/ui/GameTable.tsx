@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   BookOpen,
   Coins,
@@ -29,10 +29,7 @@ import { ActionDock, type BoardInteractionMode } from "./ActionDock";
 import { BoardActionTargets } from "./BoardActionTargets";
 import { TradeHubPanel } from "./TradeHubPanel";
 import { UtilityDialog, type UtilityPanel } from "./UtilityDialog";
-import {
-  formatResourceMap,
-  resourceShortLabels
-} from "./resourceLabels";
+import { ResourceBundle, ResourceIcon } from "./ResourceBadge";
 import { formatGameLogEntry, translateRuleText, useI18n } from "./i18n";
 
 export type GameTableResource = (typeof resources)[number];
@@ -240,15 +237,6 @@ export type GameTableDispatch = (intent: GameTableIntent) => void;
 
 type StatsMode = "player" | "dice" | "matrix";
 
-const terrainMarks: Record<GameTableBoardHex["terrain"], string> = {
-  forest: "Fo",
-  hill: "Hi",
-  pasture: "Pa",
-  field: "Fi",
-  mountain: "Mt",
-  desert: "De"
-} as const;
-
 const dicePipCounts: Record<number, number> = {
   2: 1,
   3: 2,
@@ -336,17 +324,20 @@ function BoardView({
           <g className="port-layer" aria-label={t("board.ports")}>
             {state.game.ports.map((port) => {
               const position = portProjection(state.game.board, port);
-              const label =
-                port.kind === "generic"
-                  ? "3:1"
-                  : `2:1 ${t(`resource.${port.resource ?? "wood"}`)}`;
+              const resource = port.kind === "resource" ? port.resource : undefined;
+              const ratio = resource ? "2:1" : "3:1";
+              const label = resource ? `${ratio} ${t(`resource.${resource}`)}` : ratio;
+              const accessibleLabel = t("board.portLabel", { label });
               return (
                 <g
-                  aria-label={t("board.portLabel", { label })}
+                  aria-label={accessibleLabel}
                   className="port-marker"
+                  data-port-kind={port.kind}
                   data-port-id={port.id}
+                  data-port-resource={resource}
                   key={port.id}
                 >
+                  <title>{accessibleLabel}</title>
                   <line
                     className="port-connector"
                     x1={position.label.x}
@@ -362,7 +353,18 @@ function BoardView({
                     y2={position.to.y}
                   />
                   <circle cx={position.label.x} cy={position.label.y} r="25" />
-                  <text x={position.label.x} y={position.label.y + 4}>{label}</text>
+                  <text x={position.label.x - (resource ? 5 : 0)} y={position.label.y + 4}>{ratio}</text>
+                  {resource ? (
+                    <foreignObject
+                      className="port-resource-icon"
+                      height="18"
+                      width="18"
+                      x={position.label.x + 4}
+                      y={position.label.y - 9}
+                    >
+                      <ResourceIcon decorative resource={resource} size={15} />
+                    </foreignObject>
+                  ) : null}
                 </g>
               );
             })}
@@ -372,10 +374,14 @@ function BoardView({
               const center = hexCenterPoint(hex);
               const polygonPoints = hexPolygonPoints(hex);
               const canTargetHex = canPlaceRobber && state.decisionPolicy.robberHex.targets.includes(hex.id);
+              const terrainLabel = t(`terrain.${hex.terrain}`);
+              const accessibleLabel = hex.resource
+                ? `${terrainLabel}; ${t(`resource.${hex.resource}`)}`
+                : terrainLabel;
 
               return (
                 <g
-                  aria-label={t(`terrain.${hex.terrain}`)}
+                  aria-label={accessibleLabel}
                   className="hex-tile"
                   data-robber-target={canTargetHex ? hex.id : undefined}
                   key={hex.id}
@@ -394,16 +400,23 @@ function BoardView({
                   role={canTargetHex ? "button" : undefined}
                   tabIndex={canTargetHex ? 0 : -1}
                 >
+                  <title>{accessibleLabel}</title>
                   <polygon
                     className={`board-hex terrain-${hex.terrain}`}
                     points={pointsAttribute(polygonPoints)}
                   />
-                  <text className="terrain-icon" x={center.x} y={center.y - 30}>
-                    {terrainMarks[hex.terrain]}
-                  </text>
-                  <text className="hex-resource" x={center.x} y={center.y - 4}>
-                    {t(`terrain.${hex.terrain}`)}
-                  </text>
+                  {hex.resource ? (
+                    <foreignObject
+                      className="board-resource-icon"
+                      data-board-resource={hex.resource}
+                      height="36"
+                      width="36"
+                      x={center.x - 18}
+                      y={center.y - 40}
+                    >
+                      <ResourceIcon decorative resource={hex.resource} size={28} />
+                    </foreignObject>
+                  ) : null}
                   {hex.diceNumber ? (
                     <g className={`dice-chip ${hex.diceNumber === 6 || hex.diceNumber === 8 ? "hot" : ""}`}>
                       <rect height="46" rx="9" width="50" x={center.x - 25} y={center.y + 8} />
@@ -497,7 +510,7 @@ function BoardView({
 }
 
 function PlayerPanel({ state }: { state: GameTableView }) {
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
   return (
     <section className="players-panel" aria-label={t("board.players")}>
       {state.game.players.map((player, displaySlot) => {
@@ -532,12 +545,15 @@ function PlayerPanel({ state }: { state: GameTableView }) {
               <span>{t("online.resourceCardCount", { count: player.resourceCardCount })}</span>
               <span>{t("online.developmentCardCount", { count: player.developmentCardCount })}</span>
             </div>
-            <div className="resource-strip compact">
-              {privatePresentation ? resources.map((resource) => (
-                <span className={`resource-token ${resource}`} key={resource}>
-                  {`${locale === "en" ? resourceShortLabels[resource] : t(`resource.${resource}`)} ${privatePresentation.resources[resource]}`}
-                </span>
-              )) : null}
+            <div className="resource-strip compact" data-resource-inventory={privatePresentation ? "private" : undefined}>
+              {privatePresentation ? (
+                <ResourceBundle
+                  className="player-resource-inventory"
+                  compact
+                  includeZero
+                  resources={privatePresentation.resources}
+                />
+              ) : null}
             </div>
           </article>
         );
@@ -571,12 +587,12 @@ function RightRail({ state }: { state: GameTableView }) {
       </section>
       <section className="bank-panel">
         <Warehouse size={28} />
-        <div className="resource-strip">
-          {resources.map((resource) => (
-            <span className={`resource-token ${resource}`} key={resource}>
-              {t(`resource.${resource}`)} {state.game.bank.resources[resource]}
-            </span>
-          ))}
+        <div className="resource-strip" data-resource-inventory="bank">
+          <ResourceBundle
+            className="bank-resource-inventory"
+            includeZero
+            resources={state.game.bank.resources}
+          />
         </div>
       </section>
       <PlayerPanel state={state} />
@@ -593,10 +609,6 @@ function StatsPanel({
 }) {
   const { t } = useI18n();
   const [mode, setMode] = useState<StatsMode>("player");
-  const localizedResourceLabels = useMemo(
-    () => Object.fromEntries(resources.map((resource) => [resource, t(`resource.${resource}`)])) as Record<(typeof resources)[number], string>,
-    [t]
-  );
   if (!state.statistics) {
     return (
       <section className="tool-panel stats-panel">
@@ -657,8 +669,16 @@ function StatsPanel({
                   <tr key={row.diceTotal}>
                     <td>{row.diceTotal}</td>
                     <td>{Math.round(row.probability * 1000) / 10}%</td>
-                    <td>{formatResourceMap(row.resources, localizedResourceLabels) || "-"}</td>
-                    <td>{formatResourceMap(row.expected, localizedResourceLabels) || "-"}</td>
+                    <td data-stat-resource-bundle="gain">
+                      {resources.some((resource) => row.resources[resource] > 0)
+                        ? <ResourceBundle compact resources={row.resources} />
+                        : t("stats.noGain")}
+                    </td>
+                    <td data-stat-resource-bundle="expected">
+                      {resources.some((resource) => row.expected[resource] > 0)
+                        ? <ResourceBundle compact resources={row.expected} />
+                        : t("stats.noGain")}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -689,7 +709,11 @@ function StatsPanel({
             {state.game.players.map((player) => (
               <p key={player.id}>
                 <strong>{player.name}</strong>
-                <span>{formatResourceMap(diceIncome?.players[player.id], localizedResourceLabels) || t("stats.noGain")}</span>
+                <span data-stat-resource-bundle="dice">
+                  {resources.some((resource) => (diceIncome?.players[player.id]?.[resource] ?? 0) > 0)
+                    ? <ResourceBundle compact resources={diceIncome?.players[player.id] ?? {}} />
+                    : t("stats.noGain")}
+                </span>
               </p>
             ))}
           </div>
@@ -702,7 +726,9 @@ function StatsPanel({
               <tr>
                 <th>{t("stats.player")}</th>
                 {resources.map((resource) => (
-                  <th key={resource}>{localizedResourceLabels[resource]}</th>
+                  <th key={resource} scope="col">
+                    <ResourceIcon resource={resource} size={17} />
+                  </th>
                 ))}
                 <th>{t("stats.totalEv")}</th>
               </tr>
