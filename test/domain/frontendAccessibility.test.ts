@@ -13,6 +13,10 @@ describe("frontend accessibility and responsive contracts", () => {
     expect(html).toContain('aria-label="Token amount"');
     expect(html).toContain('aria-label="Maritime give resource"');
     expect(html).toContain('aria-label="Maritime receive resource"');
+    expect(html).toContain('class="resource-choice-group" role="group"');
+    expect(html).toContain('data-maritime-give="wood"');
+    expect(html).toContain('aria-pressed="false"');
+    expect(html).toContain('aria-describedby="maritime-unavailable-reason"');
   });
 
   it("exposes selected modes, live notices, and distinct Wood/Wool abbreviations", () => {

@@ -25,9 +25,14 @@ function availability(value: AvailabilityFact<string>, connected: boolean) {
 function projectActions(source: OnlineAllowedActions, connected: boolean, privateState: PrivateSeatState, game: PublicGameView): GameTableActions {
   const action = (value: AvailabilityFact<string>) => availability(value, connected);
   return {
-    roll: action(source.turn.roll), endTurn: action(source.turn.endTurn), road: action(source.turn.road),
-    settlement: action(source.turn.settlement), city: action(source.turn.city),
-    buyDevelopmentCard: action(source.turn.buyDevelopmentCard),
+    roll: action(source.turn.roll), endTurn: action(source.turn.endTurn),
+    road: { ...action(source.turn.road), cost: { ...source.turn.road.cost } },
+    settlement: { ...action(source.turn.settlement), cost: { ...source.turn.settlement.cost } },
+    city: { ...action(source.turn.city), cost: { ...source.turn.city.cost } },
+    buyDevelopmentCard: {
+      ...action(source.turn.buyDevelopmentCard),
+      cost: { ...source.turn.buyDevelopmentCard.cost }
+    },
     developmentCards: source.turn.developmentCards.map((card) => ({
       ...(card.cardId ? { cardId: card.cardId } : {}), count: card.count,
       enabled: connected && card.enabled, kind: card.kind,

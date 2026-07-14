@@ -144,10 +144,10 @@ export interface GameTableAvailability { readonly enabled: boolean; readonly rea
 export interface GameTableActions {
   readonly roll: GameTableAvailability;
   readonly endTurn: GameTableAvailability;
-  readonly road: GameTableAvailability;
-  readonly settlement: GameTableAvailability;
-  readonly city: GameTableAvailability;
-  readonly buyDevelopmentCard: GameTableAvailability;
+  readonly road: GameTableAvailability & { readonly cost: GameTableResourceMap };
+  readonly settlement: GameTableAvailability & { readonly cost: GameTableResourceMap };
+  readonly city: GameTableAvailability & { readonly cost: GameTableResourceMap };
+  readonly buyDevelopmentCard: GameTableAvailability & { readonly cost: GameTableResourceMap };
   readonly developmentCards: readonly { readonly cardId?: string; readonly count: number; readonly enabled: boolean; readonly kind: "knight" | "roadBuilding" | "yearOfPlenty" | "monopoly"; readonly reason?: string }[];
   readonly maritime: { readonly enabled: boolean; readonly reason?: string; readonly ratios: Readonly<Record<GameTableResource, number>>; readonly trades: readonly { readonly give: GameTableResource; readonly ratio: number; readonly receives: readonly GameTableResource[] }[] };
   readonly commerce: {

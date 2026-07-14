@@ -65,6 +65,9 @@ describe("product polish UI", () => {
     expect(visibleHtml).toContain("Loss must discard 4");
     expect(html).toContain('aria-label="Loss wood discard"');
     expect(html).toContain('aria-label="Loss brick discard"');
+    expect(html).toContain('aria-describedby="discard-unavailable-reason"');
+    expect(html).toContain('data-resource-icon="wood"');
+    expect(html).toContain('data-resource-icon="brick"');
     expect(html).toContain("Submit Discard");
   });
 
@@ -184,6 +187,8 @@ describe("product polish UI", () => {
     expect(plentyHtml).toContain('data-development-effect="yearOfPlenty"');
     expect(plentyHtml).toContain("Choose 2 resources");
     expect(plentyHtml.match(/data-resource-choice="wood"[^>]*disabled/)).toBeNull();
+    expect(plentyHtml).toContain('data-resource-badge="wood"');
+    expect(plentyHtml).toContain('aria-describedby="development-resource-unavailable-reason"');
     expect(plentyHtml).not.toContain('data-resource-choice="brick"');
 
     const monopolyGame = {
@@ -208,6 +213,7 @@ describe("product polish UI", () => {
     expect(monopolyHtml).toContain('data-development-effect="monopoly"');
     expect(monopolyHtml).toContain("Choose a resource to monopolize");
     expect(monopolyHtml).toContain('data-resource-choice="ore"');
+    expect(monopolyHtml).toContain('data-resource-badge="ore"');
   });
 
   it("renders accessible legal road targets during Road Building", () => {

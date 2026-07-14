@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowRightLeft, Landmark } from "lucide-react";
+import { ArrowRightLeft, Landmark, Layers3, TimerReset } from "lucide-react";
 import { resources } from "../domain/types";
-import { formatResourceMap, resourceLabels } from "./resourceLabels";
 import type { GameTableDispatch, GameTableView } from "./GameTable";
 import { translateRuleText, useI18n } from "./i18n";
+import { ResourceBadge, ResourceBundle } from "./ResourceBadge";
 
 export function CommercePanel({
   state,
@@ -30,10 +30,6 @@ export function CommercePanel({
     state.controlledPlayers.find((control) => control.isActive)?.controlId ?? state.controlledPlayers[0]?.controlId ?? ""
   );
   const [bids, setBids] = useState<Record<string, number>>({});
-  const localizedResourceLabels = useMemo(
-    () => Object.fromEntries(resources.map((resource) => [resource, t(`resource.${resource}`)])) as typeof resourceLabels,
-    [t]
-  );
 
   useEffect(() => {
     if (!validRecipients.some((player) => player.id === recipientId)) {
@@ -56,6 +52,12 @@ export function CommercePanel({
     Number.isInteger(tokenAmount) &&
     tokenAmount > 0 &&
     tokenAmount <= availability.commerce.transfer.maxAmount;
+  const gatheringCooldownStatus = state.guild.gathering.cooldownRemaining === 0
+    ? t("commerce.gatheringReady")
+    : t("commerce.gatheringCooldownRemaining", {
+        count: state.guild.gathering.cooldownRemaining
+      });
+  const gatheringCooldownLabel = `${t("commerce.gatheringCooldown")}: ${gatheringCooldownStatus}`;
 
   return (
     <section className="commerce-panel">
@@ -66,7 +68,7 @@ export function CommercePanel({
       <div className="trade-slots">
         {state.guild.tradeSlots.map((slot) => (
           <article className="trade-slot" key={slot.id}>
-            <strong>{formatResourceMap(slot.requires, localizedResourceLabels)}</strong>
+            <strong><ResourceBundle compact resources={slot.requires} /></strong>
             <span>
               <ArrowRightLeft size={14} /> {t("commerce.tokens", { count: slot.tokenReward })}
             </span>
@@ -130,14 +132,27 @@ export function CommercePanel({
           <strong>{t(`commerce.phase.${state.guild.gathering.phase}`)}</strong>
         </div>
         {state.guild.gathering.phase === "idle" ? (
-          <button
-            aria-describedby="gathering-start-unavailable-reason"
-            disabled={!availability.commerce.startGathering.enabled}
-            onClick={() => dispatch({ type: "commerce.startGathering" })}
-            type="button"
-          >
-            {t("commerce.startGathering")}
-          </button>
+          <div className="gathering-start-row">
+            <span
+              aria-label={gatheringCooldownLabel}
+              className={`gathering-cooldown-badge${state.guild.gathering.cooldownRemaining === 0 ? " ready" : ""}`}
+              data-gathering-cooldown={state.guild.gathering.cooldownRemaining}
+              role="status"
+              title={gatheringCooldownLabel}
+            >
+              <TimerReset aria-hidden="true" size={16} />
+              <strong>{state.guild.gathering.cooldownRemaining}</strong>
+              <span>{gatheringCooldownStatus}</span>
+            </span>
+            <button
+              aria-describedby="gathering-start-unavailable-reason"
+              disabled={!availability.commerce.startGathering.enabled}
+              onClick={() => dispatch({ type: "commerce.startGathering" })}
+              type="button"
+            >
+              {t("commerce.startGathering")}
+            </button>
+          </div>
         ) : null}
         {state.guild.gathering.phase === "redemption" ? (
           <>
@@ -161,6 +176,10 @@ export function CommercePanel({
             <div className="resource-buttons">
               {resources.map((resource) => (
                 <button
+                  aria-label={t("commerce.redeemResource", {
+                    resource: t(`resource.${resource}`),
+                    count: gatheringControl?.gatheringBankStock[resource] ?? 0
+                  })}
                   disabled={
                     !gatheringControl ||
                     gatheringControl.guildTokens === 0 ||
@@ -175,9 +194,17 @@ export function CommercePanel({
                         resources: { [resource]: 1 }
                       })
                   }
+                  title={t("commerce.redeemResource", {
+                    resource: t(`resource.${resource}`),
+                    count: gatheringControl?.gatheringBankStock[resource] ?? 0
+                  })}
                   type="button"
                 >
-                  +{localizedResourceLabels[resource]} ({t("commerce.bank", { count: gatheringControl?.gatheringBankStock[resource] ?? 0 })})
+                  <ResourceBadge
+                    decorative
+                    quantity={gatheringControl?.gatheringBankStock[resource] ?? 0}
+                    resource={resource}
+                  />
                 </button>
               ))}
             </div>
@@ -254,24 +281,39 @@ export function CommercePanel({
             </button> : null}
           </div>
         ) : null}
-        {state.guild.gathering.lastAuctionResult ? (
-          <p className="auction-result">
-            {t("commerce.auctionResult", {
+        {state.guild.gathering.lastAuctionResult ? (() => {
+          const result = state.guild.gathering.lastAuctionResult;
+          const resourceCardCount = result.outcome.resourceCardCount ?? 0;
+          const outcome = result.outcome.kind === "voucher"
+            ? t("commerce.outcome.voucher")
+            : result.outcome.kind === "developmentCard"
+              ? state.sealedAuction
+                ? t("online.auctionDevelopmentCardGeneric")
+                : t("commerce.outcome.developmentCard", { cardKind: t("action.devCard") })
+              : t("resource.cardsGeneric", { count: resourceCardCount });
+          const summary = t("commerce.auctionResult", {
               winnerName: state.guild.gathering.lastAuctionResult.winnerName,
               round: state.guild.gathering.lastAuctionResult.round,
               bid: state.guild.gathering.lastAuctionResult.winningBid,
-              outcome: state.guild.gathering.lastAuctionResult.outcome.kind === "voucher"
-                ? t("commerce.outcome.voucher")
-                : state.guild.gathering.lastAuctionResult.outcome.kind === "developmentCard"
-                  ? state.sealedAuction
-                    ? t("online.auctionDevelopmentCardGeneric")
-                    : t("commerce.outcome.developmentCard", { cardKind: t("action.devCard") })
-                  : t("commerce.outcome.resources", {
-                      resources: state.guild.gathering.lastAuctionResult.outcome.resourceCardCount ?? 0
-                    })
-            })}
-          </p>
-        ) : null}
+              outcome
+            });
+          return (
+            <p className="auction-result">
+              {result.outcome.kind === "resources" ? (
+                <>
+                  <span className="sr-only">{summary}</span>
+                  <span aria-hidden="true" className="auction-result-visual">
+                    <span>{result.winnerName} · {result.round} · {result.winningBid}</span>
+                    <span className="generic-resource-card-count" title={outcome}>
+                      <Layers3 aria-hidden="true" size={18} />
+                      <strong>{resourceCardCount}</strong>
+                    </span>
+                  </span>
+                </>
+              ) : summary}
+            </p>
+          );
+        })() : null}
         <button
           aria-describedby="prize-unavailable-reason"
           disabled={!availability.commerce.redeemPrize.enabled}

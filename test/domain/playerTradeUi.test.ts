@@ -6,6 +6,7 @@ import { createLocalGameTableView } from "../../src/app/localGameState";
 import { emptyResources } from "../../src/domain/types";
 import { PlayerTradePanel } from "../../src/ui/PlayerTradePanel";
 import { TradeHubPanel } from "../../src/ui/TradeHubPanel";
+import { I18nProvider } from "../../src/ui/i18n";
 import { executeMatchCommandForTest } from "./matchCommandTestUtils";
 import { createScenarioAppState } from "../fixtures/createScenarioGame";
 
@@ -60,8 +61,33 @@ describe("player trade UI", () => {
         dispatch: () => undefined
       })
     ).replaceAll("<!-- -->", "");
-    const visibleText = offerHtml.replace(/<[^>]+>/g, "");
-    expect(visibleText).toContain("Voyage1969 offers 1 Wood, 1 Wool for 1 Grain, 1 Ore");
+    expect(offerHtml).toContain(
+      '<span class="sr-only">Voyage1969 offers 1 Wood, 1 Wool for 1 Grain, 1 Ore</span>'
+    );
+    expect(offerHtml).not.toContain(
+      '<p aria-label="Voyage1969 offers 1 Wood, 1 Wool for 1 Grain, 1 Ore"'
+    );
+    const visualSummary = offerHtml.match(
+      /<span aria-hidden="true" class="player-trade-summary-visual">([\s\S]*?)<\/span><\/p>/
+    )?.[1] ?? "";
+    const visualText = visualSummary.replace(/<[^>]+>/g, "");
+    expect(visualText).not.toContain("Wood");
+    expect(visualText).not.toContain("Wool");
+    expect(offerHtml).toContain('data-resource-badge="wood"');
+    expect(offerHtml).toContain('data-resource-badge="ore"');
+    const chineseOfferHtml = renderToString(
+      createElement(
+        I18nProvider,
+        { initialLocale: "zh-CN" },
+        createElement(PlayerTradePanel, {
+          state: createLocalGameTableView(createTradeState()),
+          dispatch: () => undefined
+        })
+      )
+    ).replaceAll("<!-- -->", "");
+    expect(chineseOfferHtml).toContain(
+      '<span class="sr-only">Voyage1969 提供 1 木材，1 羊毛，索取 1 粮食，1 矿石</span>'
+    );
     expect(offerHtml.match(/<button[^>]*>Accept as Loss<\/button>/)?.[0] ?? "").not.toContain("disabled");
     expect(offerHtml.match(/<button[^>]*>Accept as Kay<\/button>/)?.[0] ?? "").toContain("disabled");
     expect(offerHtml).toContain("Kay cannot afford the requested resources");

@@ -139,10 +139,13 @@ function projectLocalActions(state: AppState): GameTableView["legality"]["action
   return {
     roll: availability(source.roll),
     endTurn: availability(source.endTurn),
-    road: availability(source.road),
-    settlement: availability(source.settlement),
-    city: availability(source.city),
-    buyDevelopmentCard: availability(source.buyDevelopmentCard),
+    road: { ...availability(source.road), cost: cloneResources(source.road.cost) },
+    settlement: { ...availability(source.settlement), cost: cloneResources(source.settlement.cost) },
+    city: { ...availability(source.city), cost: cloneResources(source.city.cost) },
+    buyDevelopmentCard: {
+      ...availability(source.buyDevelopmentCard),
+      cost: cloneResources(source.buyDevelopmentCard.cost)
+    },
     developmentCards: source.developmentCards.map((card) => ({
       ...(card.cardId ? { cardId: card.cardId } : {}),
       count: card.count,

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { emptyResources, resources, type ResourceMap } from "../domain/types";
-import { useI18n } from "./i18n";
+import { translateRuleText, useI18n } from "./i18n";
 import type { GameTableDispatch, GameTableGameView, GameTableView } from "./GameTable";
+import { ResourceIcon } from "./ResourceBadge";
 
 export function TurnFlowPanel({
   game,
@@ -44,8 +45,9 @@ export function TurnFlowPanel({
         <div className="turn-flow-resources">
           {resources.map((resource) => (
             <label key={resource}>
-              {t(`resource.${resource}`)}
+              <ResourceIcon resource={resource} />
               <input
+                aria-describedby="discard-unavailable-reason"
                 aria-label={locale === "en" ? `${playerName} ${resource} discard` : `${playerName} ${t(`resource.${resource}`)}弃牌`}
                 disabled={!discardPolicy.enabled}
                 max={discardPolicy.maxByResource[resource]}
@@ -64,6 +66,9 @@ export function TurnFlowPanel({
             </label>
           ))}
         </div>
+        <span className="sr-only" id="discard-unavailable-reason">
+          {translateRuleText(locale, discardPolicy.reason)}
+        </span>
         <button
           disabled={!discardPolicy.enabled || !validSelection}
           onClick={() =>

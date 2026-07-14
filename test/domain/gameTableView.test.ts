@@ -58,8 +58,8 @@ function callerOnlyFixture(): GameTableView {
     legality: {
       actions: {
         roll: { enabled: true, targets: [] }, endTurn: unavailable,
-        road: unavailable, settlement: unavailable, city: unavailable,
-        buyDevelopmentCard: unavailable, developmentCards: [],
+        road: { ...unavailable, cost: noResources }, settlement: { ...unavailable, cost: noResources }, city: { ...unavailable, cost: noResources },
+        buyDevelopmentCard: { ...unavailable, cost: noResources }, developmentCards: [],
         maritime: { enabled: false, reason: "Unavailable", ratios: { wood: 4, brick: 4, wool: 4, grain: 4, ore: 4 }, trades: [] },
         commerce: { tradeSlots: [], transfer: { ...unavailable, maxAmount: 0, recipientIds: [] }, startGathering: unavailable, openAuction: unavailable, redeemPrize: unavailable, gatheringPlayers: [] }
       },

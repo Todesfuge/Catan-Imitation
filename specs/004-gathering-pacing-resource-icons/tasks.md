@@ -237,24 +237,24 @@ Interfaces:
 
 Steps:
 
-- [ ] Add component tests proving five distinct icon identities/classes, semantic resource classes, visible integer/decimal/zero quantities, and localized English/Chinese accessible names.
-- [ ] Add a repository guard proving only `ResourceBadge.tsx` declares a resource-to-icon map and no new icon/dependency asset is introduced.
-- [ ] Add operational render tests for build/development costs, maritime choices, trade bundles, Commerce slots/redemption, discard/development decisions, generic sealed-auction resource count, and one cooldown badge.
-- [ ] Add keyboard/accessibility assertions for icon-backed resource selection: programmatic group/option names, `aria-pressed` state, focusable buttons, input labels, disabled reasons, and ready state not conveyed by color alone.
-- [ ] Run `pnpm vitest run test/domain/resourcePresentation.test.ts test/domain/playerTradeUi.test.ts test/domain/productPolish.test.ts test/domain/frontendAccessibility.test.ts test/domain/gameTableView.test.ts`; expect RED on missing component, missing action costs, visible abbreviations/words, and dual-purpose native resource selects.
-- [ ] Implement `ResourceBadge.tsx` with the approved icons, existing semantic color classes, shared quantity formatting, localized `aria-label`/`title`, and no remote asset or second map.
-- [ ] Preserve cost maps through Local/Online adapters and render icon bundles alongside road, settlement, city, and development-card actions.
-- [ ] Replace maritime resource `<select>` elements with two fixed keyboard-operable icon button groups; retain player/non-resource native selects.
-- [ ] Replace player-trade editor labels and pending offer/request visible strings with structured icon bundles while retaining a complete localized accessible summary.
-- [ ] Replace Commerce trade-slot costs and redemption buttons with resource badges; show sealed public resource-card count with a generic pictogram without exposing resource composition.
-- [ ] Replace discard/year-of-plenty/monopoly resource controls and development-card costs with shared icons while preserving existing localized input/action names.
-- [ ] Add one compact Commerce Guild table-cooldown badge and localized ready/remaining text; keep the Start button's highest-priority disabled reason linked with `aria-describedby`.
-- [ ] Add filled badge, selection, focus, ready, disabled, compact, and responsive styles using existing tokens/resource colors.
-- [ ] Rerun the focused command; expect all operational and accessibility tests GREEN.
-- [ ] Run `pnpm vitest run test/domain/localization.test.ts test/online/onlineGameUi.test.ts`; expect bilingual/shared Online presentation GREEN.
-- [ ] Run `pnpm test`, `pnpm build`, and `pnpm smoke:ui`; expect main regression/build/UI smoke GREEN.
-- [ ] Review source for duplicate icon maps, native resource options, visible operational abbreviations, and resource-name loss from the accessibility tree.
-- [ ] Commit `feat: render resources with shared badges`.
+- [x] Add component tests proving five distinct icon identities/classes, semantic resource classes, visible integer/decimal/zero quantities, and localized English/Chinese accessible names.
+- [x] Add a repository guard proving only `ResourceBadge.tsx` declares a resource-to-icon map and no new icon/dependency asset is introduced.
+- [x] Add operational render tests for build/development costs, maritime choices, trade bundles, Commerce slots/redemption, discard/development decisions, generic sealed-auction resource count, and one cooldown badge.
+- [x] Add keyboard/accessibility assertions for icon-backed resource selection: programmatic group/option names, `aria-pressed` state, focusable buttons, input labels, disabled reasons, and ready state not conveyed by color alone.
+- [x] Run `pnpm vitest run test/domain/resourcePresentation.test.ts test/domain/playerTradeUi.test.ts test/domain/productPolish.test.ts test/domain/frontendAccessibility.test.ts test/domain/gameTableView.test.ts`; expect RED on missing component, missing action costs, visible abbreviations/words, and dual-purpose native resource selects.
+- [x] Implement `ResourceBadge.tsx` with the approved icons, existing semantic color classes, shared quantity formatting, localized `aria-label`/`title`, and no remote asset or second map.
+- [x] Preserve cost maps through Local/Online adapters and render icon bundles alongside road, settlement, city, and development-card actions.
+- [x] Replace maritime resource `<select>` elements with two fixed keyboard-operable icon button groups; retain player/non-resource native selects.
+- [x] Replace player-trade editor labels and pending offer/request visible strings with structured icon bundles while retaining a complete localized accessible summary.
+- [x] Replace Commerce trade-slot costs and redemption buttons with resource badges; show sealed public resource-card count with a generic pictogram without exposing resource composition.
+- [x] Replace discard/year-of-plenty/monopoly resource controls and development-card costs with shared icons while preserving existing localized input/action names.
+- [x] Add one compact Commerce Guild table-cooldown badge and localized ready/remaining text; keep the Start button's highest-priority disabled reason linked with `aria-describedby`.
+- [x] Add filled badge, selection, focus, ready, disabled, compact, and responsive styles using existing tokens/resource colors.
+- [x] Rerun the focused command; expect all operational and accessibility tests GREEN.
+- [x] Run `pnpm vitest run test/domain/localization.test.ts test/online/onlineGameUi.test.ts`; expect bilingual/shared Online presentation GREEN.
+- [x] Run `pnpm test`, `pnpm build`, and `pnpm smoke:ui`; expect main regression/build/UI smoke GREEN.
+- [x] Review source for duplicate icon maps, native resource options, visible operational abbreviations, and resource-name loss from the accessibility tree.
+- [x] Commit `feat: render resources with shared badges`.
 
 ## Task 6 — T006: Board, ports, inventory, and statistics icon convergence
 

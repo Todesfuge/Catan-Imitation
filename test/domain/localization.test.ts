@@ -26,6 +26,14 @@ describe("English and Simplified Chinese localization", () => {
     expect(readStoredLocale({ getItem: () => "zh-CN" })).toBe("zh-CN");
   });
 
+  it("localizes resource quantities, bundles, and generic card counts", () => {
+    expect(translate("en", "resource.quantity", { resource: "Wood", quantity: 2 })).toBe("Wood: 2");
+    expect(translate("en", "resource.bundleSeparator")).toBe(", ");
+    expect(translate("en", "resource.cardsGeneric", { count: 3 })).toBe("3 resource card(s)");
+    expect(translate("zh-CN", "resource.quantity", { resource: "木材", quantity: 2 })).not.toBe("Wood: 2");
+    expect(translate("zh-CN", "resource.cardsGeneric", { count: 3 })).not.toBe("3 resource card(s)");
+  });
+
   it("renders English by default and the approved core surfaces in Chinese", () => {
     const english = renderToString(createElement(App));
     expect(english).toContain("Game Log");

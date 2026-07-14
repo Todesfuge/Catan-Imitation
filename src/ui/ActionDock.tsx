@@ -12,6 +12,7 @@ import { resources, type Resource } from "../domain/types";
 import { DevelopmentCardPanel } from "./DevelopmentCardPanel";
 import type { GameTableDispatch, GameTableView } from "./GameTable";
 import { translate, translateRuleText, useI18n, type Locale } from "./i18n";
+import { ResourceBadge, ResourceBundle } from "./ResourceBadge";
 
 export type BoardInteractionMode =
   | { kind: "road" }
@@ -131,6 +132,7 @@ export function ActionDock({
         type="button"
       >
         <Hammer size={20} /> {t("action.road")}
+        <span data-action-cost="road"><ResourceBundle className="action-cost" compact resources={availability.road.cost} /></span>
       </button>
       <button
         aria-describedby="settlement-unavailable-reason"
@@ -143,6 +145,7 @@ export function ActionDock({
         type="button"
       >
         <Home size={20} /> {t("action.settlement")}
+        <span data-action-cost="settlement"><ResourceBundle className="action-cost" compact resources={availability.settlement.cost} /></span>
       </button>
       <button
         aria-describedby="city-unavailable-reason"
@@ -155,6 +158,7 @@ export function ActionDock({
         type="button"
       >
         <Castle size={20} /> {t("action.city")}
+        <span data-action-cost="city"><ResourceBundle className="action-cost" compact resources={availability.city.cost} /></span>
       </button>
       <button
         aria-describedby="development-buy-unavailable-reason"
@@ -166,52 +170,71 @@ export function ActionDock({
         type="button"
       >
         <ScrollText size={20} /> {t("action.devCard")}
+        <span data-action-cost="development-card"><ResourceBundle className="action-cost" compact resources={availability.buyDevelopmentCard.cost} /></span>
       </button>
       <DevelopmentCardPanel state={state} dispatch={dispatch} />
       <div className="maritime-action-group">
-        <div className="maritime-ratio-guide" aria-label="Effective maritime trade ratios">
+        <div className="maritime-ratio-guide" aria-label={t("action.maritimeRatiosLabel")}>
           {resources.map((resource) => (
-            <span key={resource}>
-              {t(`resource.${resource}`)} {availability.maritime.ratios[resource]}:1
+            <span
+              aria-label={`${t(`resource.${resource}`)} ${availability.maritime.ratios[resource]}:1`}
+              key={resource}
+            >
+              <ResourceBadge compact decorative quantity={availability.maritime.ratios[resource]} resource={resource} />
+              <span aria-hidden="true">:1</span>
             </span>
           ))}
         </div>
         <div className="maritime-selectors">
-          <select
+          <div
             aria-label={t("action.maritimeGiveLabel")}
-            onChange={(event) => {
-              setMaritimeGive(event.currentTarget.value as Resource | "");
-              setMaritimeReceive("");
-            }}
-            value={maritimeGive}
+            className="resource-choice-group"
+            role="group"
           >
-            <option value="">{t("action.giveResource")}</option>
             {resources.map((resource) => {
               const trade = availability.maritime.trades.find(
                 (candidate) => candidate.give === resource
               );
               return (
-                <option disabled={!trade} key={resource} value={resource}>
-                  {t(`resource.${resource}`)} {trade ? `${trade.ratio}:1` : t("action.unavailable")}
-                </option>
+                <button
+                  aria-describedby="maritime-unavailable-reason"
+                  aria-label={`${t("action.giveResource")}: ${t(`resource.${resource}`)} ${availability.maritime.ratios[resource]}:1`}
+                  aria-pressed={maritimeGive === resource}
+                  data-maritime-give={resource}
+                  disabled={!trade}
+                  key={resource}
+                  onClick={() => {
+                    setMaritimeGive(resource);
+                    setMaritimeReceive("");
+                  }}
+                  type="button"
+                >
+                  <ResourceBadge compact decorative quantity={availability.maritime.ratios[resource]} resource={resource} />
+                  <span aria-hidden="true">:1</span>
+                </button>
               );
             })}
-          </select>
-          <select
+          </div>
+          <div
             aria-label={t("action.maritimeReceiveLabel")}
-            disabled={!selectedTrade}
-            onChange={(event) =>
-              setMaritimeReceive(event.currentTarget.value as Resource | "")
-            }
-            value={maritimeReceive}
+            className="resource-choice-group"
+            role="group"
           >
-            <option value="">{t("action.receiveResource")}</option>
-            {(selectedTrade?.receives ?? []).map((resource) => (
-              <option key={resource} value={resource}>
-                {t(`resource.${resource}`)} ({state.game.bank.resources[resource]})
-              </option>
+            {resources.map((resource) => (
+              <button
+                aria-describedby="maritime-unavailable-reason"
+                aria-label={`${t("action.receiveResource")}: ${t(`resource.${resource}`)} (${t("commerce.bank", { count: state.game.bank.resources[resource] })})`}
+                aria-pressed={maritimeReceive === resource}
+                data-maritime-receive={resource}
+                disabled={!selectedTrade?.receives.includes(resource)}
+                key={resource}
+                onClick={() => setMaritimeReceive(resource)}
+                type="button"
+              >
+                <ResourceBadge compact decorative quantity={state.game.bank.resources[resource]} resource={resource} />
+              </button>
             ))}
-          </select>
+          </div>
         </div>
         <button
           aria-describedby="maritime-unavailable-reason"

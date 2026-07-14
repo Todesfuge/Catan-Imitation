@@ -219,8 +219,21 @@ describe("online game projection adapter", () => {
       disabledReason: { code: "GATHERING_COOLDOWN", params: { remainingTurns: 3 } },
       targets: []
     };
+    allowed.turn.road.cost = { ...zero, wood: 1, brick: 1 };
+    allowed.turn.settlement.cost = { ...zero, wood: 1, brick: 1, wool: 1, grain: 1 };
+    allowed.turn.city.cost = { ...zero, grain: 2, ore: 3 };
+    allowed.turn.buyDevelopmentCard.cost = { ...zero, wool: 1, grain: 1, ore: 1 };
     const view = createOnlineGameTableView(state(snapshot));
     expect(view.guild.gathering.cooldownRemaining).toBe(3);
+    expect(view.legality.actions.road.cost).toEqual({ ...zero, wood: 1, brick: 1 });
+    expect(view.legality.actions.city.cost).toEqual({ ...zero, grain: 2, ore: 3 });
+    expect(view.legality.actions.buyDevelopmentCard.cost).toEqual({ ...zero, wool: 1, grain: 1, ore: 1 });
+    expect(view.legality.actions.road.cost).not.toBe(allowed.turn.road.cost);
+    const html = renderToStaticMarkup(React.createElement(I18nProvider, null,
+      React.createElement(OnlineGame, { roomCode: "234567", state: state(snapshot), dispatch: vi.fn(), reconnect: vi.fn(), onExit: vi.fn(), createCommandId: crypto.randomUUID })
+    ));
+    expect(html).toContain('data-gathering-cooldown="3"');
+    expect(html).toContain('data-action-cost="road"');
   });
 
   it.each([

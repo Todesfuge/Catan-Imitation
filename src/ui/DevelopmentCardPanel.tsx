@@ -1,8 +1,8 @@
 import React from "react";
-import { resources } from "../domain/types";
 import { edgeProjection } from "./boardGeometry";
 import type { GameTableDispatch, GameTableGameView, GameTableResource, GameTableView } from "./GameTable";
 import { translateRuleText, useI18n } from "./i18n";
+import { ResourceBadge } from "./ResourceBadge";
 
 export function DevelopmentCardPanel({
   state,
@@ -39,6 +39,10 @@ export function DevelopmentCardPanel({
         <div className="development-resource-buttons">
           {(resourcePolicy.targets as readonly GameTableResource[]).map((resource) => (
             <button
+              aria-describedby="development-resource-unavailable-reason"
+              aria-label={isPlenty
+                ? `${t("development.chooseResource", { count: 1 })}: ${t(`resource.${resource}`)} (${game.bank.resources[resource]})`
+                : `${t("development.chooseMonopoly")}: ${t(`resource.${resource}`)}`}
               data-resource-choice={resource}
               disabled={!resourcePolicy.enabled}
               key={resource}
@@ -51,11 +55,17 @@ export function DevelopmentCardPanel({
               }
               type="button"
             >
-              {t(`resource.${resource}`)}
-              {isPlenty ? ` (${game.bank.resources[resource]})` : ""}
+              <ResourceBadge
+                decorative
+                quantity={isPlenty ? game.bank.resources[resource] : 1}
+                resource={resource}
+              />
             </button>
           ))}
         </div>
+        <span className="sr-only" id="development-resource-unavailable-reason">
+          {translateRuleText(locale, resourcePolicy.reason)}
+        </span>
       </section>
     );
   }
