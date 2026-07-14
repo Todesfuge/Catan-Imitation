@@ -12,16 +12,16 @@ Artifact: `specs/004-gathering-pacing-resource-icons/spec.md`
 
 ## Cooldown Semantics
 
-- [x] `n`, a cooldown turn, the initial `2n`, table `n`, and personal `n²-n` durations are defined.
-- [x] Setup does not consume cooldowns and the initiating turn is excluded.
-- [x] Current-player, normal-action-phase, idle-phase, table, and personal gates are all explicit.
-- [x] Independent player histories, restart reset, gathering completion, and zero clamping are testable.
+- [x] `n`, a cooldown turn, the initial `2n`, and post-gathering `n` durations are defined.
+- [x] Setup does not consume the cooldown and the initiating turn is excluded.
+- [x] Current-player, normal-action-phase, idle-phase, and table-cooldown gates are all explicit.
+- [x] Shared-table fairness, restart reset, gathering completion, and zero clamping are testable.
 - [x] Absolute turn targets plus duration caps are authoritative and do not rely on browser time or per-turn batch mutation.
 
 ## Online Authority and Migration
 
 - [x] The public command omits actor identity and the authenticated Worker boundary supplies it.
-- [x] Public table and private caller cooldown projections are distinguished.
+- [x] Public table cooldown and caller-specific start authorization are distinguished without duplicating cooldown state.
 - [x] Storage and wire schema v3 requirements are explicit.
 - [x] v2 lobby, idle/complete match, and active gathering migrations have deterministic baselines.
 - [x] Migration validation, atomic persistence, idempotency, version checks, reconnect, and recovery behavior are retained.

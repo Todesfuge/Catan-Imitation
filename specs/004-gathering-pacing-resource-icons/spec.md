@@ -6,17 +6,17 @@ Workflow phase: Specification
 
 ## Problem
 
-The Commerce Guild gathering can currently be started whenever its phase is idle, and a separate six-round rule can start it automatically. This lets gatherings interrupt the match too often and gives no individual pacing cost to the player who starts one. The current state also cannot authoritatively answer which online player is allowed to start the next gathering.
+The Commerce Guild gathering can currently be started whenever its phase is idle, and a separate six-round rule can start it automatically. This lets gatherings interrupt the match too often and provides no shared, predictable interval between gatherings. The current state also cannot authoritatively answer when the next gathering may start or which online player is allowed to start it.
 
 Initial setup omits the standard reward from each player's second settlement, leaving every player with an empty hand after setup. Resource-heavy interfaces compound the problem by repeating localized resource words or abbreviations across compact controls and board hexes, which makes the table slower to scan than a board-game interface should be.
 
-This release introduces deterministic turn-based gathering cooldowns, grants the second-settlement starting resources, and replaces operational resource text with one accessible icon system shared across Local and Online play.
+This release introduces one deterministic turn-based gathering cooldown, grants the second-settlement starting resources, and replaces operational resource text with one accessible icon system shared across Local and Online play.
 
 ## Users and Actors
 
-- Current Local player: sees authoritative gathering cooldowns, may start a gathering only on their own normal action phase, and receives resources from the second setup settlement.
-- Authenticated Online player: sees the public table cooldown and their own private cooldown; the Worker derives their identity from the authenticated seat.
-- Other players: retain independent personal cooldown histories and observe one synchronized global gathering phase.
+- Current Local player: sees the authoritative gathering cooldown, may start a gathering only on their own normal action phase, and receives resources from the second setup settlement.
+- Authenticated Online player: sees the public table cooldown; the Worker derives their identity from the authenticated seat when they attempt to start a gathering.
+- Other players: observe the same synchronized global gathering phase and cooldown.
 - Keyboard and assistive-technology user: receives complete localized resource and cooldown names even when the visual interface uses icons.
 - Operator or reviewer: verifies v2-to-v3 migration, reconnect convergence, accessibility, and responsive presentation.
 
@@ -26,12 +26,12 @@ This release introduces deterministic turn-based gathering cooldowns, grants the
 
 - Remove the automatic six-round gathering trigger.
 - Allow only the current active player to manually start a gathering during a normal post-roll action phase.
-- Add one table-wide gathering cooldown and one per-player gathering cooldown, both measured in completed player turns.
-- Start a new or restarted match with a table cooldown of `2n` and personal cooldowns of zero, where `n` is the current player count.
-- Reset the table cooldown to `n` and the initiating player's cooldown to `n²-n` when a gathering starts.
-- Exclude the initiating player's current turn from both new cooldowns.
-- Expose two compact cooldown counters and precise localized disabled reasons in the Commerce Guild panel.
-- Preserve authoritative cooldown state across Online persistence, reconnect, and caller-specific projection.
+- Add one table-wide gathering cooldown measured in completed player turns.
+- Start a new or restarted match with a table cooldown of `2n`, where `n` is the current player count.
+- Reset the table cooldown to `n` when a gathering starts.
+- Exclude the initiating player's current turn from the new cooldown.
+- Expose one compact cooldown counter and precise localized disabled reasons in the Commerce Guild panel.
+- Preserve authoritative cooldown state across Online persistence, reconnect, and public projection.
 - Upgrade room storage and wire protocol from v2 to v3 with a defined migration for active v2 rooms.
 - Grant one matching resource for every non-desert hex adjacent to a player's second setup settlement, immediately when that settlement is placed.
 - Deduct the complete setup grant from the bank in the same atomic transition.
@@ -54,15 +54,15 @@ This release introduces deterministic turn-based gathering cooldowns, grants the
 
 ### US1: Start Gatherings at a Fair Pace
 
-As the current player, I can start a gathering only after the table and my seat have both waited long enough, so gatherings remain meaningful events rather than actions that can be repeated at will.
+As the current player, I can start a gathering only after the table has waited long enough, so gatherings remain meaningful events rather than actions that can be repeated at will.
 
 Independent acceptance:
 
-- A new match displays `2n` table turns and zero personal turns once formal play begins.
+- A new match displays `2n` table turns once formal play begins.
 - Setup placement does not consume the initial table cooldown.
-- A successful start records `n` table turns and `n²-n` turns for the initiator without charging their current turn.
-- Every later completed player turn reduces the displayed remaining values by one until zero.
-- Another player may start once the table cooldown is zero if their own cooldown is also zero.
+- A successful start records `n` table turns without charging the initiator's current turn.
+- Every subsequent completed player turn after the initiator's current turn reduces the displayed remaining value by one until zero.
+- Once the table cooldown reaches zero, the then-current player may start if every other action-phase rule passes.
 - The prior six-round automatic trigger never starts a gathering.
 
 ### US2: Enforce Gathering Authority Online
@@ -73,8 +73,8 @@ Independent acceptance:
 
 - The client sends a no-payload gathering intent and never supplies a player identity.
 - The Worker derives the player from the authenticated seat and enriches the shared domain command.
-- A stale, non-current, wrong-phase, table-cooled, or personally cooled request is rejected without storage mutation, room-version increment, or broadcast.
-- Reconnect receives the same public table value and the caller's current private value.
+- A stale, non-current, wrong-phase, or table-cooled request is rejected without storage mutation, room-version increment, or broadcast.
+- Every reconnect and recipient projection receives the same public table value.
 
 ### US3: Receive the Second-Settlement Setup Grant
 
@@ -107,8 +107,8 @@ As a player in a room persisted before cooldown metadata existed, I can finish a
 Independent acceptance:
 
 - A v2 lobby migrates without creating match-only cooldown state.
-- A v2 idle or complete match migrates with a new `2n` table cooldown and zero personal cooldowns.
-- A v2 redemption or auction phase remains active and receives a conservative `n` table cooldown baseline; personal cooldowns begin at zero because the old initiator is unknowable.
+- A v2 idle or complete match migrates with a new `2n` table cooldown.
+- A v2 redemption or auction phase remains active and receives a conservative `n` table cooldown baseline.
 - Migration removes obsolete automatic-trigger metadata, validates the complete replacement, and persists atomically.
 
 ## Functional Requirements
@@ -116,30 +116,30 @@ Independent acceptance:
 ### Gathering Cooldown Contract
 
 - GP-001: A cooldown turn means one successful normal `END_TURN` transition after setup has completed; setup settlements and roads must not advance cooldown time.
-- GP-002: For `n` players, a new or restarted match must begin formal play with table remaining `2n` and every player's personal remaining equal to zero.
+- GP-002: For `n` players, a new or restarted match must begin formal play with table remaining `2n`.
 - GP-003: Only the current active player may start a gathering.
 - GP-004: A gathering start must require the normal post-roll action phase with no unresolved discard, robber, development-card, trade-response, or gathering input.
-- GP-005: A gathering start must require the gathering phase to be idle and both the table and caller personal cooldowns to be zero.
-- GP-006: A successful start during game turn `t` must make the table next eligible at `t+n+1` and the initiating player next eligible at `t+(n²-n)+1`.
-- GP-007: The initiator's current turn must not reduce either new cooldown. Immediately after the start and immediately after the initiator ends that turn, the displayed values must remain `n` and `n²-n`.
-- GP-008: Each successful later `END_TURN` must advance both eligibility calculations by exactly one displayed turn, clamped at zero.
-- GP-009: Starting a gathering must replace the table cooldown and only the initiating player's personal cooldown; other players' personal histories remain unchanged.
+- GP-005: A gathering start must require the gathering phase to be idle and the table cooldown to be zero.
+- GP-006: A successful start during game turn `t` must make the table next eligible at `t+n+1`.
+- GP-007: The initiator's current turn must not reduce the new cooldown. Immediately after the start and immediately after the initiator ends that turn, the displayed value must remain `n`.
+- GP-008: Each successful subsequent `END_TURN` after the initiator's current turn must advance eligibility by exactly one displayed turn, clamped at zero.
+- GP-009: Starting a gathering must replace the prior table cooldown window with one authoritative window that applies equally to every player.
 - GP-010: Cooldown calculations must use authoritative game turn and player count, not a browser clock, React timer, Worker alarm, or client-submitted value.
 - GP-011: The six-round automatic gathering rule and its persisted metadata must be removed.
-- GP-012: A completed gathering must remain visibly complete until the current player ends the turn, then return to idle without clearing cooldown windows or the last auction result.
-- GP-013: Both fresh-map and same-map restart must reset gathering phase, cooldown windows, table cooldown, and personal cooldowns to the new-match baseline.
+- GP-012: A completed gathering must remain visibly complete until the current player ends the turn, then return to idle without clearing the cooldown window or the last auction result.
+- GP-013: Both fresh-map and same-map restart must reset the gathering phase and table cooldown window to the new-match baseline.
 - GP-014: All rejected gathering starts must be atomic and return a stable localized reason suitable for a disabled control and protocol error mapping.
 
 ### Authenticated Online Flow and Compatibility
 
 - GP-015: The shared domain `START_GATHERING` command must identify its initiating player, while the public wire command must remain no-payload.
 - GP-016: The Worker must derive the initiating player from the authenticated seat at the existing trusted-command boundary.
-- GP-017: The public projection must expose the table remaining turns; caller-specific allowed actions must expose the caller's personal remaining turns and start availability.
-- GP-018: Storage schema v3 must persist authoritative table and per-player cooldown windows, including each eligibility target and displayed-duration cap, so eviction and reconnect reconstruct the same remaining values.
+- GP-017: The public projection must expose the table remaining turns; caller-specific allowed actions must derive start availability from that public value plus caller authorization and action-phase state.
+- GP-018: Storage schema v3 must persist one authoritative table cooldown window, including its eligibility target and displayed-duration cap, so eviction and reconnect reconstruct the same remaining value.
 - GP-019: Wire protocol v3 must validate the new cooldown projection exactly and route protocol-v2 clients through the existing incompatible-client refresh/recovery behavior.
 - GP-020: A v2 lobby must migrate to v3 without fabricating a match.
-- GP-021: A v2 match whose gathering is idle or complete must migrate with a table baseline of `2n` from the migration turn and personal baselines of zero.
-- GP-022: A v2 match in redemption or auction must preserve its phase and live gathering data, receive a table baseline of `n` that excludes the current turn, and receive personal baselines of zero.
+- GP-021: A v2 match whose gathering is idle or complete must migrate with a table baseline of `2n` from the migration turn.
+- GP-022: A v2 match in redemption or auction must preserve its phase and live gathering data and receive a table baseline of `n` that excludes the current turn.
 - GP-023: Migration must remove `lastAutoGatheringRound`, validate before replacement, and produce no partial write or broadcast on failure.
 - GP-024: Command idempotency, expected-version checks, persistence-before-broadcast ordering, room-version increments, and recipient-specific projections must remain on the existing serialized command path.
 
@@ -168,31 +168,29 @@ Independent acceptance:
 
 ### Cooldown Experience and Verification
 
-- GP-042: The Commerce Guild idle view must show two compact numeric badges: one table cooldown and one named current-player cooldown.
+- GP-042: The Commerce Guild idle view must show one compact numeric badge for the table cooldown.
 - GP-043: A zero value must be visually distinguishable as ready without relying on color alone.
-- GP-044: A disabled Start Gathering control must explain the highest-priority current reason: not playing, unresolved action phase, non-current caller, gathering in progress, table cooldown, or personal cooldown.
-- GP-045: English and Simplified-Chinese labels, pluralization, accessible names, tooltips, and error messages must cover both cooldowns and every resource icon surface.
-- GP-046: Automated evidence must cover three- and four-player cooldown math, current-turn exclusion, independent personal histories, authorization, migration, reconnect, restart, setup grants, icon semantics, and removal of visible terrain text.
-- GP-047: Browser evidence must cover Local desktop/mobile presentation and at least two isolated Online callers with different personal cooldown projections.
+- GP-044: A disabled Start Gathering control must explain the highest-priority current reason: not playing, unresolved action phase, non-current caller, gathering in progress, or table cooldown.
+- GP-045: English and Simplified-Chinese labels, pluralization, accessible names, tooltips, and error messages must cover the cooldown and every resource icon surface.
+- GP-046: Automated evidence must cover three- and four-player cooldown math, current-turn exclusion, authorization, migration, reconnect, restart, setup grants, icon semantics, and removal of visible terrain text.
+- GP-047: Browser evidence must cover Local desktop/mobile presentation and at least two isolated Online callers that receive the same table cooldown while retaining caller-specific start authorization.
 - GP-048: Completion requires the full domain/client, Worker, browser, build, smoke, localization, accessibility, repository-guard, Wrangler dry-run, and diff-check gates used by the current schema-v2 release.
 
 ## Approved Design Constraints
 
 ### Cooldown State Model
 
-The synchronized Commerce Guild state stores one table cooldown window and caller-keyed personal cooldown windows. Each window contains an absolute `availableAtTurn` target and a `displayDuration` cap. A pure domain helper derives displayed remaining turns from those windows and `game.turn`; it does not mutate multiple counters on every turn.
+The synchronized Commerce Guild state stores one table cooldown window containing an absolute `availableAtTurn` target and a `displayDuration` cap. A pure domain helper derives displayed remaining turns from that window and `game.turn`; it does not mutate a counter on every turn.
 
 For a gathering started on turn `t`:
 
 ```text
 table target            = t + n + 1
 table display duration  = n
-personal target         = t + (n * n - n) + 1
-personal display duration = n * n - n
 remaining               = min(display duration, max(0, target - current turn))
 ```
 
-The duration cap keeps the value at its full duration during the initiating turn even though eligibility is one turn farther away, thereby excluding the initiating turn without a mutable skip flag. Before any gathering has started, the initial table window targets the first formal game turn plus `2n` with a `2n` display cap, while personal remaining is zero. Migration may create a fresh baseline window anchored at the current authoritative turn without fabricating prior history.
+The duration cap keeps the value at its full duration during the initiating turn even though eligibility is one turn farther away, thereby excluding the initiating turn without a mutable skip flag. Before any gathering has started, the initial table window targets the first formal game turn plus `2n` with a `2n` display cap. Migration may create a fresh baseline window anchored at the current authoritative turn without fabricating prior history.
 
 ### Authority and Data Flow
 
@@ -203,9 +201,8 @@ Authenticated caller / Local current control
   -> shared match command
      -> active player + action phase + idle phase
      -> public table cooldown == 0
-     -> caller personal cooldown == 0
-     -> persist cooldown windows and enter redemption
-  -> public table projection + private caller availability
+     -> persist table cooldown window and enter redemption
+  -> public table projection + caller-authorized availability
 ```
 
 The UI never decides eligibility independently. It displays the same facts used by the authoritative rule and submits no target turn, remaining count, or actor identifier.
@@ -230,11 +227,11 @@ The board uses the same resource-to-icon mapping in SVG. It removes the current 
 
 ## Edge Cases
 
-- A three-player match uses initial/table/personal durations of 6, 3, and 6 turns; a four-player match uses 8, 4, and 12.
-- The initiator may finish a gathering and continue the rest of the same normal action phase; ending that turn does not reduce the newly assigned cooldowns.
-- Another player's personal cooldown may be zero while the table cooldown remains nonzero, or vice versa; both must be visible and both must pass.
-- A gathering that completes immediately because nobody can bid still establishes both cooldowns and returns to idle only after the current turn ends.
-- A player with an old personal cooldown cannot start when the table becomes ready, but another ready current player may.
+- A three-player match uses initial and post-gathering durations of 6 and 3 turns; a four-player match uses 8 and 4.
+- The initiator may finish a gathering and continue the rest of the same normal action phase; ending that turn does not reduce the newly assigned cooldown.
+- After the initiator's current turn, exactly `n` subsequent successful player turns must complete before the table becomes eligible again.
+- A gathering that completes immediately because nobody can bid still establishes the table cooldown and returns to idle only after the current turn ends.
+- When the table cooldown reaches zero, the then-current player is eligible to start subject to the same authorization and action-phase rules as every other player.
 - A stale online client cannot start based on a locally displayed zero after another accepted command changes the target.
 - A second settlement adjacent to three producing hexes grants three cards even when two or three share a resource type.
 - A second settlement adjacent to a desert grants only from the other adjacent producing hexes.
@@ -244,12 +241,12 @@ The board uses the same resource-to-icon mapping in SVG. It removes the current 
 
 ## Success Criteria
 
-- Deterministic three- and four-player vectors prove every cooldown boundary, including the excluded initiating turn and independent personal histories.
+- Deterministic three- and four-player vectors prove every table cooldown boundary, including the excluded initiating turn.
 - No automatic gathering begins during at least twelve completed four-player turns unless a qualified current player explicitly starts it.
 - Rejected gathering attempts leave match state, stored room, room version, and recipient snapshots unchanged.
 - Every player receives the exact second-settlement adjacent-resource multiset once, with an equal bank debit.
 - All named operational surfaces use the shared icon component; board DOM/SVG contains no visible terrain abbreviation or terrain-name node.
-- Local and Online browser views display the selected filled resource-badge style and compact dual cooldown badges without desktop or mobile overflow.
+- Local and Online browser views display the selected filled resource-badge style and compact table cooldown badge without desktop or mobile overflow.
 - A v2 idle match and a v2 mid-auction match migrate to v3 under the specified baselines and reconnect successfully.
 - Full required verification passes before the release is described as complete or deployable.
 
