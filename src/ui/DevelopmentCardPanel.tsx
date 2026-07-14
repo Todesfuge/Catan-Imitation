@@ -19,7 +19,9 @@ export function DevelopmentCardPanel({
       return (
         <section className="turn-flow-panel development-effect-panel" data-development-effect="roadBuilding">
           <strong>{t("development.chooseRoad")}</strong>
-          <span>{t("development.roadsRemaining", { count: effect.remainingRoads ?? 0 })}</span>
+          <span>{t(effect.remainingRoads === 1
+            ? "development.roadsRemaining.one"
+            : "development.roadsRemaining", { count: effect.remainingRoads ?? 0 })}</span>
         </section>
       );
     }
@@ -37,31 +39,35 @@ export function DevelopmentCardPanel({
             : t("development.chooseMonopoly")}
         </strong>
         <div className="development-resource-buttons">
-          {(resourcePolicy.targets as readonly GameTableResource[]).map((resource) => (
-            <button
-              aria-describedby="development-resource-unavailable-reason"
-              aria-label={isPlenty
-                ? `${t("development.chooseResource", { count: 1 })}: ${t(`resource.${resource}`)} (${game.bank.resources[resource]})`
-                : `${t("development.chooseMonopoly")}: ${t(`resource.${resource}`)}`}
-              data-resource-choice={resource}
-              disabled={!resourcePolicy.enabled}
-              key={resource}
-              onClick={() =>
-                dispatch({
-                  type: "development.chooseResource",
-                  choice: isPlenty ? "yearOfPlenty" : "monopoly",
-                  resource
-                })
-              }
-              type="button"
-            >
-              <ResourceBadge
-                decorative
-                quantity={isPlenty ? game.bank.resources[resource] : 1}
-                resource={resource}
-              />
-            </button>
-          ))}
+          {(resourcePolicy.targets as readonly GameTableResource[]).map((resource) => {
+            const label = isPlenty
+              ? `${t("development.chooseResource", { count: 1 })}: ${t(`resource.${resource}`)} (${game.bank.resources[resource]})`
+              : `${t("development.chooseMonopoly")}: ${t(`resource.${resource}`)}`;
+            return (
+              <button
+                aria-describedby="development-resource-unavailable-reason"
+                aria-label={label}
+                data-resource-choice={resource}
+                disabled={!resourcePolicy.enabled}
+                key={resource}
+                onClick={() =>
+                  dispatch({
+                    type: "development.chooseResource",
+                    choice: isPlenty ? "yearOfPlenty" : "monopoly",
+                    resource
+                  })
+                }
+                title={label}
+                type="button"
+              >
+                <ResourceBadge
+                  decorative
+                  quantity={isPlenty ? game.bank.resources[resource] : 1}
+                  resource={resource}
+                />
+              </button>
+            );
+          })}
         </div>
         <span className="sr-only" id="development-resource-unavailable-reason">
           {translateRuleText(locale, resourcePolicy.reason)}

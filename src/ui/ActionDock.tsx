@@ -195,10 +195,11 @@ export function ActionDock({
               const trade = availability.maritime.trades.find(
                 (candidate) => candidate.give === resource
               );
+              const label = `${t("action.giveResource")}: ${t(`resource.${resource}`)} ${availability.maritime.ratios[resource]}:1`;
               return (
                 <button
                   aria-describedby="maritime-unavailable-reason"
-                  aria-label={`${t("action.giveResource")}: ${t(`resource.${resource}`)} ${availability.maritime.ratios[resource]}:1`}
+                  aria-label={label}
                   aria-pressed={maritimeGive === resource}
                   data-maritime-give={resource}
                   disabled={!trade}
@@ -207,6 +208,7 @@ export function ActionDock({
                     setMaritimeGive(resource);
                     setMaritimeReceive("");
                   }}
+                  title={label}
                   type="button"
                 >
                   <ResourceBadge compact decorative quantity={availability.maritime.ratios[resource]} resource={resource} />
@@ -220,20 +222,24 @@ export function ActionDock({
             className="resource-choice-group"
             role="group"
           >
-            {resources.map((resource) => (
-              <button
-                aria-describedby="maritime-unavailable-reason"
-                aria-label={`${t("action.receiveResource")}: ${t(`resource.${resource}`)} (${t("commerce.bank", { count: state.game.bank.resources[resource] })})`}
-                aria-pressed={maritimeReceive === resource}
-                data-maritime-receive={resource}
-                disabled={!selectedTrade?.receives.includes(resource)}
-                key={resource}
-                onClick={() => setMaritimeReceive(resource)}
-                type="button"
-              >
-                <ResourceBadge compact decorative quantity={state.game.bank.resources[resource]} resource={resource} />
-              </button>
-            ))}
+            {resources.map((resource) => {
+              const label = `${t("action.receiveResource")}: ${t(`resource.${resource}`)} (${t("commerce.bank", { count: state.game.bank.resources[resource] })})`;
+              return (
+                <button
+                  aria-describedby="maritime-unavailable-reason"
+                  aria-label={label}
+                  aria-pressed={maritimeReceive === resource}
+                  data-maritime-receive={resource}
+                  disabled={!selectedTrade?.receives.includes(resource)}
+                  key={resource}
+                  onClick={() => setMaritimeReceive(resource)}
+                  title={label}
+                  type="button"
+                >
+                  <ResourceBadge compact decorative quantity={state.game.bank.resources[resource]} resource={resource} />
+                </button>
+              );
+            })}
           </div>
         </div>
         <button

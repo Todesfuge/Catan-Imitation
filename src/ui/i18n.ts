@@ -130,7 +130,8 @@ const messages = {
   "resource.ore": { en: "Ore", "zh-CN": "矿石" },
   "resource.quantity": { en: "{resource}: {quantity}", "zh-CN": "{resource}：{quantity}" },
   "resource.bundleSeparator": { en: ", ", "zh-CN": "，" },
-  "resource.cardsGeneric": { en: "{count} resource card(s)", "zh-CN": "{count} 张资源卡" },
+  "resource.cardsGeneric.one": { en: "{count} resource card", "zh-CN": "{count} 张资源卡" },
+  "resource.cardsGeneric.other": { en: "{count} resource cards", "zh-CN": "{count} 张资源卡" },
   "nav.openSettings": { en: "Open settings", "zh-CN": "打开设置" },
   "nav.openRulebook": { en: "Open rulebook", "zh-CN": "打开规则说明" },
   "nav.toggleFullscreen": { en: "Toggle fullscreen", "zh-CN": "切换全屏" },
@@ -222,7 +223,8 @@ const messages = {
   "development.yearOfPlenty": { en: "Year of Plenty", "zh-CN": "丰收年" },
   "development.monopoly": { en: "Monopoly", "zh-CN": "垄断" },
   "development.chooseRoad": { en: "Choose a highlighted road", "zh-CN": "选择一条高亮道路" },
-  "development.roadsRemaining": { en: "{count} free road(s) remaining", "zh-CN": "还可免费放置 {count} 条道路" },
+  "development.roadsRemaining": { en: "{count} free roads remaining", "zh-CN": "还可免费放置 {count} 条道路" },
+  "development.roadsRemaining.one": { en: "{count} free road remaining", "zh-CN": "还可免费放置 {count} 条道路" },
   "development.chooseResource": { en: "Choose {count} resource", "zh-CN": "选择 {count} 份资源" },
   "development.chooseResources": { en: "Choose {count} resources", "zh-CN": "选择 {count} 份资源" },
   "development.chooseMonopoly": { en: "Choose a resource to monopolize", "zh-CN": "选择要垄断的资源" },
@@ -236,7 +238,8 @@ const messages = {
   "commerce.startGathering": { en: "Start Gathering", "zh-CN": "开始集会" },
   "commerce.gatheringCooldown": { en: "Gathering cooldown", "zh-CN": "集会冷却" },
   "commerce.gatheringReady": { en: "Ready", "zh-CN": "可开启" },
-  "commerce.gatheringCooldownRemaining": { en: "{count} turn(s) remaining", "zh-CN": "还需 {count} 个回合" },
+  "commerce.gatheringCooldownRemaining.one": { en: "{count} turn remaining", "zh-CN": "还需 {count} 个回合" },
+  "commerce.gatheringCooldownRemaining.other": { en: "{count} turns remaining", "zh-CN": "还需 {count} 个回合" },
   "commerce.gatheringPlayer": { en: "Gathering player", "zh-CN": "集会玩家" },
   "commerce.redemptions": { en: "{count} redemptions remaining", "zh-CN": "还可兑换 {count} 次" },
   "commerce.bank": { en: "{count} bank", "zh-CN": "银行剩余 {count}" },
@@ -245,7 +248,8 @@ const messages = {
   "commerce.auctionRound": { en: "Round {round} / 3", "zh-CN": "第 {round} / 3 轮" },
   "commerce.resolveBlindBox": { en: "Resolve Blind Box", "zh-CN": "结算盲盒" },
   "commerce.redeemPrize": { en: "Redeem Prize", "zh-CN": "兑换奖品" },
-  "commerce.auctionResult": { en: "{winnerName} won auction round {round} with {bid} token(s): {outcome}.", "zh-CN": "{winnerName} 以 {bid} 枚代币赢得第 {round} 轮拍卖：{outcome}。" },
+  "commerce.auctionResult": { en: "{winnerName} won auction round {round} with {bid} tokens: {outcome}.", "zh-CN": "{winnerName} 以 {bid} 枚代币赢得第 {round} 轮拍卖：{outcome}。" },
+  "commerce.auctionResult.one": { en: "{winnerName} won auction round {round} with {bid} token: {outcome}.", "zh-CN": "{winnerName} 以 {bid} 枚代币赢得第 {round} 轮拍卖：{outcome}。" },
   "commerce.outcome.voucher": { en: "voucher", "zh-CN": "1 张兑换券" },
   "commerce.outcome.developmentCard": { en: "{cardKind} development card", "zh-CN": "1 张{cardKind}发展卡" },
   "commerce.outcome.resources": { en: "resources: {resources}", "zh-CN": "资源：{resources}" },
@@ -300,13 +304,15 @@ const messages = {
   "trade.player.cancelled": { en: "{proposerName} cancelled the public player trade.", "zh-CN": "{proposerName} 取消了公开玩家交易。" },
   "trade.player.accepted": { en: "{acceptingPlayerName} accepted {proposerName}'s public player trade.", "zh-CN": "{acceptingPlayerName} 接受了 {proposerName} 的公开玩家交易。" },
   "guild.slotCompleted": { en: "Commerce Guild trade completed and the slot refreshed.", "zh-CN": "商业公会交易已完成，交易位已刷新。" },
-  "guild.tokensTransferred": { en: "{fromName} transferred {amount} guild token(s) to {toName}.", "zh-CN": "{fromName} 向 {toName} 转移了 {amount} 枚公会代币。" },
+  "guild.tokensTransferred": { en: "{fromName} transferred {amount} guild tokens to {toName}.", "zh-CN": "{fromName} 向 {toName} 转移了 {amount} 枚公会代币。" },
+  "guild.tokensTransferred.one": { en: "{fromName} transferred {amount} guild token to {toName}.", "zh-CN": "{fromName} 向 {toName} 转移了 {amount} 枚公会代币。" },
   "guild.gatheringStarted": { en: "The Commerce Guild gathering has started.", "zh-CN": "商业公会集会已开始。" },
   "guild.auctionOpened": { en: "The Commerce Guild auction phase is open.", "zh-CN": "商业公会拍卖阶段已开启。" },
   "guild.auctionNoEligibleBidders": { en: "The Commerce Guild auction ended because no player has guild tokens.", "zh-CN": "没有玩家持有公会代币，商业公会拍卖已结束。" },
   "guild.auctionRoundNoBids": { en: "No bids were placed in Commerce Guild auction round {round}.", "zh-CN": "商业公会第 {round} 轮拍卖无人出价。" },
   "guild.redeemedResources": { en: "{playerName} redeemed guild tokens for resources.", "zh-CN": "{playerName} 使用公会代币兑换了资源。" },
-  "guild.auctionResolved": { en: "{winnerName} won auction round {round} with {bid} token(s): {outcome}.", "zh-CN": "{winnerName} 以 {bid} 枚代币赢得第 {round} 轮拍卖：{outcome}。" },
+  "guild.auctionResolved": { en: "{winnerName} won auction round {round} with {bid} tokens: {outcome}.", "zh-CN": "{winnerName} 以 {bid} 枚代币赢得第 {round} 轮拍卖：{outcome}。" },
+  "guild.auctionResolved.one": { en: "{winnerName} won auction round {round} with {bid} token: {outcome}.", "zh-CN": "{winnerName} 以 {bid} 枚代币赢得第 {round} 轮拍卖：{outcome}。" },
   "guild.prizeRedeemed": { en: "{playerName} redeemed vouchers for prize cards.", "zh-CN": "{playerName} 使用兑换券换取了奖品卡。" }
 } as const;
 
@@ -342,7 +348,9 @@ export function formatAuctionOutcome(outcome: BlindBoxOutcome, locale: Locale): 
 }
 
 export function formatAuctionSummary(summary: AuctionSummaryData, locale: Locale): string {
-  return translate(locale, "commerce.auctionResult", {
+  return translate(locale, summary.winningBid === 1
+    ? "commerce.auctionResult.one"
+    : "commerce.auctionResult", {
     winnerName: summary.winnerName,
     round: summary.round,
     bid: summary.winningBid,
@@ -446,10 +454,16 @@ function localizedLogParams(locale: Locale, params: MessageParams): MessageParam
 
 export function formatGameLogEntry(entry: GameLogEntry, locale: Locale): string {
   if (!entry.messageKey || !(entry.messageKey in messages)) return entry.message;
+  const params = entry.params ?? {};
+  const messageKey = entry.messageKey === "guild.tokensTransferred" && params.amount === 1
+    ? "guild.tokensTransferred.one"
+    : entry.messageKey === "guild.auctionResolved" && params.bid === 1
+      ? "guild.auctionResolved.one"
+      : entry.messageKey;
   return translate(
     locale,
-    entry.messageKey as MessageKey,
-    localizedLogParams(locale, entry.params ?? {})
+    messageKey as MessageKey,
+    localizedLogParams(locale, params)
   );
 }
 
@@ -531,7 +545,7 @@ const exactRuleTranslations: Record<string, string> = {
 export function translateRuleText(locale: Locale, message: string | null | undefined): string {
   if (!message || locale === "en") return message ?? "";
   if (exactRuleTranslations[message]) return exactRuleTranslations[message];
-  const gatheringCooldown = message.match(/^The gathering is available in (\d+) turn\(s\)\.$/);
+  const gatheringCooldown = message.match(/^The gathering is available in (\d+) turns?\.$/);
   if (gatheringCooldown) return `集会还需 ${gatheringCooldown[1]} 个回合才能开启。`;
   const cannotAfford = message.match(/^(.+) cannot afford the requested resources\.$/);
   if (cannotAfford) return `${cannotAfford[1]} 无法支付所索取的资源。`;

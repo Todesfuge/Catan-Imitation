@@ -618,7 +618,7 @@ export function applyMatchCommand(
             log: [
               log(
                 context,
-                `${getPlayerName(state.game, command.fromPlayerId)} transferred ${command.amount} guild token(s) to ${getPlayerName(state.game, command.toPlayerId)}.`,
+                `${getPlayerName(state.game, command.fromPlayerId)} transferred ${command.amount} guild ${command.amount === 1 ? "token" : "tokens"} to ${getPlayerName(state.game, command.toPlayerId)}.`,
                 "guild.tokensTransferred",
                 {
                   fromName: getPlayerName(state.game, command.fromPlayerId),

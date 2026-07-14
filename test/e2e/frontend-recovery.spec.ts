@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { createInitialAppState } from "../../src/app/localGameState";
+import { parseMapSeed } from "../../src/domain/mapSeed";
+import { createBoardDataForSeed } from "../../src/domain/randomBoard";
 import { projectRoomView } from "../../src/online/projectRoomView";
 import { publicBoardSignature } from "./seededMapHelpers";
 
@@ -456,7 +458,7 @@ for (const viewport of [
     await expect(page.locator(".online-game-shell")).toBeVisible();
     await expect(page.getByText("Room 234567")).toBeVisible();
     await expect(page.getByText("Kay is offline")).toBeVisible();
-    await expect(page.locator(".resource-strip.compact").filter({ hasText: "Wd" })).toHaveCount(1);
+    await expect(page.locator('[data-resource-inventory="private"] [data-resource-badge="wood"]')).toHaveCount(1);
     await expect(page.getByText("Place the next settlement")).toBeVisible();
     const setupTarget = page.locator('[data-board-action-target="setupSettlement"]').first();
     await expect(setupTarget).toBeVisible();
@@ -731,6 +733,19 @@ async function setDeterministicTotal(page: Page, total: number) {
   }, total);
 }
 
+async function advanceLocalGatheringCooldownToAction(
+  page: Page,
+  alreadyCompletedTurns = 0
+): Promise<void> {
+  for (let completedTurn = alreadyCompletedTurns; completedTurn < 8; completedTurn += 1) {
+    await setDeterministicTotal(page, 2);
+    await page.locator('[data-action="roll-dice"]').click();
+    await page.locator('[data-action="end-turn"]').click();
+  }
+  await setDeterministicTotal(page, 2);
+  await page.locator('[data-action="roll-dice"]').click();
+}
+
 async function completePendingLocalDiscards(page: Page) {
   for (let player = 0; player < 4; player += 1) {
     const panel = page.locator('[data-turn-flow="discard"]');
@@ -753,20 +768,21 @@ async function completePendingLocalDiscards(page: Page) {
 }
 
 const playerTradeResources = [
-  { key: "wood", short: "Wd", label: "Wood" },
-  { key: "brick", short: "Br", label: "Brick" },
-  { key: "wool", short: "Wl", label: "Wool" },
-  { key: "grain", short: "Gr", label: "Grain" },
-  { key: "ore", short: "Or", label: "Ore" }
+  { key: "wood", label: "Wood" },
+  { key: "brick", label: "Brick" },
+  { key: "wool", label: "Wool" },
+  { key: "grain", label: "Grain" },
+  { key: "ore", label: "Ore" }
 ] as const;
 
 async function readPlayerResources(page: Page, playerIndex: number): Promise<Map<string, number>> {
-  const texts = await page.locator(".player-card").nth(playerIndex)
-    .locator(".resource-strip.compact .resource-token").allTextContents();
-  return new Map(texts.map((text) => {
-    const [short, amount] = text.trim().split(/\s+/);
-    return [short, Number(amount)] as const;
-  }));
+  const entries = await page.locator(".player-card").nth(playerIndex)
+    .locator('[data-resource-inventory="private"] [data-resource-badge]')
+    .evaluateAll((badges) => badges.map((badge) => [
+      badge.getAttribute("data-resource-badge"),
+      Number(badge.getAttribute("data-resource-quantity"))
+    ] as const));
+  return new Map(entries.filter((entry): entry is readonly [string, number] => entry[0] !== null));
 }
 
 type BuildResource = (typeof playerTradeResources)[number]["key"];
@@ -780,9 +796,9 @@ const maritimeBuildCosts: Record<MaritimeBuildKind, Record<BuildResource, number
 };
 
 function toResourceAmounts(inventory: ReadonlyMap<string, number>): ResourceAmounts {
-  return Object.fromEntries(playerTradeResources.map(({ key, short }) => [
+  return Object.fromEntries(playerTradeResources.map(({ key }) => [
     key,
-    inventory.get(short) ?? 0
+    inventory.get(key) ?? 0
   ])) as ResourceAmounts;
 }
 
@@ -798,9 +814,51 @@ function missingCostResources(inventory: ResourceAmounts, cost: ResourceAmounts)
 
 async function readBankResources(page: Page): Promise<ResourceAmounts> {
   return Object.fromEntries(await Promise.all(playerTradeResources.map(async ({ key }) => {
-    const text = await page.locator(`.bank-panel .resource-token.${key}`).textContent();
-    return [key, Number(text?.trim().split(/\s+/).at(-1))] as const;
+    const badge = page.locator(`.bank-panel [data-resource-badge="${key}"]`);
+    return [key, Number(await badge.getAttribute("data-resource-quantity"))] as const;
   }))) as ResourceAmounts;
+}
+
+function emptyResourceAmounts(): ResourceAmounts {
+  return { wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 };
+}
+
+function setupGrantForVertex(seed: string, vertexId: string): ResourceAmounts {
+  const grant = emptyResourceAmounts();
+  for (const hex of createBoardDataForSeed(parseMapSeed(seed)).board) {
+    if (hex.resource && hex.vertexIds.includes(vertexId)) grant[hex.resource] += 1;
+  }
+  return grant;
+}
+
+async function chooseResourceRichLocalSetupTarget(page: Page, seed: string): Promise<string> {
+  const labels = await page.locator('[data-board-action-target="setupSettlement"]').evaluateAll(
+    (targets) => targets.map((target) => target.getAttribute("aria-label") ?? "")
+  );
+  const vertexIds = labels.map((label) => label.match(/settlement (.+)$/)?.[1]).filter(
+    (value): value is string => Boolean(value)
+  );
+  const target = vertexIds.sort((left, right) => {
+    const total = (value: string) => Object.values(setupGrantForVertex(seed, value))
+      .reduce((sum, amount) => sum + amount, 0);
+    return total(right) - total(left) || left.localeCompare(right);
+  })[0];
+  if (!target) throw new Error("No Local setup settlement target was rendered");
+  return target;
+}
+
+function subtractResources(value: ResourceAmounts, amount: ResourceAmounts): ResourceAmounts {
+  return Object.fromEntries(playerTradeResources.map(({ key }) => [
+    key,
+    value[key] - amount[key]
+  ])) as ResourceAmounts;
+}
+
+function addResources(value: ResourceAmounts, amount: ResourceAmounts): ResourceAmounts {
+  return Object.fromEntries(playerTradeResources.map(({ key }) => [
+    key,
+    value[key] + amount[key]
+  ])) as ResourceAmounts;
 }
 
 async function completeRequiredMaritimeTrade(
@@ -818,36 +876,41 @@ async function completeRequiredMaritimeTrade(
   const targetWasUnaffordable = !canCoverCost(before, targetCost);
   if (targetWasUnaffordable) await expect(targetAction).toBeDisabled();
 
-  const options = await give.locator("option:not([disabled])").evaluateAll((entries) => entries
+  const options = await give.locator("button:not([disabled])").evaluateAll((entries) => entries
     .map((entry) => ({
-      value: (entry as HTMLOptionElement).value,
-      text: entry.textContent ?? ""
+      value: entry.getAttribute("data-maritime-give") ?? "",
+      ratio: Number(entry.querySelector("[data-resource-quantity]")?.getAttribute("data-resource-quantity"))
     }))
     .filter((entry) => entry.value));
   const candidate = options.find((option) => {
     const resource = option.value as BuildResource;
-    const ratio = Number(option.text.match(/(\d+):1/)?.[1]);
-    return resource !== receiveResource && Number.isInteger(ratio) &&
-      before[resource] - ratio >= fundingCost[resource];
+    return resource !== receiveResource && Number.isInteger(option.ratio) &&
+      before[resource] - option.ratio >= fundingCost[resource];
   });
   if (!candidate) return undefined;
 
-  await give.selectOption(candidate.value);
-  const receiveOptions = await receive.locator("option:not([disabled])").evaluateAll((entries) => entries
-    .map((entry) => (entry as HTMLOptionElement).value)
-    .filter(Boolean));
+  const giveButton = give.locator(`[data-maritime-give="${candidate.value}"]`);
+  await giveButton.focus();
+  await expect(giveButton).toBeFocused();
+  await giveButton.press("Enter");
+  await expect(giveButton).toHaveAttribute("aria-pressed", "true");
+  const receiveOptions = await receive.locator("button:not([disabled])").evaluateAll((entries) => entries
+    .map((entry) => entry.getAttribute("data-maritime-receive"))
+    .filter((value): value is string => value !== null));
   if (!receiveOptions.includes(receiveResource)) {
-    await give.selectOption("");
     return undefined;
   }
 
-  await receive.selectOption(receiveResource);
+  const receiveButton = receive.locator(`[data-maritime-receive="${receiveResource}"]`);
+  await receiveButton.focus();
+  await expect(receiveButton).toBeFocused();
+  await receiveButton.press("Enter");
+  await expect(receiveButton).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Maritime" }).click();
   const after = toResourceAmounts(await readPlayerResources(page, 0));
   const giveResource = candidate.value as BuildResource;
-  const ratio = Number(candidate.text.match(/(\d+):1/)?.[1]);
   expect(after[receiveResource]).toBe(before[receiveResource] + 1);
-  expect(after[giveResource]).toBe(before[giveResource] - ratio);
+  expect(after[giveResource]).toBe(before[giveResource] - candidate.ratio);
   for (const { key } of playerTradeResources) {
     if (key !== receiveResource && key !== giveResource) expect(after[key]).toBe(before[key]);
   }
@@ -898,17 +961,11 @@ interface ProductionMatrixRow {
 }
 
 async function readProductionMatrix(page: Page): Promise<ProductionMatrixRow[]> {
-  return page.evaluate(() => {
-    const resourceByTerrain: Record<string, BuildResource | undefined> = {
-      Forest: "wood",
-      Hill: "brick",
-      Pasture: "wool",
-      Field: "grain",
-      Mountain: "ore"
-    };
+  const playerName = (await page.locator(".player-card").first().locator("strong").textContent())!.trim();
+  return page.evaluate((firstPlayerName) => {
     const centers = [...document.querySelectorAll<SVGRectElement>(".building-marker")]
       .map((entry) => ({
-        isPlayer: entry.querySelector("title")?.textContent?.startsWith("Voyage1969 ") ?? false,
+        isPlayer: entry.querySelector("title")?.textContent?.startsWith(`${firstPlayerName} `) ?? false,
         units: entry.classList.contains("city") ? 2 : 1,
         x: Number(entry.getAttribute("x")) + Number(entry.getAttribute("width")) / 2,
         y: Number(entry.getAttribute("y")) + Number(entry.getAttribute("height")) / 2
@@ -919,7 +976,7 @@ async function readProductionMatrix(page: Page): Promise<ProductionMatrixRow[]> 
     }>();
     for (const hex of document.querySelectorAll<SVGGElement>(".hex-tile")) {
       const total = Number(hex.querySelector(".dice-number")?.textContent);
-      const resource = resourceByTerrain[hex.getAttribute("aria-label") ?? ""];
+      const resource = hex.querySelector("[data-board-resource]")?.getAttribute("data-board-resource") as BuildResource | null;
       if (!Number.isInteger(total) || !resource) continue;
       const points = (hex.querySelector(".board-hex")?.getAttribute("points") ?? "")
         .trim().split(/\s+/).map((point) => {
@@ -944,7 +1001,7 @@ async function readProductionMatrix(page: Page): Promise<ProductionMatrixRow[]> 
     return [...byTotal.entries()]
       .map(([total, row]) => ({ total, ...row }))
       .sort((left, right) => left.total - right.total);
-  });
+  }, playerName);
 }
 
 async function advanceBackToFirstPlayerWithoutProduction(page: Page, seed: string): Promise<void> {
@@ -1004,7 +1061,7 @@ async function fundAndBuildWithMaritime(
   seed: string,
   options: { maxRounds?: number } = {}
 ): Promise<number> {
-  const button = page.getByRole("button", { name: kind, exact: true });
+  const button = page.locator(`[data-action="build-${kind.toLowerCase()}"]`);
   const targetKind = kind.toLowerCase();
   const marker = kind === "Road" ? ".road-marker" : `.building-marker.${targetKind}`;
   const initialMarkerCount = await page.locator(marker).count();
@@ -1065,7 +1122,7 @@ async function placeFundedSettlement(
   page: Page,
   initialSettlementCount: number
 ): Promise<void> {
-  const settlement = page.getByRole("button", { name: "Settlement", exact: true });
+  const settlement = page.locator('[data-action="build-settlement"]');
   await expect(settlement).toBeEnabled();
   await settlement.click();
   const targets = page.locator('[data-board-action-target="settlement"]');
@@ -1076,8 +1133,8 @@ async function placeFundedSettlement(
 }
 
 async function fundAndBuildSettlementWithMaritime(page: Page, seed: string): Promise<number> {
-  const settlement = page.getByRole("button", { name: "Settlement", exact: true });
-  const road = page.getByRole("button", { name: "Road", exact: true });
+  const settlement = page.locator('[data-action="build-settlement"]');
+  const road = page.locator('[data-action="build-road"]');
   const settlementCost = maritimeBuildCosts.Settlement;
   const combinedCost: ResourceAmounts = { wood: 2, brick: 2, wool: 1, grain: 1, ore: 0 };
   const initialSettlementCount = await page.locator(".building-marker.settlement").count();
@@ -1164,13 +1221,13 @@ async function prepareAffordablePublicTrade(page: Page): Promise<{
   for (let attempt = 0; attempt < productiveTotals.length + 4; attempt += 1) {
     const activeIndex = await cards.evaluateAll((nodes) => nodes.findIndex((node) => node.classList.contains("active")));
     const proposer = await readPlayerResources(page, activeIndex);
-    const offered = playerTradeResources.find((resource) => (proposer.get(resource.short) ?? 0) > 0);
+    const offered = playerTradeResources.find((resource) => (proposer.get(resource.key) ?? 0) > 0);
     let acceptingPlayer = "";
     let requested: (typeof playerTradeResources)[number] | undefined;
     for (let index = 0; index < await cards.count(); index += 1) {
       if (index === activeIndex) continue;
       const inventory = await readPlayerResources(page, index);
-      requested = playerTradeResources.find((resource) => (inventory.get(resource.short) ?? 0) > 0);
+      requested = playerTradeResources.find((resource) => (inventory.get(resource.key) ?? 0) > 0);
       if (requested) {
         acceptingPlayer = (await cards.nth(index).locator("strong").textContent())!.trim();
         break;
@@ -1191,6 +1248,96 @@ async function prepareAffordablePublicTrade(page: Page): Promise<{
   throw new Error("no affordable Local public trade converged across a full deterministic roll cycle");
 }
 
+test("Local setup grants each second settlement's adjacent resources exactly once", async ({ page }) => {
+  const seed = "M1-0000000000000000";
+  await openLocalAtSeed(page, seed);
+
+  for (let placement = 0; placement < 8; placement += 1) {
+    const cards = page.locator(".player-card");
+    const activeIndex = await cards.evaluateAll((entries) => entries.findIndex(
+      (entry) => entry.classList.contains("active")
+    ));
+    expect(activeIndex).toBeGreaterThanOrEqual(0);
+    const vertexId = await chooseResourceRichLocalSetupTarget(page, seed);
+    const expectedGrant = placement < 4 ? emptyResourceAmounts() : setupGrantForVertex(seed, vertexId);
+    if (placement >= 4) {
+      expect(Object.values(expectedGrant).reduce((sum, amount) => sum + amount, 0)).toBeGreaterThan(0);
+    }
+    const playerBefore = toResourceAmounts(await readPlayerResources(page, activeIndex));
+    const bankBefore = await readBankResources(page);
+
+    await page.locator(
+      `[data-board-action-target="setupSettlement"][aria-label$="${vertexId}"]`
+    ).press("Enter");
+
+    expect(toResourceAmounts(await readPlayerResources(page, activeIndex))).toEqual(
+      addResources(playerBefore, expectedGrant)
+    );
+    expect(await readBankResources(page)).toEqual(subtractResources(bankBefore, expectedGrant));
+
+    const playerAfterSettlement = toResourceAmounts(await readPlayerResources(page, activeIndex));
+    const bankAfterSettlement = await readBankResources(page);
+    await page.locator('[data-board-action-target="setupRoad"]').first().press("Enter");
+    expect(toResourceAmounts(await readPlayerResources(page, activeIndex))).toEqual(playerAfterSettlement);
+    expect(await readBankResources(page)).toEqual(bankAfterSettlement);
+  }
+
+  await expect(page.locator('[data-action="roll-dice"]')).toBeEnabled();
+});
+
+test("four-player Local gathering cooldown honors action phase and turn boundaries", async ({ page }) => {
+  await openLocalAtSeed(page, "M1-1111111111111111");
+  await completeLocalSetup(page);
+  await page.getByRole("tab", { name: "Commerce Guild" }).click();
+
+  const cooldown = page.locator("[data-gathering-cooldown]");
+  const start = page.getByRole("button", { name: "Start Gathering" });
+  await expect(cooldown).toHaveCount(1);
+  await expect(cooldown).toHaveAttribute("data-gathering-cooldown", "8");
+  await expect(start).toBeDisabled();
+  await expect(page.locator("#gathering-start-unavailable-reason")).toContainText("Roll the dice");
+
+  await setDeterministicTotal(page, 2);
+  await page.locator('[data-action="roll-dice"]').click();
+  await expect(start).toBeDisabled();
+  await expect(page.locator("#gathering-start-unavailable-reason")).toContainText("8 turns");
+
+  for (let completedTurn = 1; completedTurn <= 8; completedTurn += 1) {
+    await page.locator('[data-action="end-turn"]').click();
+    await expect(cooldown).toHaveAttribute(
+      "data-gathering-cooldown",
+      String(8 - completedTurn)
+    );
+    if (completedTurn < 8) {
+      await setDeterministicTotal(page, 2);
+      await page.locator('[data-action="roll-dice"]').click();
+    }
+  }
+
+  await expect(start).toBeDisabled();
+  await expect(page.locator("#gathering-start-unavailable-reason")).toContainText("Roll the dice");
+  await setDeterministicTotal(page, 2);
+  await page.locator('[data-action="roll-dice"]').click();
+  await expect(start).toBeEnabled();
+  await start.click();
+  await page.getByRole("button", { name: "Open Auctions" }).click();
+  await expect(page.getByRole("button", { name: "Resolve Blind Box" })).toHaveCount(0);
+  await page.locator('[data-action="end-turn"]').click();
+  await expect(cooldown).toHaveAttribute("data-gathering-cooldown", "4");
+
+  for (let subsequentTurn = 1; subsequentTurn <= 4; subsequentTurn += 1) {
+    await setDeterministicTotal(page, 2);
+    await page.locator('[data-action="roll-dice"]').click();
+    await page.locator('[data-action="end-turn"]').click();
+    await expect(cooldown).toHaveAttribute(
+      "data-gathering-cooldown",
+      String(4 - subsequentTurn)
+    );
+  }
+  await expect(cooldown).toHaveClass(/\bready\b/);
+  await expect(cooldown).toContainText("Ready");
+});
+
 test("Local opens in an empty seeded setup and both restart modes rebuild atomically", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 768 });
   await openLocal(page);
@@ -1199,9 +1346,14 @@ test("Local opens in an empty seeded setup and both restart modes rebuild atomic
   await expect(page.locator(".player-card")).toHaveCount(4);
   await expect(page.locator(".building-marker")).toHaveCount(0);
   await expect(page.locator(".road-marker")).toHaveCount(0);
-  await expect(page.locator(".resource-strip.compact .resource-token")).toHaveCount(20);
-  expect(await page.locator(".resource-strip.compact .resource-token").allTextContents())
-    .toEqual(expect.arrayContaining(["Wd 0", "Br 0", "Wl 0", "Gr 0", "Or 0"]));
+  const startingResources = page.locator('[data-resource-inventory="private"] [data-resource-badge]');
+  await expect(startingResources).toHaveCount(20);
+  expect(await startingResources.evaluateAll((badges) => badges.map(
+    (badge) => badge.getAttribute("data-resource-quantity")
+  ))).toEqual(Array(20).fill("0"));
+  for (const inventory of await page.locator('[data-resource-inventory="private"] .resource-bundle').all()) {
+    await expect(inventory).toHaveAccessibleName("Wood: 0, Brick: 0, Wool: 0, Grain: 0, Ore: 0");
+  }
   for (const card of await page.locator(".player-card").allTextContents()) {
     expect(card).toContain("Resources: 0");
     expect(card).toContain("Development: 0");
@@ -1245,6 +1397,7 @@ test("Local opens in an empty seeded setup and both restart modes rebuild atomic
 test("a zero-token gathering completes without entering an unwinnable auction", async ({ page }) => {
   await openLocal(page);
   await completeLocalSetup(page);
+  await advanceLocalGatheringCooldownToAction(page);
   await page.getByRole("tab", { name: "Commerce Guild" }).click();
   await page.getByRole("button", { name: "Start Gathering" }).click();
   await page.getByRole("button", { name: "Open Auctions" }).click();
@@ -1255,7 +1408,7 @@ test("a zero-token gathering completes without entering an unwinnable auction", 
   await expect(page.getByRole("button", { name: "Resolve Blind Box" })).toHaveCount(0);
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "New Random Map" }).click();
-  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(page.locator('[data-gathering-cooldown="8"]')).toBeVisible();
 });
 
 test("unaffordable actions stay disabled and maritime choices are explicit", async ({ page }) => {
@@ -1266,7 +1419,7 @@ test("unaffordable actions stay disabled and maritime choices are explicit", asy
   await completeLocalSetup(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
 
-  await expect(page.getByRole("button", { name: "City", exact: true })).toBeDisabled();
+  await expect(page.locator('[data-action="build-city"]')).toBeDisabled();
   await expect(page.getByLabel("Maritime give resource")).toBeVisible();
   await expect(page.getByLabel("Maritime receive resource")).toBeVisible();
 });
@@ -1331,12 +1484,13 @@ test("Commerce controls keep valid named selections across turns", async ({ page
   await page.getByRole("button", { name: "End Turn" }).click();
   await expect(page.getByLabel("Token recipient")).not.toHaveValue("p2");
 
+  await advanceLocalGatheringCooldownToAction(page, 1);
   await page.getByRole("button", { name: "Start Gathering" }).click();
   await expect(page.getByLabel("Gathering player")).toHaveCount(1);
   await page.getByLabel("Gathering player").selectOption({ label: "Kay (0 tokens)" });
   await expect(page.getByRole("status")).toContainText("Kay: 0 tokens");
   await expect(page.getByRole("status")).toContainText("4 redemptions remaining");
-  await expect(page.getByRole("button", { name: "+Wood (19 bank)" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^Redeem Wood; \d+ in bank$/ })).toBeDisabled();
 });
 
 test("utility dialog owns focus, closes with Escape, and restores its opener", async ({ page }) => {
@@ -1360,6 +1514,90 @@ test("post-roll guidance describes the current action phase", async ({ page }) =
 
   await expect(page.locator(".phase-guidance")).toHaveText("Choose an action or end the turn");
 });
+
+for (const visual of [
+  {
+    locale: "en",
+    width: 1280,
+    height: 720,
+    resourceNames: ["Wood", "Brick", "Wool", "Grain", "Ore"],
+    desertName: "Desert",
+    portSuffix: "port"
+  },
+  {
+    locale: "zh-CN",
+    width: 390,
+    height: 844,
+    resourceNames: ["木材", "砖块", "羊毛", "粮食", "矿石"],
+    desertName: "沙漠",
+    portSuffix: "港口"
+  }
+] as const) {
+  test(`${visual.locale} ${visual.width}px renders icon-only board resources with accessible semantics`, async ({ page }) => {
+    await page.setViewportSize({ width: visual.width, height: visual.height });
+    await openLocalAtSeed(page, "M1-FEDCBA9876543210");
+    if (visual.locale === "zh-CN") {
+      await page.getByRole("button", { name: "Open settings" }).click();
+      await page.locator("[data-language-select]").selectOption("zh-CN");
+      await page.locator("[data-dialog-close]").click();
+    }
+
+    await expect(page.locator(".hex-tile")).toHaveCount(19);
+    await expect(page.locator(".board-resource-icon[data-board-resource]")).toHaveCount(18);
+    await expect(page.locator(".dice-chip")).toHaveCount(18);
+    await expect(page.locator(".robber-piece")).toHaveCount(1);
+    await expect(page.locator(".terrain-icon, .hex-resource")).toHaveCount(0);
+    const hexSemantics = await page.locator(".hex-tile").evaluateAll((hexes) => hexes.map((hex) => ({
+      label: hex.getAttribute("aria-label") ?? "",
+      resource: hex.querySelector("[data-board-resource]")?.getAttribute("data-board-resource") ?? null,
+      visibleText: [...hex.querySelectorAll("text")].map((entry) => entry.textContent?.trim() ?? "")
+    })));
+    const desertHexes = hexSemantics.filter((hex) => hex.resource === null);
+    expect(desertHexes).toHaveLength(1);
+    expect(desertHexes[0].label).toBe(visual.desertName);
+    expect(hexSemantics.every((hex) => hex.label.length > 0)).toBe(true);
+    for (const [index, resource] of ["wood", "brick", "wool", "grain", "ore"].entries()) {
+      for (const hex of hexSemantics.filter((entry) => entry.resource === resource)) {
+        expect(hex.label).toContain(visual.resourceNames[index]);
+      }
+    }
+    expect(hexSemantics.flatMap((hex) => hex.visibleText).join(" "))
+      .not.toMatch(/Forest|Hill|Pasture|Field|Mountain|Desert|森林|丘陵|牧场|田地|山地|沙漠|\b(Wd|Br|Wl|Gr|Or)\b/);
+
+    await expect(page.locator('.port-marker[data-port-kind="generic"]')).toHaveCount(4);
+    await expect(page.locator('.port-marker[data-port-kind="resource"]')).toHaveCount(5);
+    for (const port of await page.locator('.port-marker[data-port-kind="resource"]').all()) {
+      const resource = await port.getAttribute("data-port-resource");
+      const resourceIndex = ["wood", "brick", "wool", "grain", "ore"].indexOf(resource ?? "");
+      expect(resourceIndex).toBeGreaterThanOrEqual(0);
+      await expect(port.locator(`[data-resource-icon="${resource}"]`)).toHaveCount(1);
+      await expect(port).toHaveAttribute(
+        "aria-label",
+        `2:1 ${visual.resourceNames[resourceIndex]} ${visual.portSuffix}`
+      );
+    }
+
+    const inventory = page.locator('[data-resource-inventory="private"] .resource-bundle').first();
+    for (const resourceName of visual.resourceNames) await expect(inventory).toHaveAttribute("aria-label", new RegExp(resourceName));
+    const badgeColors = await page.locator('[data-resource-inventory="bank"] [data-resource-badge]').evaluateAll(
+      (badges) => badges.map((badge) => getComputedStyle(badge).backgroundColor)
+    );
+    expect(badgeColors).toHaveLength(5);
+    expect(badgeColors.every((color) => color !== "rgba(0, 0, 0, 0)" && color !== "transparent")).toBe(true);
+    expect(new Set(badgeColors).size).toBe(5);
+
+    await page.getByRole("tab", { name: visual.locale === "en" ? "Commerce Guild" : "商业公会" }).click();
+    await expect(page.locator("[data-gathering-cooldown]")).toHaveCount(1);
+    const containment = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: innerWidth,
+      overflowingBundles: [...document.querySelectorAll<HTMLElement>(".resource-bundle")]
+        .filter((bundle) => bundle.scrollWidth > bundle.clientWidth + 1).length
+    }));
+    expect(containment.documentWidth).toBeLessThanOrEqual(containment.viewportWidth);
+    expect(containment.overflowingBundles).toBe(0);
+  });
+}
 
 for (const viewport of [
   { name: "desktop", width: 1280, height: 720 },
@@ -1544,7 +1782,7 @@ test("English defaults, Chinese retranslates history, and the locale survives re
   await expect(page.getByRole("heading", { name: "Game Log" })).toBeVisible();
   await setDeterministicTotal(page, 8);
   await page.getByRole("button", { name: "Roll Dice" }).click();
-  await expect(page.getByRole("log")).toContainText("Voyage1969 rolled 8");
+  await expect(page.getByRole("log")).toContainText("Earnest rolled 8");
 
   await page.getByRole("button", { name: "Open settings" }).click();
   const language = page.locator("[data-language-select]");
@@ -1554,7 +1792,7 @@ test("English defaults, Chinese retranslates history, and the locale survives re
   await page.locator("[data-dialog-close]").click();
 
   await expect(page.getByRole("heading", { name: "游戏日志" })).toBeVisible();
-  await expect(page.getByRole("log")).toContainText("Voyage1969 掷出了 8");
+  await expect(page.getByRole("log")).toContainText("Earnest 掷出了 8");
   await expect(page.getByText("产出统计")).toBeVisible();
 
   await page.reload();
@@ -1564,16 +1802,17 @@ test("English defaults, Chinese retranslates history, and the locale survives re
   await expect(page.getByRole("button", { name: "掷骰子" })).toBeVisible();
   await expect(page.getByRole("log")).toContainText("初始设置已开始，请按蛇形顺序放置村庄和道路。");
 
+  await advanceLocalGatheringCooldownToAction(page);
   await page.getByRole("tab", { name: "商业公会" }).click();
   await page.getByRole("button", { name: "开始集会" }).click();
   await page.getByRole("button", { name: "开启拍卖" }).click();
   await expect(page.getByRole("log")).toContainText(
     "没有玩家持有公会代币，商业公会拍卖已结束。"
   );
-  await expect(page.getByLabel("Voyage1969")).toHaveCount(0);
+  await expect(page.getByLabel("Earnest")).toHaveCount(0);
 });
 
-test("mobile keeps log and dice statistics internally scrollable", async ({ page }) => {
+test("Chinese mobile keeps log and dice statistics internally scrollable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openLocal(page);
   await completeLocalSetup(page);
@@ -1585,6 +1824,10 @@ test("mobile keeps log and dice statistics internally scrollable", async ({ page
   await setDeterministicTotal(page, 7);
   await page.getByRole("button", { name: "Roll Dice" }).click();
 
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await page.locator("[data-language-select]").selectOption("zh-CN");
+  await page.locator("[data-dialog-close]").click();
+
   const log = page.getByRole("log");
   expect(await log.evaluate((element) => element.scrollHeight)).toBeGreaterThan(
     await log.evaluate((element) => element.clientHeight)
@@ -1593,8 +1836,8 @@ test("mobile keeps log and dice statistics internally scrollable", async ({ page
   await page.keyboard.press("End");
   await expect.poll(() => log.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 
-  await page.getByRole("button", { name: "dice", exact: true }).click();
-  const diceList = page.getByLabel("Income by player for selected dice total");
+  await page.getByRole("button", { name: "骰点", exact: true }).click();
+  const diceList = page.getByLabel("所选骰点下各玩家的产出");
   expect(await diceList.evaluate((element) => element.scrollHeight)).toBeGreaterThan(
     await diceList.evaluate((element) => element.clientHeight)
   );

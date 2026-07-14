@@ -103,3 +103,13 @@ Status: Complete
 - Public bilingual seed/copy controls with a selectable manual fallback, explicit confirmation, host-only Online restart authority, and converged room-version broadcasts.
 - Storage schema v2 and protocol v2 with exact fixed-board v1 migration through reserved `M0-STANDARD`; new games never emit the compatibility seed.
 - Verification: 1,000-seed invariants, golden layouts, Local/Worker/protocol/migration/restart suites, three-context Playwright convergence, responsive screenshots, and the release evidence recorded in the seeded-map handoff.
+
+## Milestone 10: Gathering Pacing and Resource Iconography
+
+Status: Complete pending final whole-branch review
+
+- One authoritative table-wide Commerce Guild cooldown: `2n` on new/restarted matches, `n` after a manual start, with the initiating turn excluded and no automatic gathering trigger.
+- Current-player, clean-action-phase authority in Local and Online play, with exact no-payload public commands, caller-derived identity, shared projection, and reconnect-safe storage schema v3 migration.
+- Atomic second-settlement setup resources from every adjacent producing hex, including equal bank debit and exact-once behavior.
+- One filled, accessible resource-icon system across operational controls, hands, bank, statistics, ports, and board hexes; explanatory prose and localized assistive semantics retain complete names.
+- Verification: focused domain/Worker/UI suites, four-player Local and three-isolated-caller Online cooldown vectors, exact setup-grant browser coverage, bilingual desktop/mobile icon and scroll checks, release gates, and the feature verification record.

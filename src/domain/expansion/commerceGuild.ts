@@ -632,7 +632,7 @@ export function resolveAuctionRound(
   const outcome = resolvedOutcome.outcome;
   const rewardedGame = resolvedOutcome.game;
   const winnerName = getPlayer(game, winnerId).name;
-  const summary = `${winnerName} won auction round ${round} with ${winningBid} token(s): ${describeBlindBoxOutcome(outcome)}.`;
+  const summary = `${winnerName} won auction round ${round} with ${winningBid} ${winningBid === 1 ? "token" : "tokens"}: ${describeBlindBoxOutcome(outcome)}.`;
 
   return {
     kind: "won",

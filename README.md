@@ -9,6 +9,7 @@ TypeScript, React, and Cloudflare Workers implementation of a Catan-like board-g
 - Local Game for four-player hot-seat play and Online Game for anonymous private rooms with three or four seats.
 - Every new game uses a randomized standard 19-hex map with the standard terrain, number-token, and port multisets.
 - Local Game opens in a real empty setup with four players, no prebuilt pieces or resources, and snake-order settlement/road placement.
+- Each player's second setup settlement immediately grants one resource from every adjacent producing hex and debits the bank by the same amount.
 - A public canonical `M1-` seed lets every browser reconstruct the same terrain, numbers, ports, and stable geometry.
 - Catan-like dice production, staged robber flow, build costs, scoring, and enforced turn progression.
 - All standard development-card effects with explicit player choices and one non-victory card per turn.
@@ -19,11 +20,12 @@ TypeScript, React, and Cloudflare Workers implementation of a Catan-like board-g
   - full expected income matrix
 - Public multi-resource player offers that any eligible opponent can accept during the active player's action phase.
 - English interface by default with a session-persistent Simplified Chinese option in Settings.
+- Filled, accessible resource icons replace compact operational resource words while retaining localized names for assistive technology, rules, and logs.
 - Commerce Guild expansion:
   - three shared trade slots
   - once-per-turn resource-to-token trades
   - token transfer
-  - gathering redemption phase
+  - manual gathering redemption phase with one table-wide gathering cooldown
   - three-round blind-box auction flow
   - voucher-to-prize-card redemption
 
@@ -57,11 +59,19 @@ Only the Online host can restart, and each restart requires inline confirmation.
 
 `M0-STANDARD` is migration-only compatibility for an exact legacy fixed-board room. It preserves the released legacy geometry and live gameplay references, is never generated for a new match, and unknown or altered legacy boards are rejected without a partial write.
 
+## Gathering, Setup Resources, and Icons
+
+The first setup settlement grants nothing. Placing a player's second setup settlement grants one card for each adjacent non-desert producing hex, counts repeated resources independently, and applies the matching bank debit in the same transition. The paired setup road never repeats the award.
+
+The Commerce Guild now uses one manual, table-wide gathering cooldown measured in completed turns. A new or restarted match begins at `2n` turns for `n` players. After a qualified current player starts a gathering during a clean post-roll action phase, the cooldown resets to `n`; the initiating turn is excluded, and no automatic gathering starts in the background.
+
+Operational hands, bank stock, costs, trades, statistics, ports, and producing hexes use shared accessible resource icons with visible quantities. Terrain names and abbreviations are no longer repeated on the board, while complete localized resource and terrain names remain available to assistive technology and in explanatory prose and game logs.
+
 ## Cloudflare Deployment
 
 Cloudflare Workers Builds deploys GitHub `main`. The Worker serves the SPA and room API from one origin, while a Durable Object owns each room's authoritative state and WebSocket connections.
 
-This release upgrades room storage schema v2 and wire protocol v2 together. Deploy the Worker and SPA as one release: compatible v1 lobbies and exact legacy fixed-board rooms migrate automatically, while incompatible old clients follow the refresh/recovery path instead of receiving a partial projection.
+This release upgrades room storage schema v3 and wire protocol v3 together. Deploy the Worker and SPA as one release. Valid schema-v2 lobbies migrate without fabricating a match; valid v2 matches preserve live gathering state and receive a deterministic cooldown baseline. Compatible v1 rooms continue through the existing fixed-board migration chain. Incompatible old clients follow the refresh/recovery path instead of receiving a partial projection.
 
 ```bash
 pnpm build:worker
@@ -69,7 +79,7 @@ pnpm exec wrangler deploy
 pnpm exec wrangler deploy --name catan-imitation-preview
 ```
 
-This project deploys preview builds to the separate `catan-imitation-preview` Worker because version preview URLs are not suitable for its Durable Object binding. For recovery, switch traffic only to a previously verified schema-v2-compatible deployment. After any room has migrated to schema v2, never roll back to a schema-v1 binary; use a compatible v2 deployment or roll forward with a corrective release. GitHub Pages publishing has been retired so there is only one production host; the former Pages address now returns HTTP 404.
+This project deploys preview builds to the separate `catan-imitation-preview` Worker because version preview URLs are not suitable for its Durable Object binding. For recovery, switch traffic only to a previously verified schema-v3-compatible deployment. After any room has migrated to schema v3, never roll back to a schema-v2 or schema-v1 binary; use a compatible v3 deployment or roll forward with a corrective release. GitHub Pages publishing has been retired so there is only one production host; the former Pages address now returns HTTP 404.
 
 ## Documentation Map
 
@@ -81,6 +91,10 @@ This project deploys preview builds to the separate `catan-imitation-preview` Wo
 - [Seeded random maps spec](specs/003-seeded-random-maps/spec.md)
 - [Seeded random maps quickstart](specs/003-seeded-random-maps/quickstart.md)
 - [Seeded random maps verification](specs/003-seeded-random-maps/verification.md)
+- [Gathering pacing and resource icons spec](specs/004-gathering-pacing-resource-icons/spec.md)
+- [Gathering pacing and resource icons quickstart](specs/004-gathering-pacing-resource-icons/quickstart.md)
+- [Gathering pacing and resource icons verification](specs/004-gathering-pacing-resource-icons/verification.md)
+- [Gathering pacing and resource icons handoff](specs/004-gathering-pacing-resource-icons/handoff.md)
 - [Roadmap](docs/roadmap.md)
 - [Project constitution](.specify/memory/constitution.md)
 

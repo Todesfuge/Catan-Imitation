@@ -433,10 +433,10 @@ describe("online game projection adapter", () => {
   it("bounds recent sanitized logs so a real projected snapshot stays within 16 KiB", () => {
     const local = createScenarioAppState();
     const seats = local.game.players.map((player, index) => ({ seatId: `seat-${index + 1}`, playerId: player.id, nickname: player.name, ready: true }));
-    const log = [...local.game.log, ...Array.from({ length: 20 }, (_, index) => ({
+    const log = [...Array.from({ length: 20 }, (_, index) => ({
       id: `bounded-log-${index}`, message: "safe", messageKey: "dice.rolled" as const,
       params: { playerName: local.game.players[0]!.name, total: 8, eventCount: 0 }
-    }))];
+    })), ...local.game.log];
     const projected = projectRoomView({ roomCode: "234567", lifecycle: "playing", roomVersion: 42, seats,
       matchState: { game: { ...local.game, log }, guild: local.guild, lastDice: local.lastDice } }, "seat-1",
     { connectedSeatIds: seats.map((seat) => seat.seatId) });
@@ -444,7 +444,7 @@ describe("online game projection adapter", () => {
       presence: seats.map((seat) => ({ seatId: seat.seatId, connectionCount: 1, online: true })) });
     expect(projected.publicState.game?.log).toHaveLength(6);
     expect(projected.publicState.game?.log.map((entry) => entry.id)).toEqual(
-      [14, 15, 16, 17, 18, 19].map((index) => `bounded-log-${index}`)
+      [0, 1, 2, 3, 4, 5].map((index) => `bounded-log-${index}`)
     );
     expect(new TextEncoder().encode(wire).byteLength).toBeLessThanOrEqual(MAX_WIRE_BYTES);
     expect(parseServerWebSocketMessage(wire).type).toBe("room.snapshot");

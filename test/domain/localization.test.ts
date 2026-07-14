@@ -29,9 +29,13 @@ describe("English and Simplified Chinese localization", () => {
   it("localizes resource quantities, bundles, and generic card counts", () => {
     expect(translate("en", "resource.quantity", { resource: "Wood", quantity: 2 })).toBe("Wood: 2");
     expect(translate("en", "resource.bundleSeparator")).toBe(", ");
-    expect(translate("en", "resource.cardsGeneric", { count: 3 })).toBe("3 resource card(s)");
+    expect(translate("en", "resource.cardsGeneric.one", { count: 1 })).toBe("1 resource card");
+    expect(translate("en", "resource.cardsGeneric.other", { count: 0 })).toBe("0 resource cards");
+    expect(translate("en", "resource.cardsGeneric.other", { count: 2 })).toBe("2 resource cards");
     expect(translate("zh-CN", "resource.quantity", { resource: "木材", quantity: 2 })).not.toBe("Wood: 2");
-    expect(translate("zh-CN", "resource.cardsGeneric", { count: 3 })).not.toBe("3 resource card(s)");
+    expect(translate("zh-CN", "resource.cardsGeneric.one", { count: 1 })).toBe("1 张资源卡");
+    expect(translate("zh-CN", "resource.cardsGeneric.other", { count: 0 })).toBe("0 张资源卡");
+    expect(translate("zh-CN", "resource.cardsGeneric.other", { count: 2 })).toBe("2 张资源卡");
   });
 
   it("renders English by default and the approved core surfaces in Chinese", () => {
@@ -82,6 +86,59 @@ describe("English and Simplified Chinese localization", () => {
         "zh-CN"
       )
     ).toBe("Loss 以 3 枚代币赢得第 2 轮拍卖：资源：木材 2, 粮食 1。");
+  });
+
+  it("uses count-aware token grammar in auction summaries and keyed logs", () => {
+    for (const [count, tokenWord] of [
+      [0, "tokens"],
+      [1, "token"],
+      [2, "tokens"]
+    ] as const) {
+      const auction = {
+        winnerId: "p2",
+        winnerName: "Loss",
+        round: 2,
+        winningBid: count,
+        outcome: { kind: "voucher" as const }
+      };
+      expect(formatAuctionSummary(auction, "en")).toBe(
+        `Loss won auction round 2 with ${count} ${tokenWord}: voucher.`
+      );
+      expect(formatAuctionSummary(auction, "zh-CN")).toBe(
+        `Loss 以 ${count} 枚代币赢得第 2 轮拍卖：1 张兑换券。`
+      );
+
+      expect(formatGameLogEntry({
+        id: `transfer-${count}`,
+        message: "fallback",
+        messageKey: "guild.tokensTransferred",
+        params: { fromName: "Earnest", amount: count, toName: "Loss" }
+      }, "en")).toBe(`Earnest transferred ${count} guild ${tokenWord} to Loss.`);
+      expect(formatGameLogEntry({
+        id: `transfer-zh-${count}`,
+        message: "fallback",
+        messageKey: "guild.tokensTransferred",
+        params: { fromName: "Earnest", amount: count, toName: "Loss" }
+      }, "zh-CN")).toBe(`Earnest 向 Loss 转移了 ${count} 枚公会代币。`);
+
+      const auctionLog = {
+        id: `auction-${count}`,
+        message: "fallback",
+        messageKey: "guild.auctionResolved" as const,
+        params: {
+          winnerName: "Loss",
+          round: 2,
+          bid: count,
+          outcomeKind: "voucher"
+        }
+      };
+      expect(formatGameLogEntry(auctionLog, "en")).toBe(
+        `Loss won auction round 2 with ${count} ${tokenWord}: voucher.`
+      );
+      expect(formatGameLogEntry(auctionLog, "zh-CN")).toBe(
+        `Loss 以 ${count} 枚代币赢得第 2 轮拍卖：1 张兑换券。`
+      );
+    }
   });
 
   it("keeps complete resource names in natural-language logs after operational labels become icons", () => {
@@ -145,7 +202,7 @@ describe("English and Simplified Chinese localization", () => {
       "The seed stays selectable as a manual copy fallback",
       "Only the Online host can restart",
       "`M0-STANDARD` is migration-only",
-      "storage schema v2 and wire protocol v2"
+      "Compatible v1 rooms continue through the existing fixed-board migration chain"
     ]) {
       expect(englishReadme).toContain(claim);
     }
@@ -155,7 +212,31 @@ describe("English and Simplified Chinese localization", () => {
       "种子仍可选中，作为手动复制的后备方式",
       "只有联机房主可以重开",
       "`M0-STANDARD` 仅用于迁移",
-      "存储架构 v2 和联机协议 v2"
+      "兼容的 v1 房间继续通过既有固定棋盘迁移链升级"
+    ]) {
+      expect(chineseReadme).toContain(claim);
+    }
+  });
+
+  it("keeps gathering pacing, setup grants, icons, and v3 deployment explicit in both languages", () => {
+    const englishReadme = readFileSync("README.md", "utf8");
+    const chineseReadme = readFileSync("README.zh-CN.md", "utf8");
+
+    for (const claim of [
+      "English interface by default",
+      "table-wide gathering cooldown",
+      "second setup settlement",
+      "accessible resource icons",
+      "storage schema v3 and wire protocol v3"
+    ]) {
+      expect(englishReadme).toContain(claim);
+    }
+    for (const claim of [
+      "界面默认使用英文",
+      "全桌集会冷却",
+      "第二个初始村庄",
+      "无障碍资源图标",
+      "存储架构 v3 和联机协议 v3"
     ]) {
       expect(chineseReadme).toContain(claim);
     }

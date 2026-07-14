@@ -54,9 +54,14 @@ export function CommercePanel({
     tokenAmount <= availability.commerce.transfer.maxAmount;
   const gatheringCooldownStatus = state.guild.gathering.cooldownRemaining === 0
     ? t("commerce.gatheringReady")
-    : t("commerce.gatheringCooldownRemaining", {
+    : t(
+      state.guild.gathering.cooldownRemaining === 1
+        ? "commerce.gatheringCooldownRemaining.one"
+        : "commerce.gatheringCooldownRemaining.other",
+      {
         count: state.guild.gathering.cooldownRemaining
-      });
+      }
+    );
   const gatheringCooldownLabel = `${t("commerce.gatheringCooldown")}: ${gatheringCooldownStatus}`;
 
   return (
@@ -290,8 +295,15 @@ export function CommercePanel({
               ? state.sealedAuction
                 ? t("online.auctionDevelopmentCardGeneric")
                 : t("commerce.outcome.developmentCard", { cardKind: t("action.devCard") })
-              : t("resource.cardsGeneric", { count: resourceCardCount });
-          const summary = t("commerce.auctionResult", {
+              : t(
+                resourceCardCount === 1
+                  ? "resource.cardsGeneric.one"
+                  : "resource.cardsGeneric.other",
+                { count: resourceCardCount }
+              );
+          const summary = t(result.winningBid === 1
+            ? "commerce.auctionResult.one"
+            : "commerce.auctionResult", {
               winnerName: state.guild.gathering.lastAuctionResult.winnerName,
               round: state.guild.gathering.lastAuctionResult.round,
               bid: state.guild.gathering.lastAuctionResult.winningBid,

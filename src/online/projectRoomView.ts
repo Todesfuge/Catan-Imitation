@@ -414,7 +414,7 @@ function projectGame(
     log: game.log.flatMap((entry) => {
       const projected = projectLogEntry(entry, logContext);
       return projected ? [projected] : [];
-    }).slice(-MAX_PUBLIC_LOG_ENTRIES),
+    }).slice(0, MAX_PUBLIC_LOG_ENTRIES),
     developmentDeckCount: game.developmentDeck.length,
     lastDice: match.lastDice ? { ...match.lastDice } : null,
     ...(match.pendingPlayerTrade

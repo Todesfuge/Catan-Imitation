@@ -730,8 +730,10 @@ const reasonMessages: Record<AvailabilityReasonCode, (params?: AvailabilityReaso
   NO_RECIPIENT: () => "No recipient is available.",
   GATHERING_ONLY_DURING_PLAY: () => "A gathering is available only during normal play.",
   GATHERING_IN_PROGRESS: () => "A gathering is already in progress.",
-  GATHERING_COOLDOWN: (params) =>
-    `The gathering is available in ${params?.remainingTurns ?? 0} turn(s).`,
+  GATHERING_COOLDOWN: (params) => {
+    const remainingTurns = params?.remainingTurns ?? 0;
+    return `The gathering is available in ${remainingTurns} ${remainingTurns === 1 ? "turn" : "turns"}.`;
+  },
   REDEMPTION_NOT_OPEN: () => "Resource redemption is not open.",
   REDEMPTION_CAP_REACHED: () => "The gathering redemption cap has been reached.",
   NO_BANK_STOCK: () => "The bank has no redeemable stock.",

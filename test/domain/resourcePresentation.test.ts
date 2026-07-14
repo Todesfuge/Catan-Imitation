@@ -6,6 +6,7 @@ import { createLocalGameTableView } from "../../src/app/localGameState";
 import { resources } from "../../src/domain/types";
 import { GameTable } from "../../src/ui/GameTable";
 import { CommercePanel } from "../../src/ui/CommercePanel";
+import { DevelopmentCardPanel } from "../../src/ui/DevelopmentCardPanel";
 import {
   ResourceBadge,
   ResourceBundle,
@@ -177,9 +178,107 @@ describe("shared resource presentation", () => {
     expect(html).not.toContain('<select aria-label="Maritime give resource"');
     expect(html).toContain('data-player-trade-resource="wood"');
     expect(html).toContain('data-gathering-cooldown="3"');
-    expect(html).toContain('3 turn(s) remaining');
+    expect(html).toContain('3 turns remaining');
     expect(html).toContain('aria-describedby="gathering-start-unavailable-reason"');
   });
+
+  it("renders count-aware gathering cooldown text in English and Chinese", () => {
+    const state = createScenarioAppState();
+
+    for (const [count, english, chinese] of [
+      [0, "Ready", "可开启"],
+      [1, "1 turn remaining", "还需 1 个回合"],
+      [2, "2 turns remaining", "还需 2 个回合"]
+    ] as const) {
+      const view = createLocalGameTableView({
+        ...state,
+        guild: {
+          ...state.guild,
+          gatheringCooldown: {
+            availableAtTurn: state.game.turn + count,
+            displayDuration: Math.max(1, count)
+          }
+        }
+      });
+      const panel = createElement(CommercePanel, { state: view, dispatch: () => undefined });
+
+      expect(renderWithLocale(panel)).toContain(english);
+      expect(renderWithLocale(panel, "zh-CN")).toContain(chinese);
+    }
+  });
+
+  it.each(["en", "zh-CN"] as const)(
+    "puts complete localized maritime labels in both aria-label and title in %s",
+    (locale) => {
+      const view = createLocalGameTableView(createScenarioAppState());
+      const html = renderWithLocale(
+        createElement(GameTable, { view, dispatch: () => undefined }),
+        locale
+      );
+
+      for (const resource of resources) {
+        for (const attribute of ["data-maritime-give", "data-maritime-receive"] as const) {
+          const tag = html.match(
+            new RegExp(`<button[^>]*${attribute}="${resource}"[^>]*>`)
+          )?.[0] ?? "";
+          const ariaLabel = tag.match(/aria-label="([^"]+)"/)?.[1];
+          const title = tag.match(/title="([^"]+)"/)?.[1];
+
+          expect(ariaLabel).toContain(translate(locale, `resource.${resource}`));
+          expect(title).toBe(ariaLabel);
+        }
+      }
+    }
+  );
+
+  it.each(["en", "zh-CN"] as const)(
+    "puts complete localized development resource-choice labels in both aria-label and title in %s",
+    (locale) => {
+      const state = createScenarioAppState();
+
+      for (const effect of [
+        {
+          kind: "yearOfPlenty" as const,
+          playerId: state.game.activePlayerId,
+          remainingPicks: 2,
+          resumePhase: "action" as const
+        },
+        {
+          kind: "monopoly" as const,
+          playerId: state.game.activePlayerId,
+          resumePhase: "action" as const
+        }
+      ]) {
+        const view = createLocalGameTableView({
+          ...state,
+          game: {
+            ...state.game,
+            turnState: {
+              phase: "awaitingDevelopmentEffect" as const,
+              pendingDiscards: {},
+              developmentCardPlayed: true,
+              pendingDevelopmentEffect: effect
+            }
+          }
+        });
+        const html = renderWithLocale(
+          createElement(DevelopmentCardPanel, { state: view, dispatch: () => undefined }),
+          locale
+        );
+
+        for (const resource of resources) {
+          const tag = html.match(
+            new RegExp(`<button[^>]*data-resource-choice="${resource}"[^>]*>`)
+          )?.[0] ?? "";
+          const ariaLabel = tag.match(/aria-label="([^"]+)"/)?.[1];
+          const title = tag.match(/title="([^"]+)"/)?.[1];
+
+          expect(ariaLabel).toContain(translate(locale, `resource.${resource}`));
+          expect(title).toBe(ariaLabel);
+        }
+      }
+    }
+  );
 
   it("renders complete private and bank inventories as five semantic resource badges", () => {
     const html = renderWithLocale(
@@ -347,12 +446,12 @@ describe("shared resource presentation", () => {
       createElement(CommercePanel, { state: resultView, dispatch: () => undefined })
     );
     expect(resultHtml).toContain('class="generic-resource-card-count"');
-    expect(resultHtml).toContain('title="3 resource card(s)"');
+    expect(resultHtml).toContain('title="3 resource cards"');
     expect(resultHtml).toContain(
-      '<span class="sr-only">Loss won auction round 2 with 1 token(s): 3 resource card(s).</span>'
+      '<span class="sr-only">Loss won auction round 2 with 1 token: 3 resource cards.</span>'
     );
     expect(resultHtml).not.toContain(
-      '<p aria-label="Loss won auction round 2 with 1 token(s): 3 resource card(s)."'
+      '<p aria-label="Loss won auction round 2 with 1 token: 3 resource cards."'
     );
     const visualResult = resultHtml.match(
       /<span aria-hidden="true" class="auction-result-visual">([\s\S]*?)<\/span><\/p>/
@@ -365,6 +464,104 @@ describe("shared resource presentation", () => {
     expect(chineseResultHtml).toContain(
       '<span class="sr-only">Loss 以 1 枚代币赢得第 2 轮拍卖：3 张资源卡。</span>'
     );
+  });
+
+  it("renders generic auction resource-card counts with English singular and plural forms", () => {
+    const baseView = createLocalGameTableView(createScenarioAppState());
+
+    for (const [count, english, chinese] of [
+      [0, "0 resource cards", "0 张资源卡"],
+      [1, "1 resource card", "1 张资源卡"],
+      [2, "2 resource cards", "2 张资源卡"]
+    ] as const) {
+      const view = {
+        ...baseView,
+        guild: {
+          ...baseView.guild,
+          gathering: {
+            ...baseView.guild.gathering,
+            phase: "complete" as const,
+            lastAuctionResult: {
+              winnerName: "Loss",
+              round: 2,
+              winningBid: 1,
+              outcome: { kind: "resources" as const, resourceCardCount: count }
+            }
+          }
+        }
+      };
+      const panel = createElement(CommercePanel, { state: view, dispatch: () => undefined });
+
+      expect(renderWithLocale(panel)).toContain(`title="${english}"`);
+      expect(renderWithLocale(panel, "zh-CN")).toContain(`title="${chinese}"`);
+    }
+  });
+
+  it("renders Commerce auction bids with count-aware English token grammar", () => {
+    const baseView = createLocalGameTableView(createScenarioAppState());
+
+    for (const [bid, tokenWord] of [
+      [0, "tokens"],
+      [1, "token"],
+      [2, "tokens"]
+    ] as const) {
+      const view = {
+        ...baseView,
+        guild: {
+          ...baseView.guild,
+          gathering: {
+            ...baseView.guild.gathering,
+            phase: "complete" as const,
+            lastAuctionResult: {
+              winnerName: "Loss",
+              round: 2,
+              winningBid: bid,
+              outcome: { kind: "resources" as const, resourceCardCount: 2 }
+            }
+          }
+        }
+      };
+      const panel = createElement(CommercePanel, { state: view, dispatch: () => undefined });
+
+      expect(renderWithLocale(panel)).toContain(
+        `Loss won auction round 2 with ${bid} ${tokenWord}: 2 resource cards.`
+      );
+      expect(renderWithLocale(panel, "zh-CN")).toContain(
+        `Loss 以 ${bid} 枚代币赢得第 2 轮拍卖：2 张资源卡。`
+      );
+    }
+  });
+
+  it("renders Road Building remaining counts with English singular and plural forms", () => {
+    const state = createScenarioAppState();
+
+    for (const [count, english] of [
+      [0, "0 free roads remaining"],
+      [1, "1 free road remaining"],
+      [2, "2 free roads remaining"]
+    ] as const) {
+      const view = createLocalGameTableView({
+        ...state,
+        game: {
+          ...state.game,
+          turnState: {
+            phase: "awaitingDevelopmentEffect" as const,
+            pendingDiscards: {},
+            developmentCardPlayed: true,
+            pendingDevelopmentEffect: {
+              kind: "roadBuilding" as const,
+              playerId: state.game.activePlayerId,
+              remainingRoads: count,
+              resumePhase: "action" as const
+            }
+          }
+        }
+      });
+      const panel = createElement(DevelopmentCardPanel, { state: view, dispatch: () => undefined });
+
+      expect(renderWithLocale(panel)).toContain(english);
+      expect(renderWithLocale(panel, "zh-CN")).toContain(`还可免费放置 ${count} 条道路`);
+    }
   });
 
   it("marks a zero cooldown as ready with text as well as styling", () => {

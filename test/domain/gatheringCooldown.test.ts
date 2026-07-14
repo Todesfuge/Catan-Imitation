@@ -102,12 +102,20 @@ describe("Commerce Guild gathering cooldown", () => {
   });
 
   it("localizes the cooldown label, ready state, and disabled reason", () => {
-    const englishReason = formatAvailabilityReason({
-      code: "GATHERING_COOLDOWN",
-      params: { remainingTurns: 4 }
-    });
-    expect(englishReason).toBe("The gathering is available in 4 turn(s).");
-    expect(translateRuleText("zh-CN", englishReason)).toBe("集会还需 4 个回合才能开启。");
+    for (const [count, expected] of [
+      [0, "The gathering is available in 0 turns."],
+      [1, "The gathering is available in 1 turn."],
+      [2, "The gathering is available in 2 turns."]
+    ] as const) {
+      const englishReason = formatAvailabilityReason({
+        code: "GATHERING_COOLDOWN",
+        params: { remainingTurns: count }
+      });
+      expect(englishReason).toBe(expected);
+      expect(translateRuleText("zh-CN", englishReason)).toBe(
+        `集会还需 ${count} 个回合才能开启。`
+      );
+    }
     expect(translate("en", "commerce.gatheringCooldown")).toBe("Gathering cooldown");
     expect(translate("zh-CN", "commerce.gatheringReady")).toBe("可开启");
   });

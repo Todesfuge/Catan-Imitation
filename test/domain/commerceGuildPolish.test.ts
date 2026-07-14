@@ -134,16 +134,45 @@ describe("Commerce Guild polish", () => {
       }
     };
 
-    const transferred = gameReducer(state, {
+    const transferredOne = gameReducer(state, {
+      type: "TRANSFER_TOKENS",
+      fromPlayerId: "p1",
+      toPlayerId: "p2",
+      amount: 1
+    });
+    const transferredTwo = gameReducer(state, {
       type: "TRANSFER_TOKENS",
       fromPlayerId: "p1",
       toPlayerId: "p2",
       amount: 2
     });
 
-    expect(transferred.game.log[0].message).toContain("Voyage1969 transferred 2 guild token");
-    expect(transferred.game.log[0].message).toContain("Loss");
-    expect(transferred.game.log[0].message).not.toContain("p1 transferred");
+    expect(transferredOne.game.log[0].message).toBe(
+      "Voyage1969 transferred 1 guild token to Loss."
+    );
+    expect(transferredTwo.game.log[0].message).toBe(
+      "Voyage1969 transferred 2 guild tokens to Loss."
+    );
+    expect(transferredTwo.game.log[0].message).not.toContain("p1 transferred");
     expect(() => transferGuildTokens(state.game, "p1", "p1", 1)).toThrow(/different players/i);
+  });
+
+  it("writes count-aware raw auction summaries", () => {
+    const game = withPlayer(createScenarioGame(), "p2", (player) => ({
+      ...player,
+      guildTokens: 4
+    }));
+    const gathering = gatheringGuild(game);
+    const guild = {
+      ...gathering,
+      gathering: { ...gathering.gathering, phase: "auction" as const }
+    };
+
+    expect(resolveAuctionRound(game, guild, { p2: 1 }, () => 0.6).summary).toMatch(
+      /with 1 token:/
+    );
+    expect(resolveAuctionRound(game, guild, { p2: 2 }, () => 0.6).summary).toMatch(
+      /with 2 tokens:/
+    );
   });
 });

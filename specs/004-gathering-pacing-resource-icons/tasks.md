@@ -319,28 +319,28 @@ Files:
 
 Steps:
 
-- [ ] Add Local browser coverage that completes setup and proves first settlement no grant, second settlement exact adjacent grant, equal bank debit, and no repeat on the paired road.
-- [ ] Add Local three/four-player cooldown browser vectors proving initial `2n`, start availability only in clean action phase, post-start `n`, initiating-turn exclusion, and zero boundary.
-- [ ] Add Local desktop/mobile checks in English and Chinese for one cooldown badge, filled resource badges, keyboard resource selection, scrollable statistics/log panels, and no horizontal overflow.
-- [ ] Add board browser assertions for icon-only produced resources/ports, retained dice/robber visuals, no visible terrain word/abbreviation, and complete accessible labels.
-- [ ] Add two-isolated-context Online coverage proving identical public remaining values, current-caller-only start, no actor in sent command, one accepted version increment, stale/non-current rejection, and reconnect convergence.
-- [ ] Add or retain adversarial WebSocket coverage sending `playerId`/timer fields; assert protocol rejection and unchanged room version/snapshot.
-- [ ] Run the smallest affected Playwright project after each new assertion; observe RED until the relevant integration behavior is present, then fix only reproducible in-scope defects.
-- [ ] Update English and Chinese READMEs with manual gathering pacing, second-settlement starting resources, accessible resource icons, default-English/switchable-Chinese behavior, and protocol/storage v3 deployment note.
-- [ ] Update the roadmap to mark these behaviors complete without rewriting historical specs 001–003.
-- [ ] Run `pnpm vitest run test/domain/deliveryReadiness.test.ts test/domain/localization.test.ts`; expect documentation and bilingual claims GREEN.
-- [ ] Run `pnpm test`; record exact passed file/test counts in `verification.md`.
-- [ ] Run `pnpm test:worker`; record exact passed file/test counts.
-- [ ] Run `pnpm test:e2e`; record exact passed project/test counts.
-- [ ] Run `pnpm build` and `pnpm build:worker`; record both successful outputs.
-- [ ] Run `pnpm smoke:ui` and `pnpm smoke:worker`; record both successful outputs.
-- [ ] Run `pnpm exec wrangler deploy --dry-run --config wrangler.jsonc`; record bundle/binding success without deploying.
-- [ ] Run repository guards for obsolete auto gathering, personal/player-keyed cooldown state, resource abbreviations, duplicate icon maps, and visible terrain text; record zero unexpected matches.
-- [ ] Run `git diff --check`; expect no whitespace errors.
-- [ ] Complete the GP-001–GP-048 evidence table in `verification.md` and write `handoff.md` with branch, commits, schema migration/deployment implications, verified behavior, known out-of-scope items, and exact next action.
-- [ ] Request a whole-branch code review; resolve every confirmed finding with focused RED/GREEN evidence and rerun affected plus full gates.
-- [ ] Run artifact convergence against the final `spec.md`, `plan.md`, and `tasks.md`; append rather than renumber any newly discovered implementation task.
-- [ ] Commit `docs: verify gathering pacing and resource icons` only after every recorded command is current.
+- [x] Add Local browser coverage that completes setup and proves first settlement no grant, second settlement exact adjacent grant, equal bank debit, and no repeat on the paired road.
+- [x] Add supported three/four-player browser cooldown vectors: four-player Local and three-player Online, proving initial `2n`, start availability only in clean action phase, post-start `n`, initiating-turn exclusion, and zero boundary without adding a test-only Local roster.
+- [x] Add Local desktop/mobile checks in English and Chinese for one cooldown badge, filled resource badges, keyboard resource selection, scrollable statistics/log panels, and no horizontal overflow.
+- [x] Add board browser assertions for icon-only produced resources/ports, retained dice/robber visuals, no visible terrain word/abbreviation, and complete accessible labels.
+- [x] Add two-isolated-context Online coverage proving identical public remaining values, current-caller-only start, no actor in sent command, one accepted version increment, stale/non-current rejection, and reconnect convergence.
+- [x] Add or retain adversarial WebSocket coverage sending `playerId`/timer fields; assert protocol rejection and unchanged room version/snapshot.
+- [x] Run the smallest affected Playwright project after each new assertion; observe RED until the relevant integration behavior is present, then fix only reproducible in-scope defects.
+- [x] Update English and Chinese READMEs with manual gathering pacing, second-settlement starting resources, accessible resource icons, default-English/switchable-Chinese behavior, and protocol/storage v3 deployment note.
+- [x] Update the roadmap to mark these behaviors complete without rewriting historical specs 001–003.
+- [x] Run `pnpm vitest run test/domain/deliveryReadiness.test.ts test/domain/localization.test.ts`; expect documentation and bilingual claims GREEN.
+- [x] Run `pnpm test`; record exact passed file/test counts in `verification.md`.
+- [x] Run `pnpm test:worker`; record exact passed file/test counts.
+- [x] Run `pnpm test:e2e`; record exact passed project/test counts.
+- [x] Run `pnpm build` and `pnpm build:worker`; record both successful outputs.
+- [x] Run `pnpm smoke:ui` and `pnpm smoke:worker`; record both successful outputs.
+- [x] Run `pnpm exec wrangler deploy --dry-run --config wrangler.jsonc`; record bundle/binding success without deploying.
+- [x] Run repository guards for obsolete auto gathering, personal/player-keyed cooldown state, resource abbreviations, duplicate icon maps, and visible terrain text; record zero unexpected matches.
+- [x] Run `git diff --check`; expect no whitespace errors.
+- [x] Complete the GP-001–GP-048 evidence table in `verification.md` and write `handoff.md` with branch, commits, schema migration/deployment implications, verified behavior, known out-of-scope items, and exact next action.
+- [x] Request a whole-branch code review; resolve every confirmed finding with focused RED/GREEN evidence and rerun affected plus full gates.
+- [x] Run artifact convergence against the final `spec.md`, `plan.md`, and `tasks.md`; append rather than renumber any newly discovered implementation task.
+- [x] Commit `docs: verify gathering pacing and resource icons` only after every recorded command is current.
 
 ## Requirement Coverage Matrix
 
