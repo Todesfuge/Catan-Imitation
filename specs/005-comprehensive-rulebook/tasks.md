@@ -143,24 +143,24 @@ Files:
 
 Steps:
 
-- [ ] Review `spec.md`, `plan.md`, and completed T001/T002 diffs requirement by requirement; record the RB-001–RB-054 owner/test mapping in `verification.md`.
-- [ ] Run `pnpm vitest run test/domain/rulebookUi.test.ts test/domain/frontendAccessibility.test.ts test/domain/localization.test.ts test/domain/resourcePresentation.test.ts`; record file/test counts and success.
-- [ ] Run `pnpm exec playwright test test/e2e/rulebook.spec.ts --project=local-preview`; record dedicated test count and success.
-- [ ] Run `pnpm test`; record exact main-suite file/test counts.
-- [ ] Run `pnpm test:e2e`; record exact full browser-suite project/test counts.
-- [ ] Run `pnpm build`; record successful TypeScript/Vite output.
-- [ ] Run `pnpm smoke:ui`; record successful smoke output.
-- [ ] Run `rg -n '"dialog\.rule[1-4]"' src`; record zero matches.
-- [ ] Run `$pattern = '\[(' + 'TBD|TO' + 'DO)\]|PLACE' + 'HOLDER:'; Get-ChildItem specs/005-comprehensive-rulebook -Recurse -File | Select-String -Pattern $pattern`; record zero unresolved placeholders.
-- [ ] Run `git diff b357b51 -- src/domain src/online worker package.json pnpm-lock.yaml`; record empty output proving no gameplay/network/dependency change.
-- [ ] Run `git diff --check`; record no whitespace errors.
-- [ ] Request a whole-feature code review covering content correctness, accessibility, focus lifecycle, responsive containment, localization parity, privacy, and boundary/minimalism constraints.
-- [ ] Resolve every confirmed finding with a focused failing test first; rerun the affected focused command and all final gates changed by the fix.
-- [ ] Perform the Spec Kit artifact analysis gate: verify every requirement maps to a task/evidence row, no task contradicts the approved static scope, no CRITICAL/HIGH finding remains, and any MEDIUM/LOW item is explicitly recorded.
-- [ ] Perform convergence against the final application and `tasks.md`; append a new task rather than renumbering if any approved requirement remains unsatisfied.
-- [ ] Create `handoff.md` with branch/commit list, implemented scope, unchanged systems, key files/interfaces, verification counts/commands, review result, convergence result, risks, and exact integration next action.
-- [ ] Mark T003 complete only when all recorded evidence is current and no required work remains.
-- [ ] Commit `docs: verify comprehensive in-game rulebook`.
+- [x] Review `spec.md`, `plan.md`, and completed T001/T002 diffs requirement by requirement; record the RB-001–RB-054 owner/test mapping in `verification.md`.
+- [x] Run `pnpm vitest run test/domain/rulebookUi.test.ts test/domain/frontendAccessibility.test.ts test/domain/localization.test.ts test/domain/resourcePresentation.test.ts`; record file/test counts and success.
+- [x] Run `pnpm exec playwright test test/e2e/rulebook.spec.ts --project=local-preview`; record dedicated test count and success.
+- [x] Run `pnpm test`; record exact main-suite file/test counts.
+- [x] Run `pnpm test:e2e`; record exact full browser-suite project/test counts.
+- [x] Run `pnpm build`; record successful TypeScript/Vite output.
+- [x] Run `pnpm smoke:ui`; record successful smoke output.
+- [x] Run `rg -n '"dialog\.rule[1-4]"' src`; record zero matches.
+- [x] Run `$pattern = '\[(' + 'TBD|TO' + 'DO)\]|PLACE' + 'HOLDER:'; Get-ChildItem specs/005-comprehensive-rulebook -Recurse -File | Select-String -Pattern $pattern`; record zero unresolved placeholders.
+- [x] Run `git diff b357b51 -- src/domain src/online worker package.json pnpm-lock.yaml`; record empty output proving no gameplay/network/dependency change.
+- [x] Run `git diff --check`; record no whitespace errors.
+- [x] Request a whole-feature code review covering content correctness, accessibility, focus lifecycle, responsive containment, localization parity, privacy, and boundary/minimalism constraints.
+- [x] Resolve every confirmed finding with a focused failing test first; rerun the affected focused command and all final gates changed by the fix.
+- [x] Perform the Spec Kit artifact analysis gate: verify every requirement maps to a task/evidence row, no task contradicts the approved static scope, no CRITICAL/HIGH finding remains, and any MEDIUM/LOW item is explicitly recorded.
+- [x] Perform convergence against the final application and `tasks.md`; append a new task rather than renumbering if any approved requirement remains unsatisfied.
+- [x] Create `handoff.md` with branch/commit list, implemented scope, unchanged systems, key files/interfaces, verification counts/commands, review result, convergence result, risks, and exact integration next action.
+- [x] Mark T003 complete only when all recorded evidence is current and no required work remains.
+- [x] Commit `docs: verify comprehensive in-game rulebook`.
 
 ## Requirement Coverage Matrix
 
