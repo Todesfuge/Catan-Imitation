@@ -14,11 +14,13 @@ import {
   type GameLogEntry,
   type ResourceMap
 } from "../domain/types";
+import { rulebookMessages } from "./rulebook/messages";
 
 export type Locale = "en" | "zh-CN";
 type MessageParams = Record<string, string | number>;
 
 const messages = {
+  ...rulebookMessages,
   "mode.language": { en: "Language", "zh-CN": "语言" },
   "mode.eyebrow": { en: "Choose how to play", "zh-CN": "选择游戏方式" },
   "mode.title": { en: "Catan Imitation", "zh-CN": "卡坦岛仿制版" },

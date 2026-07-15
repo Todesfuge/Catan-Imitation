@@ -52,31 +52,31 @@ Implement the catalog object with `as const satisfies` the shown record shape so
 
 Steps:
 
-- [ ] Create `test/domain/rulebookUi.test.ts` with a `renderWithLocale(node, locale)` helper using `I18nProvider` and `renderToStaticMarkup`, matching the repository's existing Node test environment.
-- [ ] Add a failing catalog test that iterates every `rulebookMessages` entry and requires non-empty `en` and `zh-CN` values; require both `translate(locale, key)` calls to return content rather than the raw key.
-- [ ] Add a failing chapter-order/content test that expects `rulebookChapterIds` to equal `quickStart`, `baseRules`, `commerceGuild`, `quickReference` and renders each `RulebookChapterContent` in English and Chinese.
-- [ ] In the content test, assert Quick Start includes objective, all five terrain/resource pairs, snake setup, distance rule, second-settlement-only grant, roll/mandatory decisions/actions/end turn, rolling seven, robber, scoring, and concrete setup/turn examples.
-- [ ] Assert Base Rules includes road/settlement/city/development costs, production/bank shortage, connectivity/distance/city upgrade/piece stock, public player trade, 4:1/3:1/2:1 maritime trade, robber privacy, scoring, victory, and Common Misunderstandings.
-- [ ] Assert all five development-card effects are explicit: Knight moves the robber/counts for Largest Army; Road Building places up to two legal free roads; Year of Plenty takes up to two bank-available resources; Monopoly takes every opponent card of one chosen resource; Victory Point stays hidden and scores. Require the purchase-turn and one-non-victory-card-per-turn limits.
-- [ ] Assert scoring detail includes settlement/city/hidden-point/prize-card values, Longest Road's five-road minimum/opponent-building interruption/tie retention, Largest Army's three-knight minimum/strict takeover, and the configured target displayed by the game.
-- [ ] Assert rolling seven states the more-than-seven threshold, exact half rounded down, all owed discards before robber movement, move-to-a-different-hex requirement, eligible adjacent victim, and one random hidden resource theft.
-- [ ] Assert Commerce Guild includes all three current slot costs/rewards, refresh and once-per-turn use, token transfer, initial `2n`, post-start `n`, initiating-turn exclusion, action/current-player/pending-trade/idle authority, four-resource redemption cap, bank stock, three sealed rounds, replacement/affordability/privacy/tie resolution, resources/development/voucher outcomes, zero-token/no-bid completion, three-voucher prize redemption, and Common Misunderstandings.
-- [ ] Assert Quick Reference includes turn checklist, costs, terrain production, 4:1/3:1/2:1 ratios, score sources, disabled-action reasons, keyboard/touch/internal-scroll/mobile guidance, and a stable final sentinel.
-- [ ] Add a failing cost-rendering test that computes expected accessible bundle labels from `buildCosts.road`, `.settlement`, `.city`, and `.developmentCard`, then requires the Quick Reference markup to contain matching `ResourceBundle` output rather than copied text-only costs.
-- [ ] Add a failing icon-accessibility test that requires each resource icon/bundle to retain `data-resource-*`, localized `aria-label`, and non-color prose association with its terrain.
-- [ ] Run `pnpm vitest run test/domain/rulebookUi.test.ts`; expect RED because the catalog and content modules do not exist.
-- [ ] Create `src/ui/rulebook/messages.ts` with all `rulebook.*` labels, headings, paragraphs, ordered steps, examples, misunderstandings, fact labels, reference rows, language-control label, and final sentinel in English and Simplified Chinese.
-- [ ] Import `rulebookMessages` into `src/ui/i18n.ts` and spread it into the existing `messages` object before `MessageKey` is inferred; do not add another translate function, context, storage key, or locale type.
-- [ ] Create `src/ui/rulebook/RulebookContent.tsx` with the closed chapter-id tuple/type and four explicit semantic chapter renderers. Use headings, short paragraphs, ordered/unordered lists, example callouts, `<dl>`/compact groups where appropriate, and exactly one requested chapter per render.
-- [ ] Import `buildCosts` and render the four cost rows through `ResourceBundle`; import `resources`/`ResourceIcon` for terrain-resource relationships and keep full localized names in adjacent text.
-- [ ] Keep the component API static: no `GameTableView`, player id, phase, room, command, dispatch, target-score value, or action-availability prop/import.
-- [ ] Run `pnpm vitest run test/domain/rulebookUi.test.ts`; expect all new content/catalog/cost/icon tests GREEN.
-- [ ] Run `pnpm vitest run test/domain/localization.test.ts test/domain/resourcePresentation.test.ts`; expect existing i18n and single-icon-owner contracts GREEN.
-- [ ] Run `pnpm build`; expect TypeScript and Vite build GREEN with no untranslated/missing `MessageKey` error.
-- [ ] Run `rg -n "GameTableView|dispatch|useEffect|localStorage|sessionStorage" src/ui/rulebook/RulebookContent.tsx src/ui/rulebook/messages.ts`; expect no rulebook content state/game command/storage dependency.
-- [ ] Review English and Chinese chapter pairs side by side against RB-007–RB-038 and the authoritative baseline in `plan.md`; correct any missing or mismatched topic before commit.
-- [ ] Run `git diff --check`; expect no whitespace errors.
-- [ ] Commit `feat: add bilingual rulebook chapters`.
+- [x] Create `test/domain/rulebookUi.test.ts` with a `renderWithLocale(node, locale)` helper using `I18nProvider` and `renderToStaticMarkup`, matching the repository's existing Node test environment.
+- [x] Add a failing catalog test that iterates every `rulebookMessages` entry and requires non-empty `en` and `zh-CN` values; require both `translate(locale, key)` calls to return content rather than the raw key.
+- [x] Add a failing chapter-order/content test that expects `rulebookChapterIds` to equal `quickStart`, `baseRules`, `commerceGuild`, `quickReference` and renders each `RulebookChapterContent` in English and Chinese.
+- [x] In the content test, assert Quick Start includes objective, all five terrain/resource pairs, snake setup, distance rule, second-settlement-only grant, roll/mandatory decisions/actions/end turn, rolling seven, robber, scoring, and concrete setup/turn examples.
+- [x] Assert Base Rules includes road/settlement/city/development costs, production/bank shortage, connectivity/distance/city upgrade/piece stock, public player trade, 4:1/3:1/2:1 maritime trade, robber privacy, scoring, victory, and Common Misunderstandings.
+- [x] Assert all five development-card effects are explicit: Knight moves the robber/counts for Largest Army; Road Building places up to two legal free roads; Year of Plenty takes up to two bank-available resources; Monopoly takes every opponent card of one chosen resource; Victory Point stays hidden and scores. Require the purchase-turn and one-non-victory-card-per-turn limits.
+- [x] Assert scoring detail includes settlement/city/hidden-point/prize-card values, Longest Road's five-road minimum/opponent-building interruption/tie retention, Largest Army's three-knight minimum/strict takeover, and the configured target displayed by the game.
+- [x] Assert rolling seven states the more-than-seven threshold, exact half rounded down, all owed discards before robber movement, move-to-a-different-hex requirement, eligible adjacent victim, and one random hidden resource theft.
+- [x] Assert Commerce Guild includes all three current slot costs/rewards, refresh and once-per-turn use, token transfer, initial `2n`, post-start `n`, initiating-turn exclusion, action/current-player/pending-trade/idle authority, four-resource redemption cap, bank stock, three sealed rounds, replacement/affordability/privacy/tie resolution, resources/development/voucher outcomes, zero-token/no-bid completion, three-voucher prize redemption, and Common Misunderstandings.
+- [x] Assert Quick Reference includes turn checklist, costs, terrain production, 4:1/3:1/2:1 ratios, score sources, disabled-action reasons, keyboard/touch/internal-scroll/mobile guidance, and a stable final sentinel.
+- [x] Add a failing cost-rendering test that computes expected accessible bundle labels from `buildCosts.road`, `.settlement`, `.city`, and `.developmentCard`, then requires the Quick Reference markup to contain matching `ResourceBundle` output rather than copied text-only costs.
+- [x] Add a failing icon-accessibility test that requires each resource icon/bundle to retain `data-resource-*`, localized `aria-label`, and non-color prose association with its terrain.
+- [x] Run `pnpm vitest run test/domain/rulebookUi.test.ts`; expect RED because the catalog and content modules do not exist.
+- [x] Create `src/ui/rulebook/messages.ts` with all `rulebook.*` labels, headings, paragraphs, ordered steps, examples, misunderstandings, fact labels, reference rows, language-control label, and final sentinel in English and Simplified Chinese.
+- [x] Import `rulebookMessages` into `src/ui/i18n.ts` and spread it into the existing `messages` object before `MessageKey` is inferred; do not add another translate function, context, storage key, or locale type.
+- [x] Create `src/ui/rulebook/RulebookContent.tsx` with the closed chapter-id tuple/type and four explicit semantic chapter renderers. Use headings, short paragraphs, ordered/unordered lists, example callouts, `<dl>`/compact groups where appropriate, and exactly one requested chapter per render.
+- [x] Import `buildCosts` and render the four cost rows through `ResourceBundle`; import `resources`/`ResourceIcon` for terrain-resource relationships and keep full localized names in adjacent text.
+- [x] Keep the component API static: no `GameTableView`, player id, phase, room, command, dispatch, target-score value, or action-availability prop/import.
+- [x] Run `pnpm vitest run test/domain/rulebookUi.test.ts`; expect all new content/catalog/cost/icon tests GREEN.
+- [x] Run `pnpm vitest run test/domain/localization.test.ts test/domain/resourcePresentation.test.ts`; expect existing i18n and single-icon-owner contracts GREEN.
+- [x] Run `pnpm build`; expect TypeScript and Vite build GREEN with no untranslated/missing `MessageKey` error.
+- [x] Run `rg -n "GameTableView|dispatch|useEffect|localStorage|sessionStorage" src/ui/rulebook/RulebookContent.tsx src/ui/rulebook/messages.ts`; expect no rulebook content state/game command/storage dependency.
+- [x] Review English and Chinese chapter pairs side by side against RB-007–RB-038 and the authoritative baseline in `plan.md`; correct any missing or mismatched topic before commit.
+- [x] Run `git diff --check`; expect no whitespace errors.
+- [x] Commit `feat: add bilingual rulebook chapters`.
 
 ## Task 2 — T002: Accessible tabs, live language control, dialog integration, and responsive scrolling
 
