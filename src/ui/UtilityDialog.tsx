@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import type { MapRestartMode } from "../domain/match/types";
 import type { GameTableView } from "./GameTable";
 import { useI18n } from "./i18n";
+import { RulebookPanel } from "./rulebook/RulebookPanel";
 
 export type UtilityPanel = "settings" | "rulebook" | "info" | null;
 
@@ -144,7 +145,7 @@ export function UtilityDialog({
       }}
       ref={dialogRef}
     >
-      <section className="modal-card">
+      <section className={`modal-card${panel === "rulebook" ? " modal-card--rulebook" : ""}`}>
         <div className="modal-header">
           <h2 id="utility-dialog-title">{title}</h2>
           <button
@@ -269,12 +270,7 @@ export function UtilityDialog({
           </div>
         ) : null}
         {panel === "rulebook" ? (
-          <ul className="modal-list">
-            <li>{t("dialog.rule1")}</li>
-            <li>{t("dialog.rule2")}</li>
-            <li>{t("dialog.rule3")}</li>
-            <li>{t("dialog.rule4")}</li>
-          </ul>
+          <RulebookPanel />
         ) : null}
         {panel === "info" ? (
           <div className="modal-stack">

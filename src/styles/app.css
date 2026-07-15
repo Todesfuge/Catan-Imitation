@@ -1374,6 +1374,14 @@ button.primary {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
 }
 
+.modal-card--rulebook {
+  width: min(760px, 100%);
+  height: min(720px, calc(100dvh - 2rem));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .modal-header {
   position: sticky;
   top: -1rem;
@@ -1414,6 +1422,211 @@ button.primary {
 
 .modal-list {
   padding-left: 1.1rem;
+}
+
+.rulebook-shell {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  gap: 0.75rem;
+}
+
+.rulebook-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.rulebook-tabs {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 0.35rem;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.15rem 0.1rem 0.35rem;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.rulebook-tabs button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-bottom-width: 3px;
+  background: #fff8ea;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.rulebook-tabs button:hover {
+  background: #f5ead4;
+}
+
+.rulebook-tabs button:active {
+  transform: translateY(1px);
+}
+
+.rulebook-tabs button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.rulebook-tabs button[aria-selected="true"] {
+  border-bottom-color: var(--focus);
+  font-weight: 900;
+  background: #e8f2ec;
+}
+
+.rulebook-language {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 0.25rem;
+  color: var(--muted-ink);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.rulebook-language select {
+  min-height: 44px;
+  max-width: 100%;
+}
+
+.rulebook-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.9rem 1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf7;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+}
+
+.rulebook-panel:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.rulebook-chapter,
+.rulebook-section,
+.rulebook-example,
+.rulebook-fact-grid,
+.rulebook-cost-list {
+  min-width: 0;
+}
+
+.rulebook-chapter {
+  color: #2e352d;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.rulebook-chapter > h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.35rem;
+}
+
+.rulebook-lead {
+  margin: 0.4rem 0 1rem;
+  color: var(--muted-ink);
+}
+
+.rulebook-section {
+  padding-block: 0.7rem;
+  border-top: 1px solid var(--line);
+}
+
+.rulebook-section h4,
+.rulebook-section h5 {
+  margin: 0 0 0.4rem;
+  color: var(--ink);
+}
+
+.rulebook-section p,
+.rulebook-section ul,
+.rulebook-section ol {
+  margin-block: 0.4rem;
+}
+
+.rulebook-section ul,
+.rulebook-section ol {
+  padding-left: 1.3rem;
+}
+
+.rulebook-section li + li {
+  margin-top: 0.35rem;
+}
+
+.rulebook-example {
+  margin: 0.65rem 0;
+  padding: 0.75rem;
+  border-left: 4px solid var(--focus);
+  border-radius: 0 8px 8px 0;
+  background: #f1f7f3;
+}
+
+.rulebook-example p {
+  margin: 0.3rem 0 0;
+}
+
+.rulebook-fact-grid,
+.rulebook-cost-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0.55rem 0;
+}
+
+.rulebook-fact-row,
+.rulebook-cost-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff8ea;
+}
+
+.rulebook-fact-row > span:last-child,
+.rulebook-cost-row dd {
+  min-width: 0;
+}
+
+.rulebook-cost-row {
+  justify-content: space-between;
+}
+
+.rulebook-cost-row dt {
+  font-weight: 900;
+}
+
+.rulebook-cost-row dd {
+  margin: 0;
+}
+
+.rulebook-desert-mark {
+  width: 1.25rem;
+  text-align: center;
+  font-weight: 900;
+}
+
+.rulebook-end {
+  margin: 0.8rem 0 0;
+  padding-top: 0.8rem;
+  border-top: 2px solid var(--line);
+  font-weight: 900;
 }
 
 .utility-facts {
@@ -1683,6 +1896,47 @@ button.primary {
 
   .modal-card {
     width: 100%;
+  }
+
+  .modal-card--rulebook {
+    height: calc(100dvh - 2rem);
+    max-height: calc(100dvh - 2rem);
+    padding: 0.75rem;
+  }
+
+  .rulebook-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .rulebook-tabs {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .rulebook-tabs button {
+    min-height: 44px;
+  }
+
+  .rulebook-language,
+  .rulebook-language select {
+    width: 100%;
+  }
+
+  .rulebook-panel {
+    padding: 0.75rem;
+  }
+
+  .rulebook-fact-grid,
+  .rulebook-cost-list {
+    grid-template-columns: 1fr;
+  }
+
+  .rulebook-fact-row,
+  .rulebook-cost-row,
+  .rulebook-example {
+    max-width: 100%;
   }
 
   .map-seed-row,

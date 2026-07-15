@@ -10,6 +10,7 @@ import {
   type RulebookChapterId
 } from "../../src/ui/rulebook/RulebookContent";
 import { rulebookMessages } from "../../src/ui/rulebook/messages";
+import { RulebookPanel } from "../../src/ui/rulebook/RulebookPanel";
 import {
   I18nProvider,
   translate,
@@ -23,6 +24,16 @@ function renderChapter(chapter: RulebookChapterId, locale: Locale = "en"): strin
       I18nProvider,
       { initialLocale: locale },
       createElement(RulebookChapterContent, { chapter })
+    )
+  );
+}
+
+function renderPanel(locale: Locale = "en"): string {
+  return renderToStaticMarkup(
+    createElement(
+      I18nProvider,
+      { initialLocale: locale },
+      createElement(RulebookPanel)
     )
   );
 }
@@ -278,5 +289,52 @@ describe("comprehensive in-game rulebook content", () => {
     expect(source).toContain("buildCosts");
     expect(source).toContain("ResourceBundle");
     expect(source).toContain("ResourceIcon");
+  });
+
+  it("renders one ordered, labelled ARIA tab interface before the language control", () => {
+    const html = renderPanel();
+
+    expect(html.match(/role="tablist"/g)).toHaveLength(1);
+    expect(html.match(/role="tab"/g)).toHaveLength(4);
+    expect(html.match(/role="tabpanel"/g)).toHaveLength(1);
+    expect(html.indexOf('role="tablist"')).toBeLessThan(
+      html.indexOf('data-rulebook-language-select="true"')
+    );
+
+    for (const [index, chapter] of rulebookChapterIds.entries()) {
+      const tabId = `rulebook-tab-${chapter}`;
+      const panelId = `rulebook-panel-${chapter}`;
+      const tabPattern = new RegExp(
+        `<button[^>]*aria-controls="${panelId}"[^>]*aria-selected="${index === 0 ? "true" : "false"}"[^>]*id="${tabId}"[^>]*role="tab"[^>]*tabindex="${index === 0 ? "0" : "-1"}"`
+      );
+      expect(html, chapter).toMatch(tabPattern);
+    }
+
+    expect(html).toContain('aria-labelledby="rulebook-tab-quickStart"');
+    expect(html).toContain('id="rulebook-panel-quickStart"');
+    expect(html).not.toContain('id="rulebook-panel-baseRules"');
+    expect(html).not.toContain('id="rulebook-panel-commerceGuild"');
+    expect(html).not.toContain('id="rulebook-panel-quickReference"');
+  });
+
+  it("delegates only the rulebook branch and scopes its responsive scroll contract", () => {
+    const utility = readFileSync("src/ui/UtilityDialog.tsx", "utf8");
+    const i18n = readFileSync("src/ui/i18n.ts", "utf8");
+    const styles = readFileSync("src/styles/app.css", "utf8");
+
+    expect(utility).toContain('from "./rulebook/RulebookPanel"');
+    expect(utility).toContain("<RulebookPanel />");
+    expect(utility).toMatch(/className=\{[^}]*modal-card--rulebook[^}]*\}/s);
+    expect(utility).toContain('panel === "settings"');
+    expect(utility).toContain('panel === "info"');
+    expect(utility).not.toMatch(/dialog\.rule[1-4]/);
+    expect(i18n).not.toMatch(/"dialog\.rule[1-4]"/);
+
+    expect(styles).toMatch(/\.modal-card--rulebook\s*\{[^}]*width:\s*min\(760px,\s*100%\)[^}]*display:\s*flex[^}]*flex-direction:\s*column[^}]*overflow:\s*hidden/s);
+    expect(styles).toMatch(/\.rulebook-panel\s*\{[^}]*min-height:\s*0[^}]*overflow-y:\s*auto[^}]*overflow-x:\s*hidden/s);
+    expect(styles).toMatch(/\.rulebook-tabs\s*\{[^}]*min-width:\s*0[^}]*overflow-x:\s*auto/s);
+    expect(styles).toMatch(/\.rulebook-tabs button:focus-visible\s*\{[^}]*outline:/s);
+    expect(styles).toMatch(/\.rulebook-tabs button\[aria-selected="true"\]\s*\{[^}]*font-weight:/s);
+    expect(styles).toMatch(/@media \(max-width:\s*640px\)[\s\S]*\.modal-card--rulebook[\s\S]*\.rulebook-tabs button\s*\{[^}]*min-height:\s*44px/s);
   });
 });

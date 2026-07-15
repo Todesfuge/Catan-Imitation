@@ -101,32 +101,32 @@ export function RulebookPanel(): React.JSX.Element;
 
 Steps:
 
-- [ ] Extend `test/domain/rulebookUi.test.ts` with a failing server-render test for one `role="tablist"`, four ordered `role="tab"` buttons, stable tab/panel ids, `aria-controls`/`aria-labelledby`, Quick Start `aria-selected="true"` and `tabIndex=0`, other tabs unselected and `tabIndex=-1`, one active `role="tabpanel"`, and one session-language select after the tablist in DOM order.
-- [ ] Add a failing source/CSS boundary test requiring `UtilityDialog` to delegate to `<RulebookPanel />`, apply `modal-card--rulebook` conditionally, contain no `dialog.rule1`–`dialog.rule4` consumer, and keep Settings/Info branches present.
-- [ ] Add CSS contract assertions for a wider rulebook-only card, column containment, internal `.rulebook-panel` vertical scrolling, bounded `.rulebook-tabs` horizontal scrolling, visible focus, non-color selected indication, and a max-640px containment rule.
-- [ ] Create `test/e2e/rulebook.spec.ts` with its own `openLocal` and `openRulebook` helpers; do not import or modify helpers in the large recovery spec.
-- [ ] Add a failing browser test that opens Rulebook, verifies Quick Start is selected, clicks Base Rules, verifies only its panel is visible and begins at scroll top, closes with Escape, checks focus returns to Open rulebook, reopens, and verifies Quick Start is selected again.
-- [ ] Add a failing keyboard browser test that focuses Quick Start, presses ArrowRight through chapters, verifies ArrowRight wrapping, ArrowLeft wrapping, Home to Quick Start, End to Quick Reference, and checks both selected state and focused tab after every move.
-- [ ] Add a failing live-language browser test that selects Base Rules, changes the in-rulebook session language to Simplified Chinese, verifies Chinese tab/body copy and unchanged selected chapter, then changes back to English.
-- [ ] Add failing desktop/mobile browser cases for 1280x768 and 390x844 that require document width within viewport, dialog within viewport, close button/tablist in viewport, body `scrollHeight > clientHeight`, final Quick Reference sentinel reachable, and no clipping/page-level horizontal overflow. On mobile, allow only the bounded tab strip to have horizontal overflow.
-- [ ] Run `pnpm vitest run test/domain/rulebookUi.test.ts`; expect RED on missing panel/integration/styles.
-- [ ] Run `pnpm build` and then `pnpm exec playwright test test/e2e/rulebook.spec.ts --project=local-preview`; expect RED because the four-bullet rulebook has no tabs/language control/internal scroll.
-- [ ] Create `src/ui/rulebook/RulebookPanel.tsx` with local `activeChapter = "quickStart"`, one ref per tab, one shared panel ref, a tablist before the native language select in DOM order, existing `locale`/`setLocale`, and one active `RulebookChapterContent`.
-- [ ] Implement a single chapter-selection path: set the chapter, reset the shared panel to scroll top, and optionally focus the selected tab. Left/Right calculate a wrapped index, Home selects index 0, End selects the last index, and handled keys call `preventDefault`; pointer selection uses the same path without stealing focus.
-- [ ] Give every tab/panel stable ids (`rulebook-tab-<id>`, `rulebook-panel-<id>`), correct ARIA relationships, roving tab index, and visible text labels from `rulebook.*` keys.
-- [ ] Modify `UtilityDialog.tsx` to import/render `RulebookPanel` and conditionally add `modal-card--rulebook`; do not change the dialog effect, `onCancel`, close button, opener restoration, restart flow, Settings, or Info.
-- [ ] Delete obsolete `dialog.rule1`–`dialog.rule4` messages from `src/ui/i18n.ts` after the old list consumer is gone.
-- [ ] Add scoped `.modal-card--rulebook` and `.rulebook-*` CSS using existing colors/tokens. Keep header/toolbar visible; make the active panel vertically scrollable; add focus/selected/hover/pressed distinctions; set `min-width: 0`, wrapping, and bounded tab-strip overflow.
-- [ ] At max 640px, keep the dialog inside its padded viewport, make tabs at least 44px high, contain the language control, and prevent chapter tables/cost rows/examples from widening the page.
-- [ ] Run `pnpm vitest run test/domain/rulebookUi.test.ts test/domain/frontendAccessibility.test.ts test/domain/localization.test.ts test/domain/resourcePresentation.test.ts`; expect all focused component/localization/accessibility tests GREEN.
-- [ ] Run `pnpm build`; expect TypeScript/Vite GREEN.
-- [ ] Run `pnpm exec playwright test test/e2e/rulebook.spec.ts --project=local-preview`; expect all dedicated pointer, keyboard, language, focus, scroll, and containment cases GREEN.
-- [ ] Run `pnpm smoke:ui`; expect the built Local UI smoke GREEN.
-- [ ] Manually inspect the actual Rulebook at 1280x768 and 390x844 in English and Chinese. Confirm headings are scannable, tab labels do not overlap, selected/focus states are distinct, resource icons are legible, and the final content is reachable.
-- [ ] Run `rg -n '"dialog\.rule[1-4]"' src`; expect zero matches.
-- [ ] Run `git diff b357b51 -- src/domain src/online worker package.json pnpm-lock.yaml`; expect no output.
-- [ ] Run `git diff --check`; expect no whitespace errors.
-- [ ] Commit `feat: add accessible in-game rulebook`.
+- [x] Extend `test/domain/rulebookUi.test.ts` with a failing server-render test for one `role="tablist"`, four ordered `role="tab"` buttons, stable tab/panel ids, `aria-controls`/`aria-labelledby`, Quick Start `aria-selected="true"` and `tabIndex=0`, other tabs unselected and `tabIndex=-1`, one active `role="tabpanel"`, and one session-language select after the tablist in DOM order.
+- [x] Add a failing source/CSS boundary test requiring `UtilityDialog` to delegate to `<RulebookPanel />`, apply `modal-card--rulebook` conditionally, contain no `dialog.rule1`–`dialog.rule4` consumer, and keep Settings/Info branches present.
+- [x] Add CSS contract assertions for a wider rulebook-only card, column containment, internal `.rulebook-panel` vertical scrolling, bounded `.rulebook-tabs` horizontal scrolling, visible focus, non-color selected indication, and a max-640px containment rule.
+- [x] Create `test/e2e/rulebook.spec.ts` with its own `openLocal` and `openRulebook` helpers; do not import or modify helpers in the large recovery spec.
+- [x] Add a failing browser test that opens Rulebook, verifies Quick Start is selected, clicks Base Rules, verifies only its panel is visible and begins at scroll top, closes with Escape, checks focus returns to Open rulebook, reopens, and verifies Quick Start is selected again.
+- [x] Add a failing keyboard browser test that focuses Quick Start, presses ArrowRight through chapters, verifies ArrowRight wrapping, ArrowLeft wrapping, Home to Quick Start, End to Quick Reference, and checks both selected state and focused tab after every move.
+- [x] Add a failing live-language browser test that selects Base Rules, changes the in-rulebook session language to Simplified Chinese, verifies Chinese tab/body copy and unchanged selected chapter, then changes back to English.
+- [x] Add failing desktop/mobile browser cases for 1280x768 and 390x844 that require document width within viewport, dialog within viewport, close button/tablist in viewport, body `scrollHeight > clientHeight`, final Quick Reference sentinel reachable, and no clipping/page-level horizontal overflow. On mobile, allow only the bounded tab strip to have horizontal overflow.
+- [x] Run `pnpm vitest run test/domain/rulebookUi.test.ts`; expect RED on missing panel/integration/styles.
+- [x] Run `pnpm build` and then `pnpm exec playwright test test/e2e/rulebook.spec.ts --project=local-preview`; expect RED because the four-bullet rulebook has no tabs/language control/internal scroll.
+- [x] Create `src/ui/rulebook/RulebookPanel.tsx` with local `activeChapter = "quickStart"`, one ref per tab, one shared panel ref, a tablist before the native language select in DOM order, existing `locale`/`setLocale`, and one active `RulebookChapterContent`.
+- [x] Implement a single chapter-selection path: set the chapter, reset the shared panel to scroll top, and optionally focus the selected tab. Left/Right calculate a wrapped index, Home selects index 0, End selects the last index, and handled keys call `preventDefault`; pointer selection uses the same path without stealing focus.
+- [x] Give every tab/panel stable ids (`rulebook-tab-<id>`, `rulebook-panel-<id>`), correct ARIA relationships, roving tab index, and visible text labels from `rulebook.*` keys.
+- [x] Modify `UtilityDialog.tsx` to import/render `RulebookPanel` and conditionally add `modal-card--rulebook`; do not change the dialog effect, `onCancel`, close button, opener restoration, restart flow, Settings, or Info.
+- [x] Delete obsolete `dialog.rule1`–`dialog.rule4` messages from `src/ui/i18n.ts` after the old list consumer is gone.
+- [x] Add scoped `.modal-card--rulebook` and `.rulebook-*` CSS using existing colors/tokens. Keep header/toolbar visible; make the active panel vertically scrollable; add focus/selected/hover/pressed distinctions; set `min-width: 0`, wrapping, and bounded tab-strip overflow.
+- [x] At max 640px, keep the dialog inside its padded viewport, make tabs at least 44px high, contain the language control, and prevent chapter tables/cost rows/examples from widening the page.
+- [x] Run `pnpm vitest run test/domain/rulebookUi.test.ts test/domain/frontendAccessibility.test.ts test/domain/localization.test.ts test/domain/resourcePresentation.test.ts`; expect all focused component/localization/accessibility tests GREEN.
+- [x] Run `pnpm build`; expect TypeScript/Vite GREEN.
+- [x] Run `pnpm exec playwright test test/e2e/rulebook.spec.ts --project=local-preview`; expect all dedicated pointer, keyboard, language, focus, scroll, and containment cases GREEN.
+- [x] Run `pnpm smoke:ui`; expect the built Local UI smoke GREEN.
+- [x] Manually inspect the actual Rulebook at 1280x768 and 390x844 in English and Chinese. Confirm headings are scannable, tab labels do not overlap, selected/focus states are distinct, resource icons are legible, and the final content is reachable.
+- [x] Run `rg -n '"dialog\.rule[1-4]"' src`; expect zero matches.
+- [x] Run `git diff b357b51 -- src/domain src/online worker package.json pnpm-lock.yaml`; expect no output.
+- [x] Run `git diff --check`; expect no whitespace errors.
+- [x] Commit `feat: add accessible in-game rulebook`.
 
 ## Task 3 — T003: Full verification, review, convergence, and handoff
 
