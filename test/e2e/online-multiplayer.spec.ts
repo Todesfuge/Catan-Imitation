@@ -308,7 +308,14 @@ async function submitAuctionRound(
       const submitButton = pages[index].getByRole("button", { name: "Submit sealed bid" });
       await expect(bidInput).toBeEnabled();
       await expect(submitButton).toBeEnabled();
+      for (const invalid of [-1, 0.5, max + 1]) {
+        await bidInput.fill(String(invalid));
+        await expect(submitButton).toBeDisabled();
+        await expect(bidInput).toHaveAttribute("aria-invalid", "true");
+        await expect(pages[index].locator("#sealed-bid-validation")).toContainText("whole-number bid");
+      }
       await bidInput.fill(String(amount));
+      await expect(submitButton).toBeEnabled();
       await submitButton.click();
     });
     onUiBid(index);

@@ -528,6 +528,28 @@ describe("online reducer", () => {
 });
 
 describe("online reconnect transport", () => {
+  it.each(["SEAT_TOKEN_INVALID", "ROOM_NOT_FOUND"] as const)("clears an invalid saved seat after %s without retrying", async (code) => {
+    const credentials = createSeatCredentialStore(memoryStorage());
+    credentials.save({ roomCode, seatId: "seat-1", seatToken });
+    const scheduler = new FakeScheduler();
+    const createWebSocket = vi.fn(() => new FakeSocket());
+    const client = createOnlineRoomClient(roomCode, {
+      origin: "https://game.test", credentials, scheduler, createWebSocket,
+      fetch: async () => new Response(JSON.stringify({ error: { code, params: {}, retryable: false } }), {
+        status: code === "SEAT_TOKEN_INVALID" ? 401 : 404
+      })
+    });
+    client.connect();
+    await flush();
+
+    expect(client.getState()).toMatchObject({ status: "offline", notice: { code } });
+    expect(credentials.loadActive()).toBeUndefined();
+    expect(credentials.load(roomCode)).toBeUndefined();
+    expect(scheduler.tasks).toEqual([]);
+    expect(createWebSocket).not.toHaveBeenCalled();
+    client.dispose();
+  });
+
   it("reduces a secret-echoing ticket error to a generic notice", async () => {
     const credentials = createSeatCredentialStore(memoryStorage());
     credentials.save({ roomCode, seatId: "seat-1", seatToken });

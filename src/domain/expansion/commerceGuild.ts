@@ -381,6 +381,9 @@ export function openGuildAuction(
   game: GameState,
   guild: CommerceGuildState
 ): CommerceGuildState {
+  if (guild.gathering.phase !== "redemption") {
+    throw new RuleViolationError("Guild gathering is not in resource redemption phase.");
+  }
   const hasEligibleBidder = game.players.some((player) => player.guildTokens > 0);
   return {
     ...guild,

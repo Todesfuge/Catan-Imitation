@@ -281,12 +281,14 @@ export function createLocalGameTableView(state: AppState): GameTableView {
       developmentCards: player.developmentCards.map((card) => ({ ...card })),
       guildTokens: player.guildTokens,
       gatheringRemainingAllowance: tableActions.commerce.gatheringPlayers.find((candidate) => candidate.id === player.id)?.remainingAllowance ?? 0,
+      gatheringRedemptionEnabled: getActionAvailabilityFacts(state, player.id).commerce.redeemGathering.enabled,
       gatheringBankStock: cloneResources(state.game.bank.resources),
       ...(state.pendingPlayerTrade
         ? player.id === state.pendingPlayerTrade.proposerId
-          ? { tradeResponse: { kind: "cancel" as const } }
+          ? { tradeResponse: { kind: "cancel" as const, enabled: true } }
           : { tradeResponse: {
               kind: "accept" as const,
+              enabled: !getPlayerTradeAcceptanceReason(state.game, state.pendingPlayerTrade, player.id),
               ...(getPlayerTradeAcceptanceReason(state.game, state.pendingPlayerTrade, player.id)
                 ? { reason: getPlayerTradeAcceptanceReason(state.game, state.pendingPlayerTrade, player.id)! }
                 : {})

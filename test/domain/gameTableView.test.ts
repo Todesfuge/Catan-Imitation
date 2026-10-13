@@ -44,6 +44,7 @@ function callerOnlyFixture(): GameTableView {
       developmentCards: [],
       guildTokens: 0,
       gatheringRemainingAllowance: 0,
+      gatheringRedemptionEnabled: false,
       gatheringBankStock: noResources
     }],
     lastDice: null,

@@ -460,6 +460,43 @@ describe("authoritative room command pipeline", () => {
     expect(peers.messages.has("seat-2")).toBe(false);
   });
 
+  it.each(["VERSION_CONFLICT", "COMMAND_NOT_ALLOWED"] as const)("rate-limits repeated %s without persisting rejected attempts", async (code) => {
+    const room = lobbyRoom();
+    const store = new MemoryCommandStore(room);
+    const before = structuredClone(room);
+    const peers = recipients("seat-1");
+    const prepareExecutionContext = vi.fn(() => () => context);
+    const pipeline = createCommandPipeline({ store, prepareExecutionContext, rateLimit: { maximum: 3, windowMs: 2_000 } });
+    for (let index = 0; index < 6; index++) {
+      await pipeline.handle({
+        seatId: "seat-1",
+        rawMessage: code === "VERSION_CONFLICT" ? command(ids[index], 0) : JSON.stringify({
+          type: "room.start", commandId: ids[index], expectedVersion: room.roomVersion
+        }),
+        now: 100 + index, presence: noPresence, recipients: peers.recipients
+      });
+      expect(peers.messages.get("seat-1")?.at(-1)).toMatchObject({
+        type: "command.rejected", error: { code: index < 3 ? code : "RATE_LIMITED" }
+      });
+    }
+    expect(prepareExecutionContext).toHaveBeenCalledTimes(3);
+    expect(store.commits).toBe(0);
+    expect(store.room).toEqual(before);
+  });
+
+  it("retains both persisted admissions for concurrent same-seat commands", async () => {
+    const room = lobbyRoom();
+    const store = new MemoryCommandStore(room);
+    const peers = recipients("seat-1");
+    const pipeline = createCommandPipeline({ store });
+    await Promise.all([0, 1].map((index) => pipeline.handle({
+      seatId: "seat-1", rawMessage: command(ids[index], room.roomVersion + index, index === 0),
+      now: 100 + index, presence: noPresence, recipients: peers.recipients
+    })));
+    expect(store.commits).toBe(2);
+    expect(store.room!.seats[0].commandAttemptTimestamps).toEqual([100, 101]);
+  });
+
   it("limits a seat to ten commands per two seconds without corrupting room state", async () => {
     const store = new MemoryCommandStore(lobbyRoom());
     const peers = recipients("seat-1");

@@ -5,6 +5,8 @@ import type { OnlineClientState } from "./onlineReducer";
 import type { ClientWebSocketMessage, OnlineMatchCommand, RoomSnapshotMessage } from "./protocol";
 import type { PrivateSeatState, PublicGameView } from "./view";
 import { parseOnlineGameProjection } from "./onlineGameProjection";
+import { protocolNoticeKey } from "./notice";
+import { translate, type Locale } from "../ui/i18n";
 
 type SendMessage = (message: ClientWebSocketMessage) => boolean;
 
@@ -67,7 +69,7 @@ function decision(privateState: PrivateSeatState): GameTableView["controlledPlay
   return { kind: "development" };
 }
 
-export function createOnlineGameTableView(state: OnlineClientState): GameTableView {
+export function createOnlineGameTableView(state: OnlineClientState, locale: Locale = "en"): GameTableView {
   const projected = readOnlineGameProjection(state.snapshot);
   if (!projected?.allowedActions) throw new Error("Invalid online game projection.");
   const { publicState, privateState, allowedActions } = projected;
@@ -122,19 +124,21 @@ export function createOnlineGameTableView(state: OnlineClientState): GameTableVi
       displayName: ownSeat.nickname, isActive: privateState.playerId === game.activePlayerId,
       resources: { ...privateState.resources! }, developmentCards: privateState.developmentCards!.map((card) => ({ ...card })),
       guildTokens: ownPlayer.guildTokens, gatheringRemainingAllowance: allowedActions.commerce.redeemGathering.maxAmount,
+      gatheringRedemptionEnabled: gameplayConnected && allowedActions.commerce.redeemGathering.enabled,
       gatheringBankStock: { ...allowedActions.commerce.redeemGathering.bankStock },
       ...(decision(privateState) ? { decision: decision(privateState) } : {}),
       ...(game.pendingPlayerTrade
-        ? game.pendingPlayerTrade.proposerId === privateState.playerId && allowedActions.publicTrade.cancel.enabled
-          ? { tradeResponse: { kind: "cancel" as const } }
-          : { tradeResponse: { kind: "accept" as const, ...(reason(allowedActions.publicTrade.accept.disabledReason) ? { reason: reason(allowedActions.publicTrade.accept.disabledReason) } : {}) } }
+        ? game.pendingPlayerTrade.proposerId === privateState.playerId
+          ? { tradeResponse: { kind: "cancel" as const, enabled: gameplayConnected && allowedActions.publicTrade.cancel.enabled } }
+          : { tradeResponse: { kind: "accept" as const, enabled: gameplayConnected && allowedActions.publicTrade.accept.enabled,
+              ...(gameplayConnected ? (reason(allowedActions.publicTrade.accept.disabledReason) ? { reason: reason(allowedActions.publicTrade.accept.disabledReason) } : {}) : { reason: disconnectedReason }) } }
         : {})
     }],
     lastDice: game.lastDice ? { ...game.lastDice } : null,
     ...(game.pendingPlayerTrade ? { pendingPlayerTrade: { proposerId: game.pendingPlayerTrade.proposerId,
       offered: { ...game.pendingPlayerTrade.offered }, requested: { ...game.pendingPlayerTrade.requested } } } : {}),
     selectedDiceTotal: 8, selectedPlayerId: privateState.playerId!,
-    notice: state.notice?.code === "VERSION_CONFLICT" ? "The room changed. Review the latest snapshot before trying again." : null,
+    notice: state.notice ? translate(locale, protocolNoticeKey(state.notice.code)) : null,
     legality: {
       actions: tableActions,
       ...(game.phase === "setup" ? { setupControlId: privateState.seatId } : {}),

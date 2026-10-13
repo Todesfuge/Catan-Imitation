@@ -621,6 +621,34 @@ describe("online game projection adapter", () => {
     expect(renderGame(state(developmentSnapshot, "reconnecting"))).not.toContain("data-resource-choice=");
   });
 
+  it.each([
+    ["RATE_LIMITED", "Too many requests.", "请求过于频繁"],
+    ["RULE_VIOLATION", "That action is not allowed", "当前房间状态不允许"],
+    ["COMMAND_NOT_ALLOWED", "That action is not allowed", "当前房间状态不允许"]
+  ] as const)("renders %s in both game languages", (code, english, chinese) => {
+    const clientState = { ...state(snapshotFor()), notice: { code, params: {}, retryable: code === "RATE_LIMITED" } };
+    for (const [locale, message] of [["en", english], ["zh-CN", chinese]] as const) {
+      const html = renderToStaticMarkup(React.createElement(I18nProvider, { initialLocale: locale },
+        React.createElement(OnlineGame, { roomCode: "234567", state: clientState,
+          dispatch: vi.fn(), reconnect: vi.fn(), onExit: vi.fn(), createCommandId: crypto.randomUUID })
+      ));
+      expect(html).toContain(message);
+      expect(html).toContain('class="toast"');
+    }
+  });
+
+  it("disables resource redemption buttons while reconnecting", () => {
+    const redemption = snapshotFor();
+    (redemption.publicState as unknown as PublicRoomState).guild!.gathering.phase = "redemption";
+    const html = renderToStaticMarkup(React.createElement(I18nProvider, null,
+      React.createElement(OnlineGame, { roomCode: "234567", state: state(redemption, "reconnecting"),
+        dispatch: vi.fn(), reconnect: vi.fn(), onExit: vi.fn(), createCommandId: crypto.randomUUID })
+    ));
+    const buttons = [...html.matchAll(/<button[^>]*aria-label="Redeem[^"]*"[^>]*>/g)];
+    expect(buttons).toHaveLength(5);
+    expect(buttons.every(([button]) => button.includes('disabled=""'))).toBe(true);
+  });
+
   it("uses only server allowed actions and disables every command while disconnected", () => {
     const serverDenied = actions();
     serverDenied.turn.roll = unavailable("REQUIRED_PLAYER_OFFLINE");
@@ -631,6 +659,7 @@ describe("online game projection adapter", () => {
     expect(offline.legality.actions.roll.enabled).toBe(false);
     expect(offline.legality.actions.maritime.enabled).toBe(false);
     expect(offline.tradePolicy.publishEnabled).toBe(false);
+    expect(offline.controlledPlayers.every((control) => !control.gatheringRedemptionEnabled)).toBe(true);
   });
 
   it("projects canonical seed and host-only restart policy across playing and finished rooms", () => {

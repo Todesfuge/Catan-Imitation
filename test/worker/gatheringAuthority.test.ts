@@ -140,6 +140,35 @@ async function handleStart(
 }
 
 describe("authenticated gathering authority", () => {
+  it.each(["idle", "auction", "complete"] as const)("rejects OPEN_AUCTION from %s without resetting bids or persisting", async (phase) => {
+    const room = playableRoom();
+    const match = room.matchState!;
+    match.game.players = match.game.players.map((player) => ({ ...player, guildTokens: 2 }));
+    match.guild.gathering.phase = phase;
+    match.guild.gathering.auctionRound = phase === "complete" ? 4 : 2;
+    match.guild.gatheringCooldown.availableAtTurn = match.game.turn + 3;
+    if (phase === "auction") room.pendingAuction = { round: 2, bidsBySeatId: { "seat-1": 1 } };
+    const store = new MemoryCommandStore(room);
+    const before = structuredClone(room);
+    const peers = recipientHarness(store);
+
+    await createCommandPipeline({ store, createExecutionContext: () => context }).handle({
+      seatId: "seat-2",
+      rawMessage: JSON.stringify({
+        type: "match.command", commandId: COMMAND_ID, expectedVersion: room.roomVersion,
+        command: { type: "OPEN_AUCTION" }
+      }),
+      now: 10_000, presence: [], recipients: peers.recipients
+    });
+
+    expect(store.room).toEqual(before);
+    expect(store.commits).toBe(0);
+    expect(peers.messages.get("seat-2")).toContainEqual({
+      type: "command.rejected", commandId: COMMAND_ID,
+      error: { code: "RULE_VIOLATION", params: {}, retryable: false }
+    });
+  });
+
   it("does not flush a legacy replacement when the authenticated command is rejected", async () => {
     const legacy = structuredClone(playableRoom()) as unknown as Record<string, any>;
     legacy.schemaVersion = 2;

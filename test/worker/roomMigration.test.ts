@@ -567,6 +567,27 @@ const rawValidationMatrix = invalidStoredRoomCases.flatMap((testCase) => [
 ]);
 
 describe("persisted room schema v3", () => {
+  it("bounds saved and existing room histories without changing the room version or game data", async () => {
+    const room = createProductionPlaying();
+    const event = room.matchState!.game.log[0];
+    room.matchState!.game.log = Array.from({ length: 1_000 }, (_, index) => ({ ...event, id: `history-${index}` }));
+    const original = structuredClone(room);
+    const storage = new CountingStorage();
+    const store = new RoomStore(storage);
+    await store.save(room);
+    const stored = storage.values.get(ROOM_RECORD_KEY) as PersistedRoom;
+    expect(stored.matchState!.game.log).toHaveLength(200);
+    expect(stored.matchState!.game.log[199].id).toBe("history-199");
+    expect(room).toEqual(original);
+
+    storage.values.set(ROOM_RECORD_KEY, original);
+    const loaded = await store.load(room.lastActivityAt);
+    expect(loaded?.matchState!.game.log).toHaveLength(200);
+    expect(loaded?.roomVersion).toBe(room.roomVersion);
+    expect(loaded?.matchState!.game.players).toEqual(room.matchState!.game.players);
+    expect((storage.values.get(ROOM_RECORD_KEY) as PersistedRoom).matchState!.game.log).toHaveLength(200);
+  });
+
   it("creates and writes schema-v3 lobbies without match state", async () => {
     const room = createLobby({
       roomCode: "ABC234",

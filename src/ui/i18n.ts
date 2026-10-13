@@ -104,6 +104,7 @@ const messages = {
   "online.auctionWaiting": { en: "Waiting for {name}", "zh-CN": "等待 {name} 提交" },
   "online.auctionBidLabel": { en: "Your sealed bid", "zh-CN": "你的密封出价" },
   "online.auctionSubmit": { en: "Submit sealed bid", "zh-CN": "提交密封出价" },
+  "online.auctionBidInvalid": { en: "Enter a whole-number bid from 0 to {max}.", "zh-CN": "请输入 0 到 {max} 之间的整数出价。" },
   "online.auctionDevelopmentCardGeneric": { en: "one development card", "zh-CN": "一张发展卡" },
   "online.error.nicknameRequired": { en: "Enter a nickname.", "zh-CN": "请输入昵称。" },
   "online.error.nicknameTooLong": { en: "Nickname must be 20 characters or fewer.", "zh-CN": "昵称不能超过 20 个字符。" },

@@ -20,6 +20,21 @@ export const buildCosts = {
   developmentCard: { ...emptyResources(), wool: 1, grain: 1, ore: 1 }
 } satisfies Record<string, ResourceMap>;
 
+const pieceLimits = { road: 15, settlement: 5, city: 4 } as const;
+
+function hasAvailablePiece(game: GameState, playerId: PlayerId, kind: keyof typeof pieceLimits): boolean {
+  const used = kind === "road"
+    ? game.roads.filter((road) => road.ownerId === playerId).length
+    : game.buildings.filter((building) => building.ownerId === playerId && building.kind === kind).length;
+  return used < pieceLimits[kind];
+}
+
+function assertPieceAvailable(game: GameState, playerId: PlayerId, kind: keyof typeof pieceLimits): void {
+  if (!hasAvailablePiece(game, playerId, kind)) {
+    throw new RuleViolationError(`No ${kind} pieces remain.`);
+  }
+}
+
 function getPlayer(game: GameState, playerId: PlayerId): Player {
   const player = game.players.find((candidate) => candidate.id === playerId);
   if (!player) {
@@ -206,6 +221,7 @@ export function buildRoad(game: GameState, playerId: PlayerId, edgeId: EdgeId): 
     throw new RuleViolationError("Use setup placement during setup.");
   }
   getPlayer(game, playerId);
+  assertPieceAvailable(game, playerId, "road");
   assertRoadLocation(game, playerId, edgeId);
 
   const paidGame = payBuildCost(game, playerId, buildCosts.road);
@@ -214,6 +230,7 @@ export function buildRoad(game: GameState, playerId: PlayerId, edgeId: EdgeId): 
 
 export function getLegalRoadEdgeIds(game: GameState, playerId: PlayerId): EdgeId[] {
   getPlayer(game, playerId);
+  if (!hasAvailablePiece(game, playerId, "road")) return [];
   return game.edges
     .filter(
       (edge) =>
@@ -228,6 +245,7 @@ export function getLegalSettlementVertexIds(
   playerId: PlayerId
 ): VertexId[] {
   getPlayer(game, playerId);
+  if (!hasAvailablePiece(game, playerId, "settlement")) return [];
   const vertexIds = new Set(game.board.flatMap((hex) => hex.vertexIds));
   return [...vertexIds].filter(
     (vertexId) =>
@@ -239,6 +257,7 @@ export function getLegalSettlementVertexIds(
 
 export function getUpgradeableBuildingIds(game: GameState, playerId: PlayerId): string[] {
   getPlayer(game, playerId);
+  if (!hasAvailablePiece(game, playerId, "city")) return [];
   return game.buildings
     .filter((building) => building.ownerId === playerId && building.kind === "settlement")
     .map((building) => building.id);
@@ -257,6 +276,7 @@ export function getLegalSetupSettlementVertexIds(
     return [];
   }
   getPlayer(game, playerId);
+  if (!hasAvailablePiece(game, playerId, "settlement")) return [];
   const vertexIds = new Set(game.board.flatMap((hex) => hex.vertexIds));
   return [...vertexIds].filter(
     (vertexId) => !isVertexOccupied(game, vertexId) && !hasAdjacentBuilding(game, vertexId)
@@ -278,6 +298,7 @@ export function getLegalSetupRoadEdgeIds(
     return [];
   }
   getPlayer(game, playerId);
+  if (!hasAvailablePiece(game, playerId, "road")) return [];
   return game.edges
     .filter(
       (edge) =>
@@ -292,6 +313,7 @@ export function placeFreeRoad(game: GameState, playerId: PlayerId, edgeId: EdgeI
     throw new RuleViolationError("A free road can only be placed during normal play.");
   }
   getPlayer(game, playerId);
+  assertPieceAvailable(game, playerId, "road");
   assertRoadLocation(game, playerId, edgeId);
   return addRoad(game, playerId, edgeId, "free-road");
 }
@@ -301,6 +323,7 @@ export function buildSettlement(game: GameState, playerId: PlayerId, vertexId: V
     throw new RuleViolationError("Use setup placement during setup.");
   }
   getPlayer(game, playerId);
+  assertPieceAvailable(game, playerId, "settlement");
   assertSettlementLocation(game, vertexId);
   if (!isConnectedToOwnedRoad(game, playerId, vertexId)) {
     throw new RuleViolationError("A normal settlement must connect to one of the player's roads.");
@@ -315,6 +338,8 @@ export function buildCity(game: GameState, playerId: PlayerId, buildingId: strin
   if (!building || building.ownerId !== playerId || building.kind !== "settlement") {
     throw new RuleViolationError("City upgrades require one of the player's settlements.");
   }
+
+  assertPieceAvailable(game, playerId, "city");
 
   const paidGame = payBuildCost(game, playerId, buildCosts.city);
   return {
@@ -343,6 +368,7 @@ export function placeSetupSettlement(
   }
 
   getPlayer(game, playerId);
+  assertPieceAvailable(game, playerId, "settlement");
   assertSettlementLocation(game, vertexId);
 
   const isSecondPlacement = game.setup.order
@@ -397,6 +423,8 @@ export function placeSetupRoad(game: GameState, playerId: PlayerId, edgeId: Edge
   if (game.activePlayerId !== playerId) {
     throw new RuleViolationError("It is not this player's setup placement.");
   }
+
+  assertPieceAvailable(game, playerId, "road");
 
   const edge = getEdge(game, edgeId);
   if (!edge || !edge.vertexIds.includes(game.setup.pendingSettlement.vertexId)) {

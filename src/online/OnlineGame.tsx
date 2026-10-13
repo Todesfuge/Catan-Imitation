@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { GameTableIntent } from "../ui/GameTable";
 import { GameTable } from "../ui/GameTable";
 import { translate, useI18n, type MessageKey } from "../ui/i18n";
@@ -38,11 +38,13 @@ export function OnlineGame({
 }) {
   const { locale, t } = useI18n();
   const [selectedDiceTotal, setSelectedDiceTotal] = useState(8);
+  const [sendFailed, setSendFailed] = useState(false);
+  useEffect(() => setSendFailed(false), [state.notice, state.snapshot?.roomVersion]);
   const projection = readOnlineGameProjection(state.snapshot);
   const baseView = useMemo(() => {
     if (!projection) return undefined;
-    try { return createOnlineGameTableView(state); } catch { return undefined; }
-  }, [projection, state]);
+    try { return createOnlineGameTableView(state, locale); } catch { return undefined; }
+  }, [projection, state, locale]);
   if (!baseView || !projection || !state.snapshot) {
     return (
       <main className="online-shell">
@@ -54,7 +56,8 @@ export function OnlineGame({
       </main>
     );
   }
-  const view = { ...baseView, selectedDiceTotal };
+  const view = { ...baseView, selectedDiceTotal,
+    notice: sendFailed ? t("online.error.actionFailed") : baseView.notice };
   const controller = createOnlineGameTableController(() => state, send, createCommandId);
   const game = projection.publicState.game!;
   const playerName = (playerId: string | undefined) =>
@@ -69,7 +72,7 @@ export function OnlineGame({
   const actor = playerName(game.activePlayerId);
   const dispatch = (intent: GameTableIntent) => {
     if (intent.type === "ui.selectDiceTotal") { setSelectedDiceTotal(intent.diceTotal); return; }
-    controller.dispatch(intent);
+    setSendFailed(!controller.dispatch(intent));
   };
   return (
     <div className="online-game-shell" data-room-version={state.snapshot.roomVersion}>
@@ -83,7 +86,7 @@ export function OnlineGame({
           {winner ? t("online.gameWinner", { name: winner }) : awaitedNames.length > 0 ? t("online.waitingFor", { names: awaitedNames.join(", ") }) : t("online.activePlayer", { name: actor ?? "—" })}
         </div>
         {state.status === "offline" ? <button onClick={reconnect} type="button">{t("online.reconnect")}</button> : null}
-        {state.status === "expired" || state.status === "incompatible" ? <button onClick={onExit} type="button">{t("online.returnHome")}</button> : null}
+        {state.status !== "connected" ? <button aria-label={t("online.returnHome")} onClick={onExit} type="button">{t("online.returnHome")}</button> : null}
       </header>
       <GameTable view={view} dispatch={dispatch} />
       <p className="sr-only">{translate(locale, "online.noOptimisticChanges")}</p>

@@ -138,7 +138,7 @@ export function PlayerTradePanel({
                 <div className="player-trade-response" data-control-id={control.controlId} key={control.controlId}>
                   <button
                     aria-describedby={`player-trade-${control.controlId}-reason`}
-                    disabled={Boolean(reason)}
+                    disabled={!control.tradeResponse?.enabled || Boolean(reason)}
                     onClick={() =>
                       dispatch({ type: "trade.respond", controlId: control.controlId, response: "accept" })
                     }
@@ -154,6 +154,7 @@ export function PlayerTradePanel({
         {state.controlledPlayers.some((control) => control.tradeResponse?.kind === "cancel") ? (
           <button
             className="secondary"
+            disabled={!state.controlledPlayers.some((control) => control.tradeResponse?.kind === "cancel" && control.tradeResponse.enabled)}
             onClick={() =>
               state.controlledPlayers
                 .filter((control) => control.tradeResponse?.kind === "cancel")

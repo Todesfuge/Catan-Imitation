@@ -45,10 +45,21 @@ function gatheringGuild(auctionRound = 1, game: GameState = createScenarioGame()
 }
 
 describe("Commerce Guild auctions without bids", () => {
+  it.each(["idle", "auction", "complete"] as const)("rejects opening an auction from %s without changing state", (phase) => {
+    const game = withGuildTokens(createScenarioGame(), { p1: 2 });
+    const guild = gatheringGuild(2, game);
+    guild.gathering.phase = phase;
+    const before = structuredClone({ game, guild });
+
+    expect(() => openGuildAuction(game, guild)).toThrow(/redemption/i);
+    expect({ game, guild }).toEqual(before);
+  });
+
   it("completes immediately when no player owns a guild token", () => {
     const game = withGuildTokens(createScenarioGame(), {});
-
-    const guild = openGuildAuction(game, gatheringGuild(1, game));
+    const redemption = gatheringGuild(1, game);
+    redemption.gathering.phase = "redemption";
+    const guild = openGuildAuction(game, redemption);
 
     expect(guild.gathering.phase).toBe("complete");
     expect(guild.gathering.auctionRound).toBe(1);
@@ -100,6 +111,7 @@ describe("Commerce Guild auctions without bids", () => {
       game: withGuildTokens(initial.game, {}),
       guild: gatheringGuild(1, initial.game)
     };
+    noEligibleState.guild.gathering.phase = "redemption";
 
     const completed = gameReducer(noEligibleState, { type: "OPEN_AUCTION" });
     expect(completed.guild.gathering.phase).toBe("complete");

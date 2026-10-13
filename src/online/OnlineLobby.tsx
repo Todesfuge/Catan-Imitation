@@ -12,6 +12,7 @@ import {
 } from "./useOnlineRoom";
 import type { PublicRoomState, PublicSeatView } from "./view";
 import { OnlineGame } from "./OnlineGame";
+import { protocolNoticeKey } from "./notice";
 import { translate, type Locale, type MessageKey } from "../ui/i18n";
 
 const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -256,24 +257,6 @@ const connectionKeys: Record<OnlineClientState["status"], MessageKey> = {
   incompatible: "online.status.incompatible"
 };
 
-function protocolNoticeKey(code: ProtocolErrorCode): MessageKey {
-  const keys: Record<ProtocolErrorCode, MessageKey> = {
-    ROOM_NOT_FOUND: "online.error.roomNotFound",
-    ROOM_FULL: "online.error.roomFull",
-    ROOM_ALREADY_STARTED: "online.error.roomStarted",
-    SEAT_TOKEN_INVALID: "online.error.seatInvalid",
-    CONNECTION_TICKET_EXPIRED: "online.error.connectionExpired",
-    VERSION_CONFLICT: "online.error.versionConflict",
-    COMMAND_NOT_ALLOWED: "online.error.commandNotAllowed",
-    RULE_VIOLATION: "online.error.commandNotAllowed",
-    RATE_LIMITED: "online.error.rateLimited",
-    ROOM_EXPIRED: "online.error.roomExpired",
-    PROTOCOL_INCOMPATIBLE: "online.error.protocolIncompatible",
-    INTERNAL_ERROR: "online.error.internal"
-  };
-  return keys[code];
-}
-
 export function OnlineRoomView({
   roomCode,
   seatId,
@@ -396,8 +379,8 @@ export function OnlineRoomView({
         {state.status === "offline" ? (
           <button onClick={onReconnect} type="button">{t("online.reconnect")}</button>
         ) : null}
-        {terminal ? (
-          <button className="primary-button" onClick={onExit} type="button">{t("online.returnHome")}</button>
+        {state.status !== "connected" ? (
+          <button aria-label={t("online.returnHome")} className="primary-button" onClick={onExit} type="button">{t("online.returnHome")}</button>
         ) : null}
       </section>
     </main>

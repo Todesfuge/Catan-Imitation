@@ -30,6 +30,10 @@ export function CommercePanel({
     state.controlledPlayers.find((control) => control.isActive)?.controlId ?? state.controlledPlayers[0]?.controlId ?? ""
   );
   const [bids, setBids] = useState<Record<string, number>>({});
+  const sealedBid = state.sealedAuction
+    ? bids[state.sealedAuction.viewerSeatId] ?? state.sealedAuction.ownPendingBid ?? 0 : 0;
+  const validSealedBid = Number.isSafeInteger(sealedBid) && sealedBid >= 0 &&
+    sealedBid <= (state.sealedAuction?.maxAmount ?? 0);
 
   useEffect(() => {
     if (!validRecipients.some((player) => player.id === recipientId)) {
@@ -187,6 +191,7 @@ export function CommercePanel({
                   })}
                   disabled={
                     !gatheringControl ||
+                    !gatheringControl.gatheringRedemptionEnabled ||
                     gatheringControl.guildTokens === 0 ||
                     gatheringControl.gatheringRemainingAllowance === 0 ||
                     gatheringControl.gatheringBankStock[resource] === 0
@@ -243,25 +248,31 @@ export function CommercePanel({
                   {t("online.auctionBidLabel")}
                   <input
                     aria-label={t("online.auctionBidLabel")}
+                    aria-invalid={!validSealedBid}
+                    aria-describedby={!validSealedBid ? "sealed-bid-validation" : undefined}
                     disabled={!state.sealedAuction.enabled}
                     max={state.sealedAuction.maxAmount}
                     min={0}
+                    step={1}
                     onChange={(event) => setBids({ ...bids, [state.sealedAuction!.viewerSeatId]: Number(event.currentTarget.value) })}
                     type="number"
-                    value={bids[state.sealedAuction.viewerSeatId] ?? state.sealedAuction.ownPendingBid ?? 0}
+                    value={sealedBid}
                   />
                 </label>
                 <button
-                  disabled={!state.sealedAuction.enabled}
+                  disabled={!state.sealedAuction.enabled || !validSealedBid}
                   onClick={() => dispatch({
                     type: "auction.submitBid",
                     controlId: state.sealedAuction!.viewerSeatId,
-                    bid: bids[state.sealedAuction!.viewerSeatId] ?? state.sealedAuction!.ownPendingBid ?? 0
+                    bid: sealedBid
                   })}
                   type="button"
                 >
                   {t("online.auctionSubmit")}
                 </button>
+                {!validSealedBid ? <p id="sealed-bid-validation" role="alert">
+                  {t("online.auctionBidInvalid", { max: state.sealedAuction.maxAmount })}
+                </p> : null}
                 {state.sealedAuction.reason ? <span>{translateRuleText(locale, state.sealedAuction.reason)}</span> : null}
               </>
             ) : state.controlledPlayers.map((control) => {

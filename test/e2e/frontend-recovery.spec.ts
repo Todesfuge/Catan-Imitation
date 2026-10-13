@@ -200,6 +200,13 @@ async function installOnlineGameMock(page: Page) {
       copied: [] as string[],
       clipboardMode: "success" as "success" | "missing" | "reject" | "deferred",
       pendingClipboard: [] as Array<() => void>,
+      failSend: false,
+      reject(code: "RATE_LIMITED" | "RULE_VIOLATION") {
+        socket?.emit("message", { data: JSON.stringify({
+          type: "command.rejected", commandId: this.sent.at(-1)?.commandId,
+          error: { code, params: {}, retryable: code === "RATE_LIMITED" }
+        }) });
+      },
       holdConnections: false,
       setClipboardMode(mode: "success" | "missing" | "reject" | "deferred") { this.clipboardMode = mode; },
       resolveClipboard() { this.pendingClipboard.shift()?.(); },
@@ -248,7 +255,10 @@ async function installOnlineGameMock(page: Page) {
         const entries = this.listeners.get(type) ?? new Set(); entries.add(listener); this.listeners.set(type, entries);
       }
       removeEventListener(type: string, listener: (event: unknown) => void) { this.listeners.get(type)?.delete(listener); }
-      send(value: string) { state.sent.push(JSON.parse(value) as Record<string, unknown>); }
+      send(value: string) {
+        if (state.failSend) throw new Error("test send failed");
+        state.sent.push(JSON.parse(value) as Record<string, unknown>);
+      }
       close() { this.readyState = 3; }
       emit(type: string, event: unknown) { for (const listener of this.listeners.get(type) ?? []) listener(event); }
     }
@@ -479,6 +489,15 @@ for (const viewport of [
       command: { type: "PLACE_SETUP_SETTLEMENT", vertexId: expect.any(String) }
     });
     expect(JSON.stringify(sent)).not.toContain("playerId");
+    for (const [code, message] of [
+      ["RATE_LIMITED", "Too many requests"], ["RULE_VIOLATION", "That action is not allowed"]
+    ] as const) {
+      await page.evaluate((code) => (window as any).__onlineGameMock.reject(code), code);
+      await expect(page.locator(".toast")).toContainText(message);
+    }
+    await page.evaluate(() => { (window as any).__onlineGameMock.failSend = true; });
+    await setupTarget.press("Enter");
+    await expect(page.locator(".toast")).toContainText("The room action was not sent");
     const measurements = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: window.innerWidth,

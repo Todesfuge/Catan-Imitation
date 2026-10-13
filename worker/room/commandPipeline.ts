@@ -21,7 +21,7 @@ import {
   prepareCryptographicM1MapSeed
 } from "../crypto";
 import { RoomLifecycleError, restartRoom, setLobbyReady, startLobby } from "./roomLifecycle";
-import { createRestartAttemptLimiter } from "./restartAttemptLimiter";
+import { createCommandAttemptLimiter } from "./commandAttemptLimiter";
 import type { LatestRoomMutation, LatestRoomMutationResult } from "./roomStore";
 import type { PersistedRoom, PersistedSeat } from "./roomTypes";
 
@@ -320,7 +320,7 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
   const project = dependencies.projectRoom ?? projectRoomView;
   const rateLimit = dependencies.rateLimit ?? { maximum: 10, windowMs: 2_000 };
   const audit = dependencies.audit ?? ((record: CommandAuditRecord) => console.log(record));
-  const restartAttemptLimiter = createRestartAttemptLimiter(rateLimit);
+  const commandAttemptLimiter = createCommandAttemptLimiter(rateLimit);
 
   async function emitAudit(
     roomCode: string,
@@ -362,14 +362,21 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
         return;
       }
 
-      const authenticated = await dependencies.store.mutateLatest(input.now, (room) => ({
-        kind: "unchanged",
-        value: {
-          authorized: room.seats.some((seat) => seat.seatId === input.seatId),
-          roomCode: room.roomCode,
-          roomVersion: room.roomVersion
-        }
-      }));
+      const authenticated = await dependencies.store.mutateLatest(input.now, (room) => {
+        const seat = room.seats.find((candidate) => candidate.seatId === input.seatId);
+        return {
+          kind: "unchanged",
+          value: {
+            authorized: seat !== undefined,
+            roomCode: room.roomCode,
+            roomVersion: room.roomVersion,
+            currentSeatIds: room.seats.map((candidate) => candidate.seatId),
+            persistedAttemptTimestamps: seat?.commandAttemptTimestamps ?? [],
+            duplicate: parsed.type !== "connection.heartbeat" &&
+              (seat?.acceptedCommandIds.some((entry) => entry.commandId === parsed.commandId) ?? false)
+          }
+        };
+      });
       if (authenticated.kind === "expired") {
         expireRoom(input.recipients);
         return;
@@ -398,6 +405,21 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
       if (parsed.type === "connection.heartbeat") return;
       const auditStartedAt = performance.now();
       const commandType = parsed.type === "match.command" ? parsed.command.type : parsed.type;
+      let rateDecision: ReturnType<typeof commandAttemptLimiter.assess> | undefined;
+      if (authenticated.kind === "active" && !authenticated.value.duplicate) {
+        rateDecision = commandAttemptLimiter.assess({
+          ...authenticated.value, seatId: input.seatId, now: input.now, recordAttempt: true
+        });
+        if (rateDecision.limited) {
+          await emitAudit(authenticated.value.roomCode, authenticated.value.roomVersion, commandType, auditStartedAt, "RATE_LIMITED");
+          for (const recipient of input.recipients) {
+            if (recipient.seatId === input.seatId) safeSend(recipient, {
+              type: "command.rejected", commandId: parsed.commandId, error: error("RATE_LIMITED")
+            });
+          }
+          return;
+        }
+      }
       let preparedContext: () => MatchExecutionContext;
       let contextForRoomVersion: ((roomVersion: number) => MatchExecutionContext) | undefined;
       try {
@@ -442,7 +464,6 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
         }
         return;
       }
-      let restartRateDecision: ReturnType<typeof restartAttemptLimiter.assess> | undefined;
 
       let mutation: LatestRoomMutationResult<MutationOutcome>;
       try {
@@ -458,23 +479,12 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
             return { kind: "unchanged", value: { kind: "duplicate", commandId: parsed.commandId } };
           }
           const restart = parsed.type === "room.restart";
-          const rateDecision = restart
-            ? (restartRateDecision ??= restartAttemptLimiter.assess({
-                roomCode: room.roomCode,
-                currentSeatIds: room.seats.map((candidate) => candidate.seatId),
-                seatId: seat.seatId,
-                persistedAttemptTimestamps: seat.commandAttemptTimestamps,
-                now: input.now,
-                recordRestartAttempt: true
-              }))
-            : restartAttemptLimiter.assess({
-                roomCode: room.roomCode,
-                currentSeatIds: room.seats.map((candidate) => candidate.seatId),
-                seatId: seat.seatId,
-                persistedAttemptTimestamps: seat.commandAttemptTimestamps,
-                now: input.now,
-                recordRestartAttempt: false
-              });
+          rateDecision ??= commandAttemptLimiter.assess({
+            roomCode: room.roomCode,
+            currentSeatIds: room.seats.map((candidate) => candidate.seatId),
+            seatId: seat.seatId, persistedAttemptTimestamps: seat.commandAttemptTimestamps,
+            now: input.now, recordAttempt: true
+          });
           if (rateDecision.limited) {
             return {
               kind: "unchanged",
@@ -486,7 +496,7 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
             : withAttemptTimestamps(
                 room,
                 seat.seatId,
-                [...rateDecision.recentPersistedAttemptTimestamps, input.now]
+                [...seat.commandAttemptTimestamps.filter((timestamp) => timestamp > input.now - rateLimit.windowMs), input.now]
                   .sort((left, right) => left - right)
               );
           if (parsed.expectedVersion !== room.roomVersion) {
@@ -563,6 +573,9 @@ export function createCommandPipeline(dependencies: PipelineDependencies) {
       }
 
       const outcome = mutation.value;
+      if (outcome.kind === "accepted" && parsed.type !== "room.restart") {
+        commandAttemptLimiter.markPersisted(mutation.room.roomCode, input.seatId, input.now);
+      }
       await emitAudit(
         mutation.room.roomCode,
         mutation.room.roomVersion,

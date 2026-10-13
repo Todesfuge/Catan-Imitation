@@ -242,6 +242,22 @@ describe("online room entry", () => {
 });
 
 describe("online lobby room", () => {
+  it("offers a home exit when saved-seat recovery fails without a snapshot", () => {
+    const session = { roomCode: "234567", seatId: "seat-host" };
+    const clearActiveSession = vi.fn();
+    const onExit = vi.fn();
+    const view = OnlineRoomView(roomProps({
+      status: "offline", retryAttempt: 0,
+      notice: { code: "SEAT_TOKEN_INVALID", params: {}, retryable: false }
+    }, { onExit: () => exitConnectedOnlineRoom(session, { clearActiveSession }, onExit) }));
+    const home = elementByLabel(view, "Return to game modes");
+    (home.props as { onClick(): void }).onClick();
+
+    expect(clearActiveSession).toHaveBeenCalledWith(session);
+    expect(onExit).toHaveBeenCalledOnce();
+    expect((elementByLabel(view, "Leave room").props as { disabled: boolean }).disabled).toBe(true);
+  });
+
   it("shows code, copy recovery, join order, ready state, host marker, and presence", () => {
     const state: OnlineClientState = { status: "connected", retryAttempt: 0, snapshot: lobbySnapshot() };
     const view = OnlineRoomView(roomProps(state, { copyState: "failed" }));

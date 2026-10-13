@@ -11,6 +11,7 @@ import {
   type TradeSlot
 } from "../expansion/commerceGuild";
 import { RuleViolationError } from "../errors";
+import { limitGameLog } from "../gameLog";
 import {
   buildCity,
   buildRoad,
@@ -182,6 +183,16 @@ export function applyMatchCommand(
   command: MatchCommand,
   context: MatchExecutionContext
 ): MatchState {
+  const result = executeMatchCommand(state, command, context);
+  const game = limitGameLog(result.game);
+  return game === result.game ? result : { ...result, game };
+}
+
+function executeMatchCommand(
+  state: MatchState,
+  command: MatchCommand,
+  context: MatchExecutionContext
+): MatchState {
   switch (command.type) {
     case "START_NEW_GAME": {
       let map: MatchMapSelection;
@@ -263,7 +274,7 @@ export function applyMatchCommand(
     }
     case "END_TURN": {
       assertCanUseTurnAction(state.game, command.playerId);
-      const nextGame = resetTurnFlow(advanceTurn(state.game));
+      const nextGame = withWinnerState(resetTurnFlow(advanceTurn(state.game)));
       const nextGuild = closeCompletedGuildGathering({
         ...state.guild,
         usedTradePlayerIds: []
@@ -736,7 +747,7 @@ export function applyMatchCommand(
       return {
         ...state,
         game: {
-          ...result.game,
+          ...withWinnerState(result.game),
           log: [
             log(context, result.summary, "guild.auctionResolved", {
               summary: result.summary,

@@ -14,6 +14,7 @@ import {
 } from "../../src/domain/match/random";
 import { createBoardDataForSeed } from "../../src/domain/randomBoard";
 import { createDevelopmentDeck } from "../../src/domain/rules/developmentCards";
+import { calculatePlayerScore } from "../../src/domain/rules/scoring";
 import { createSetupGame } from "../../src/domain/setup";
 import type {
   DiceRoll,
@@ -703,6 +704,36 @@ describe("match transition foundations", () => {
     expect(started.guild.gathering.phase).toBe("redemption");
     expect(redeemed.game.log[0].messageKey).toBe("guild.redeemedResources");
     expect(["auction", "complete"]).toContain(auction.guild.gathering.phase);
+  });
+
+  it.each(["p1", "p2"])("checks an auction victory point on %s's own turn", (winnerId) => {
+    const base = toMatchState();
+    const [owned, reward] = createDevelopmentDeck(["victoryPoint", "victoryPoint"]);
+    const auction: MatchState = {
+      ...base,
+      game: {
+        ...base.game,
+        turnState: { phase: "action", pendingDiscards: {} },
+        developmentDeck: [reward],
+        buildings: base.game.buildings.map((building) => building.ownerId === winnerId
+          ? { ...building, kind: "city" } : building),
+        players: base.game.players.map((player) => player.id === winnerId
+          ? { ...player, guildTokens: 2, prizeCards: 3, developmentCards: [owned] } : player)
+      },
+      guild: { ...base.guild, gathering: { ...base.guild.gathering, phase: "auction", auctionRound: 1 } }
+    };
+    expect(calculatePlayerScore(auction.game, winnerId)).toBe(9);
+
+    const resolved = apply(auction, { type: "RESOLVE_AUCTION", bids: { [winnerId]: 1 } }, createContext([0xffff_ffff]));
+    expect(calculatePlayerScore(resolved.game, winnerId)).toBe(10);
+    if (winnerId === "p1") {
+      expect(resolved.game).toMatchObject({ phase: "gameOver", winnerId });
+      expect(() => apply(resolved, { type: "END_TURN", playerId: "p1" })).toThrow();
+    } else {
+      expect(resolved.game.phase).toBe("playing");
+      const next = apply(resolved, { type: "END_TURN", playerId: "p1" });
+      expect(next.game).toMatchObject({ phase: "gameOver", winnerId, activePlayerId: winnerId });
+    }
   });
 
   it("uses injected randomness for a won Commerce Guild blind box", () => {

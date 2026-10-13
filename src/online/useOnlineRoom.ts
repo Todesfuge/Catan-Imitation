@@ -433,6 +433,10 @@ export function createOnlineRoomClient(
         reduce({ type: "transport.failed", error: protocolError });
         scheduleReconnect();
       } else {
+        if ((protocolError.code === "SEAT_TOKEN_INVALID" || protocolError.code === "ROOM_NOT_FOUND") &&
+            dependencies.credentials.load(normalizedRoomCode)?.seatToken === credential.seatToken) {
+          dependencies.credentials.remove(normalizedRoomCode);
+        }
         reduce({ type: "transport.failed", error: protocolError });
       }
       return;

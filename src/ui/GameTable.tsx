@@ -53,8 +53,9 @@ export interface GameTablePrivateControl {
     | { readonly kind: "development" };
   readonly guildTokens: number;
   readonly gatheringRemainingAllowance: number;
+  readonly gatheringRedemptionEnabled: boolean;
   readonly gatheringBankStock: GameTableResourceMap;
-  readonly tradeResponse?: { readonly kind: "accept" | "cancel"; readonly reason?: string };
+  readonly tradeResponse?: { readonly kind: "accept" | "cancel"; readonly enabled: boolean; readonly reason?: string };
 }
 
 export interface GameTablePlayerView {

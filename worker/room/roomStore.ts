@@ -2,6 +2,7 @@ import type { ConnectionTicket, PersistedRoom, PersistedSeat } from "./roomTypes
 import { hashesMatch } from "../crypto";
 import { migratePersistedRoom } from "./roomMigration";
 import { isPersistedMatchState } from "./roomValidation";
+import { limitGameLog } from "../../src/domain/gameLog";
 import {
   joinLobby,
   leaveLobby,
@@ -13,6 +14,14 @@ export const ROOM_RECORD_KEY = "room";
 export const ROOM_EXPIRED_KEY = "expired";
 export const MAX_OUTSTANDING_TICKETS_PER_SEAT = 8;
 export const MAX_OUTSTANDING_TICKETS_PER_ROOM = 32;
+
+function boundRoomLog(room: PersistedRoom): PersistedRoom {
+  if (!room.matchState) return room;
+  const game = limitGameLog(room.matchState.game);
+  return game === room.matchState.game ? room : {
+    ...room, matchState: { ...room.matchState, game }
+  };
+}
 
 export interface RoomStorage {
   get(key: string): Promise<unknown>;
@@ -235,6 +244,9 @@ async function readStoredRoom(
     replacementRequired = true;
   }
 
+  const bounded = boundRoomLog(room);
+  replacementRequired ||= bounded !== room;
+  room = bounded;
   const connectionTickets = room.connectionTickets.filter((item) => item.expiresAt > now);
   const cleaned = connectionTickets.length === room.connectionTickets.length
     ? room
@@ -256,7 +268,7 @@ async function persistReadReplacement(
 ): Promise<void> {
   if (value.kind === "active" && value.replacementRequired) {
     assertPersistedRoom(value.room);
-    await storage.put(ROOM_RECORD_KEY, value.room);
+    await storage.put(ROOM_RECORD_KEY, boundRoomLog(value.room));
   }
 }
 
@@ -282,7 +294,7 @@ export class RoomStore {
         await persistReadReplacement(storage, current);
         return "collision";
       }
-      await storage.put(ROOM_RECORD_KEY, room);
+      await storage.put(ROOM_RECORD_KEY, boundRoomLog(room));
       await storage.setAlarm(room.expiresAt);
       return "created";
     });
@@ -290,7 +302,7 @@ export class RoomStore {
 
   async save(room: PersistedRoom): Promise<void> {
     assertPersistedRoom(room);
-    await this.storage.put(ROOM_RECORD_KEY, room);
+    await this.storage.put(ROOM_RECORD_KEY, boundRoomLog(room));
     await this.storage.setAlarm(room.expiresAt);
   }
 
@@ -307,9 +319,10 @@ export class RoomStore {
         return { kind: "active", room: current.room, value: result.value };
       }
       assertPersistedRoom(result.room);
-      await storage.put(ROOM_RECORD_KEY, result.room);
-      await storage.setAlarm(result.room.expiresAt);
-      return { kind: "active", room: result.room, value: result.value };
+      const room = boundRoomLog(result.room);
+      await storage.put(ROOM_RECORD_KEY, room);
+      await storage.setAlarm(room.expiresAt);
+      return { kind: "active", room, value: result.value };
     });
   }
 
