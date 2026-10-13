@@ -882,7 +882,10 @@ test("three real browsers play an authoritative private room and reconnect", asy
     await second.evaluate(() => (window as any).__catanE2E.socket.close(1000, "observer complete"));
     const ticketsBefore = ticketRequestCounts.get(second)!.count;
     const handBefore = await second.locator(".player-card").filter({ hasText: "Second" }).locator(".resource-strip").innerText();
-    await contexts[1].setOffline(true);
+    // Keep the WebSocket close handshake reachable while blocking reconnect
+    // tickets. Browser-wide offline mode can leave close() waiting on Linux.
+    const ticketRoute = `**/api/rooms/${roomCode}/connection-ticket`;
+    await second.route(ticketRoute, (route) => route.abort("internetdisconnected"));
     await second.evaluate(() => {
       const observer = (window as any).__catanE2E.socket as WebSocket;
       for (const socket of (window as any).__catanTrackedSockets as WebSocket[]) {
@@ -890,7 +893,7 @@ test("three real browsers play an authoritative private room and reconnect", asy
       }
     });
     await expect(second.locator(".connection-badge")).toHaveText(/Reconnecting|Offline/, { timeout: 12_000 });
-    await contexts[1].setOffline(false);
+    await second.unroute(ticketRoute);
     await expect(second.locator(".connection-badge")).toHaveText("Connected", { timeout: 20_000 });
     await expect.poll(() => ticketRequestCounts.get(second)!.count, { timeout: 20_000 }).toBeGreaterThan(ticketsBefore);
     const serverVersion = Math.max(...(await synchronized([host, third])).map((snapshot) => snapshot.roomVersion));
