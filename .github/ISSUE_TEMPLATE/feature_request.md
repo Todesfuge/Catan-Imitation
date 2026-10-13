@@ -8,7 +8,7 @@ assignees: ""
 
 ## Goal
 
-What player, reviewer, or maintainer problem should this solve?
+What player or maintainer problem should this solve?
 
 ## Proposed Scope
 

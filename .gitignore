@@ -1,6 +1,8 @@
 .codex/
 .worktrees/
 .superpowers/
+.specify/
+specs/
 node_modules/
 .pnpm-store/
 dist/

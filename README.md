@@ -1,105 +1,75 @@
 # Catan Imitation
 
-[简体中文](README.zh-CN.md)
+[简体中文](README.zh-CN.md) · [Play online](https://catan-imitation.catan-imitation.workers.dev/)
 
-TypeScript, React, and Cloudflare Workers implementation of a Catan-like board-game table with an original Commerce Guild expansion.
+A browser board game built with TypeScript, React, Vite, and Cloudflare Workers. The base game follows Catan-style rules. The original Commerce Guild expansion adds token trading, resource redemption, and sealed auctions.
 
-## Current Scope
+## Features
 
-- Local Game for four-player hot-seat play and Online Game for anonymous private rooms with three or four seats.
-- Every new game uses a randomized standard 19-hex map with the standard terrain, number-token, and port multisets.
-- Local Game opens in a real empty setup with four players, no prebuilt pieces or resources, and snake-order settlement/road placement.
-- Each player's second setup settlement immediately grants one resource from every adjacent producing hex and debits the bank by the same amount.
-- A public canonical `M1-` seed lets every browser reconstruct the same terrain, numbers, ports, and stable geometry.
-- Catan-like dice production, staged robber flow, build costs, scoring, and enforced turn progression.
-- All standard development-card effects with explicit player choices and one non-victory card per turn.
-- Nine deterministic coastal ports with building-derived 4:1, 3:1, and 2:1 maritime ratios.
-- Statistics panel:
-  - player income by dice total
-  - dice-total distribution across players
-  - full expected income matrix
-- Public multi-resource player offers that any eligible opponent can accept during the active player's action phase.
-- English interface by default with a session-persistent Simplified Chinese option in Settings.
-- Filled, accessible resource icons replace compact operational resource words while retaining localized names for assistive technology, rules, and logs.
-- Commerce Guild expansion:
-  - three shared trade slots
-  - once-per-turn resource-to-token trades
-  - token transfer
-  - manual gathering redemption phase with one table-wide gathering cooldown
-  - three-round blind-box auction flow
-  - voucher-to-prize-card redemption
+- Local Game supports four players sharing one browser. Online Game supports three or four players in an anonymous private room.
+- Each new game starts with an empty board and snake-order setup. Every player's second setup settlement grants resources from adjacent producing hexes.
+- The standard 19-hex map is randomized. A public `M1-` map seed reproduces its layout. Settings provides seed copying and confirmed same-map or new-map restarts. Only the Online host can restart.
+- Base rules include resource production, robber resolution, building, development cards, maritime trade, player trade, scoring, and a default target of 10 points.
+- The Commerce Guild provides three trade slots, tokens, a table-wide gathering cooldown, resource redemption, three sealed auction rounds, vouchers, and prize cards.
+- The game includes an in-game rulebook, income statistics, and accessible resource icons.
+- The interface defaults to English. Settings provides Simplified Chinese. The responsive web interface supports desktop, tablet, and mobile browsers.
 
-## Commands
+## Technology
+
+| Layer | Implementation |
+| --- | --- |
+| Frontend | React, TypeScript, Vite, and responsive CSS |
+| Game rules | Shared TypeScript modules for Local and Online play |
+| Backend | Cloudflare Worker with HTTP room endpoints and WebSockets |
+| Database | SQLite-backed Durable Objects; one object stores each room through the storage API |
+| Hosting | One Worker serves the frontend and backend from the same origin |
+
+The Online server validates player commands and stores the authoritative room state. Each player receives a separate view that protects opponents' hands and sealed bids. Local Game runs in browser memory and does not use the Online database.
+
+## Quick start
+
+Use Node.js 22 or newer and pnpm 11.7.0, as declared in [package.json](package.json).
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm dev -- --port 5173
+```
+
+Open [http://127.0.0.1:5173/](http://127.0.0.1:5173/) for frontend development and Local Game. To develop Online Game with the frontend and backend on one origin, stop that server and run:
+
+```bash
+pnpm dev:worker
+```
+
+Open [http://127.0.0.1:8787/](http://127.0.0.1:8787/). Local development does not require Cloudflare account credentials.
+
+## Verification
+
+```bash
 pnpm test
+pnpm build:worker
 pnpm test:worker
 pnpm test:e2e
-pnpm build
-pnpm build:worker
-pnpm smoke:worker
 pnpm smoke:ui
 ```
 
-The app is designed for `http://127.0.0.1:5173/` during local development.
+These commands cover domain and client tests, frontend and Worker type checks, Worker runtime tests, browser interactions, and the built frontend. See the [development guide](docs/development.md) for test setup and the additional Worker smoke check.
 
-## Play Online
+## Limits
 
-[Open the production game](https://catan-imitation.catan-imitation.workers.dev/). The mode selector starts either Local Game or Online Game. English is the default interface language; Settings can switch the current browser session to Simplified Chinese.
+- Online rooms use a six-character code. There are no accounts, public matchmaking, or spectator seats.
+- Seat credentials are stored for the current browser and site origin. Refreshing or reopening can restore the seat. Clearing site data loses the credential. Cross-device recovery is unavailable.
+- Inactive rooms expire after 24 hours. Active connections defer expiry. Room persistence is temporary and does not provide long-term saved games.
+- Local Game is shared-screen play. It does not provide private hands or refresh recovery.
+- AI players and non-standard board sizes are outside the current scope.
 
-Online rooms are private and anonymous. A host creates a six-character room code, and three or four players join by code before starting. There are no user accounts or public matchmaking. Each seat is protected by an origin-local bearer credential stored by the browser, so reopening the room on the same browser origin can reconnect to the latest server state. Clearing site storage loses that seat credential, and the anonymous first version does not support cross-device seat recovery. Inactive rooms expire after 24 hours; active connections defer expiry.
+## Documentation
 
-## Seeded Maps and Restarts
+The detailed guides are in Simplified Chinese.
 
-Settings displays the canonical map seed to every Local or Online player and provides a localized copy action. The seed stays selectable as a manual copy fallback if clipboard permission is unavailable. `Replay Current Map` resets all gameplay and Commerce Guild state while retaining the seed and layout; `New Random Map` performs the same atomic reset with a new `M1-` seed and layout. Both paths return to a clean snake-order setup.
-
-Only the Online host can restart, and each restart requires inline confirmation. Participants can inspect and copy the seed but cannot invoke a restart; the server independently enforces that authority and broadcasts one converged room version after an accepted command.
-
-`M0-STANDARD` is migration-only compatibility for an exact legacy fixed-board room. It preserves the released legacy geometry and live gameplay references, is never generated for a new match, and unknown or altered legacy boards are rejected without a partial write.
-
-## Gathering, Setup Resources, and Icons
-
-The first setup settlement grants nothing. Placing a player's second setup settlement grants one card for each adjacent non-desert producing hex, counts repeated resources independently, and applies the matching bank debit in the same transition. The paired setup road never repeats the award.
-
-The Commerce Guild now uses one manual, table-wide gathering cooldown measured in completed turns. A new or restarted match begins at `2n` turns for `n` players. After a qualified current player starts a gathering during a clean post-roll action phase, the cooldown resets to `n`; the initiating turn is excluded, and no automatic gathering starts in the background.
-
-Operational hands, bank stock, costs, trades, statistics, ports, and producing hexes use shared accessible resource icons with visible quantities. Terrain names and abbreviations are no longer repeated on the board, while complete localized resource and terrain names remain available to assistive technology and in explanatory prose and game logs.
-
-## Cloudflare Deployment
-
-Cloudflare Workers Builds deploys GitHub `main`. The Worker serves the SPA and room API from one origin, while a Durable Object owns each room's authoritative state and WebSocket connections.
-
-This release upgrades room storage schema v3 and wire protocol v3 together. Deploy the Worker and SPA as one release. Valid schema-v2 lobbies migrate without fabricating a match; valid v2 matches preserve live gathering state and receive a deterministic cooldown baseline. Compatible v1 rooms continue through the existing fixed-board migration chain. Incompatible old clients follow the refresh/recovery path instead of receiving a partial projection.
-
-```bash
-pnpm build:worker
-pnpm exec wrangler deploy
-pnpm exec wrangler deploy --name catan-imitation-preview
-```
-
-This project deploys preview builds to the separate `catan-imitation-preview` Worker because version preview URLs are not suitable for its Durable Object binding. For recovery, switch traffic only to a previously verified schema-v3-compatible deployment. After any room has migrated to schema v3, never roll back to a schema-v2 or schema-v1 binary; use a compatible v3 deployment or roll forward with a corrective release. GitHub Pages publishing has been retired so there is only one production host; the former Pages address now returns HTTP 404.
-
-## Documentation Map
-
-- [Feature spec](specs/001-catan-imitation/spec.md)
-- [Implementation plan](specs/001-catan-imitation/plan.md)
-- [Task list](specs/001-catan-imitation/tasks.md)
-- [Quickstart](specs/001-catan-imitation/quickstart.md)
-- [Online multiplayer quickstart](specs/002-cloudflare-online-multiplayer/quickstart.md)
-- [Seeded random maps spec](specs/003-seeded-random-maps/spec.md)
-- [Seeded random maps quickstart](specs/003-seeded-random-maps/quickstart.md)
-- [Seeded random maps verification](specs/003-seeded-random-maps/verification.md)
-- [Gathering pacing and resource icons spec](specs/004-gathering-pacing-resource-icons/spec.md)
-- [Gathering pacing and resource icons quickstart](specs/004-gathering-pacing-resource-icons/quickstart.md)
-- [Gathering pacing and resource icons verification](specs/004-gathering-pacing-resource-icons/verification.md)
-- [Gathering pacing and resource icons handoff](specs/004-gathering-pacing-resource-icons/handoff.md)
-- [Roadmap](docs/roadmap.md)
-- [Project constitution](.specify/memory/constitution.md)
-
-## Engineering Notes
-
-Game rules live in pure TypeScript modules under `src/domain`. React components render state and dispatch typed commands through `src/app/gameReducer.ts`. In Online Game, the Cloudflare Worker and per-room Durable Object validate commands, persist short-lived room state, and return caller-specific projections.
-
-The project intentionally excludes accounts, matchmaking, cross-device credential recovery, long-term saved games, AI players, non-standard board sizes/topologies, and exact proprietary artwork.
+| Guide | Contents |
+| --- | --- |
+| [User guide](docs/user-guide.md) | Starting a game, base rules, Commerce Guild, and connection recovery |
+| [Architecture](docs/architecture.md) | Module boundaries, command processing, database storage, privacy, and room API |
+| [Development](docs/development.md) | Installation, local servers, builds, tests, and repository structure |
+| [Deployment](docs/deployment.md) | Cloudflare configuration, preview, production verification, and compatible rollback |

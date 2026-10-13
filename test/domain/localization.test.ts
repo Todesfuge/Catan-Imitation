@@ -181,64 +181,16 @@ describe("English and Simplified Chinese localization", () => {
     expect(readStoredLocale(undefined)).toBe("en");
   });
 
-  it("links complete English and Chinese README documents reciprocally", () => {
+  it("links English and Chinese overviews to the same reader guides", () => {
     const englishReadme = readFileSync("README.md", "utf8");
     const chineseReadme = readFileSync("README.zh-CN.md", "utf8");
 
     expect(englishReadme).toContain("README.zh-CN.md");
     expect(chineseReadme).toContain("README.md");
-    for (const heading of ["项目范围", "安装与启动", "游戏玩法", "测试", "部署", "项目文档"]) {
-      expect(chineseReadme).toContain(heading);
-    }
-  });
-
-  it("keeps the seeded-map release behavior explicit in both README languages", () => {
-    const englishReadme = readFileSync("README.md", "utf8");
-    const chineseReadme = readFileSync("README.zh-CN.md", "utf8");
-
-    for (const claim of [
-      "Every new game uses a randomized standard 19-hex map",
-      "Local Game opens in a real empty setup",
-      "The seed stays selectable as a manual copy fallback",
-      "Only the Online host can restart",
-      "`M0-STANDARD` is migration-only",
-      "Compatible v1 rooms continue through the existing fixed-board migration chain"
-    ]) {
-      expect(englishReadme).toContain(claim);
-    }
-    for (const claim of [
-      "每局新游戏都使用随机化的标准 19 地块地图",
-      "本地游戏会直接进入真实的空白开局设置",
-      "种子仍可选中，作为手动复制的后备方式",
-      "只有联机房主可以重开",
-      "`M0-STANDARD` 仅用于迁移",
-      "兼容的 v1 房间继续通过既有固定棋盘迁移链升级"
-    ]) {
-      expect(chineseReadme).toContain(claim);
-    }
-  });
-
-  it("keeps gathering pacing, setup grants, icons, and v3 deployment explicit in both languages", () => {
-    const englishReadme = readFileSync("README.md", "utf8");
-    const chineseReadme = readFileSync("README.zh-CN.md", "utf8");
-
-    for (const claim of [
-      "English interface by default",
-      "table-wide gathering cooldown",
-      "second setup settlement",
-      "accessible resource icons",
-      "storage schema v3 and wire protocol v3"
-    ]) {
-      expect(englishReadme).toContain(claim);
-    }
-    for (const claim of [
-      "界面默认使用英文",
-      "全桌集会冷却",
-      "第二个初始村庄",
-      "无障碍资源图标",
-      "存储架构 v3 和联机协议 v3"
-    ]) {
-      expect(chineseReadme).toContain(claim);
+    for (const guide of ["user-guide", "architecture", "development", "deployment"]) {
+      const target = `docs/${guide}.md`;
+      expect(englishReadme).toContain(target);
+      expect(chineseReadme).toContain(target);
     }
   });
 });

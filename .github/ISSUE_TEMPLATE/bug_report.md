@@ -24,12 +24,12 @@ What should have happened?
 
 - Browser:
 - Viewport:
+- Local or Online Game:
+- Interface language:
 - Branch or commit:
 
-## Verification Notes
+## Evidence
 
-Relevant checks:
+Include relevant screenshots, error messages, or reproduction details.
 
-- [ ] `pnpm test`
-- [ ] `pnpm build`
-- [ ] `pnpm smoke:ui`
+Remove seat credentials and connection tickets from logs before sharing them.
