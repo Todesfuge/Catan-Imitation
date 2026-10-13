@@ -276,7 +276,12 @@ export class RoomDurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  async webSocketClose(_socket: WebSocket): Promise<void> {
+  async webSocketClose(socket: WebSocket, code: number, reason: string): Promise<void> {
+    // The configured compatibility date requires an explicit close-frame reply.
+    // A peer that omitted a status reports 1005, which cannot be sent on the wire.
+    if (socket.readyState !== WebSocket.CLOSED) {
+      safeCloseSocket(socket, code === 1005 ? 1000 : code, reason);
+    }
     await this.socketEnded();
   }
 

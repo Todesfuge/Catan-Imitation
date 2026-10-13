@@ -789,7 +789,7 @@ class TestRoomNamespace {
     if (entry === undefined) throw new Error(`missing room ${name}`);
     for (const socket of entry.state.getWebSockets()) {
       socket.close(1000, "done");
-      await entry.object.webSocketClose(socket);
+      await entry.object.webSocketClose(socket, 1000, "done");
     }
   }
 
