@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { emptyResources, resources, type ResourceMap } from "../domain/types";
+import { emptyResources, resources, type Resource, type ResourceMap } from "../domain/types";
 import { translateRuleText, useI18n } from "./i18n";
 import type { GameTableDispatch, GameTableGameView, GameTableView } from "./GameTable";
 import { ResourceIcon } from "./ResourceBadge";
@@ -38,33 +38,75 @@ export function TurnFlowPanel({
           discarded[resource] <= discardPolicy.maxByResource[resource]
       );
 
+    function setDiscardAmount(resource: Resource, value: number) {
+      if (!discardPolicy.enabled) return;
+      setDiscarded((current) => {
+        const otherTotal = resources.reduce(
+          (total, candidate) => total + (candidate === resource ? 0 : current[candidate]),
+          0
+        );
+        const maximum = Math.min(discardPolicy.maxByResource[resource], required - otherTotal);
+        return {
+          ...current,
+          [resource]: Math.max(0, Math.min(maximum, Number.isFinite(value) ? Math.trunc(value) : 0))
+        };
+      });
+    }
+
     return (
-      <section className="turn-flow-panel" data-turn-flow="discard">
+      <section className="turn-flow-panel turn-flow-panel--discard" data-turn-flow="discard">
         <strong>{t("turn.discardRequired", { name: playerName, count: required })}</strong>
-        <span>{t("turn.selected", { selected: selectedTotal, required })}</span>
+        <div className="discard-progress" role="status">
+          <span>{t("turn.selected", { selected: selectedTotal, required })}</span>
+          <span>{t(selectedTotal === required ? "turn.discardReady" : "turn.discardRemaining", {
+            count: required - selectedTotal
+          })}</span>
+        </div>
         <div className="turn-flow-resources">
-          {resources.map((resource) => (
-            <label key={resource}>
-              <ResourceIcon resource={resource} />
-              <input
-                aria-describedby="discard-unavailable-reason"
-                aria-label={locale === "en" ? `${playerName} ${resource} discard` : `${playerName} ${t(`resource.${resource}`)}弃牌`}
-                disabled={!discardPolicy.enabled}
-                max={discardPolicy.maxByResource[resource]}
-                min={0}
-                onChange={(event) => {
-                  const value = Number(event.currentTarget.value);
-                  setDiscarded((current) => ({
-                    ...current,
-                    [resource]: value
-                  }));
-                }}
-                step={1}
-                type="number"
-                value={discarded[resource]}
-              />
-            </label>
-          ))}
+          {resources.map((resource) => {
+            const resourceName = t(`resource.${resource}`);
+            const owned = discardPolicy.maxByResource[resource];
+            return (
+              <div className="discard-resource" data-discard-resource={resource} key={resource}>
+                <div className="discard-resource-info">
+                  <ResourceIcon decorative resource={resource} size={24} />
+                  <span className="discard-resource-name">{resourceName}</span>
+                  <span className="discard-owned" id={`discard-owned-${resource}`}>
+                    {t("turn.discardOwned", { count: owned })}
+                  </span>
+                </div>
+                <div className="discard-stepper">
+                  <button
+                    aria-label={t("turn.discardDecrease", { resource: resourceName })}
+                    disabled={!discardPolicy.enabled || discarded[resource] === 0}
+                    onClick={() => setDiscardAmount(resource, discarded[resource] - 1)}
+                    type="button"
+                  >−</button>
+                  <input
+                    aria-describedby={`discard-owned-${resource} discard-unavailable-reason`}
+                    aria-label={locale === "en" ? `${playerName} ${resource} discard` : `${playerName} ${resourceName}弃牌`}
+                    disabled={!discardPolicy.enabled}
+                    inputMode="numeric"
+                    max={owned}
+                    min={0}
+                    onChange={(event) => {
+                      const value = Number(event.currentTarget.value);
+                      setDiscardAmount(resource, value);
+                    }}
+                    step={1}
+                    type="number"
+                    value={discarded[resource]}
+                  />
+                  <button
+                    aria-label={t("turn.discardIncrease", { resource: resourceName })}
+                    disabled={!discardPolicy.enabled || discarded[resource] >= owned || selectedTotal >= required}
+                    onClick={() => setDiscardAmount(resource, discarded[resource] + 1)}
+                    type="button"
+                  >+</button>
+                </div>
+              </div>
+            );
+          })}
         </div>
         <span className="sr-only" id="discard-unavailable-reason">
           {translateRuleText(locale, discardPolicy.reason)}

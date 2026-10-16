@@ -72,17 +72,29 @@ describe("product polish UI", () => {
     expect(visibleHtml).toContain("Loss must discard 4");
     expect(html).toContain('aria-label="Loss wood discard"');
     expect(html).toContain('aria-label="Loss brick discard"');
-    expect(html).toContain('aria-describedby="discard-unavailable-reason"');
+    expect(html).toContain('aria-describedby="discard-owned-wood discard-unavailable-reason"');
+    expect(visibleHtml).toContain("Owned: 4");
+    expect(html).toContain('aria-label="Discard one more Wood"');
+    expect(html).toContain('aria-label="Discard one fewer Wood" disabled');
     expect(html).toContain('data-resource-icon="wood"');
     expect(html).toContain('data-resource-icon="brick"');
     expect(html).toContain("Submit Discard");
+
+    const disabledHtml = renderToString(createElement(TurnFlowPanel, {
+      game: view.game,
+      gameControls: view.controlledPlayers,
+      decisionPolicy: { ...view.decisionPolicy, discard: { ...view.decisionPolicy.discard, enabled: false } },
+      dispatch: () => undefined
+    }));
+    expect(disabledHtml.match(/<button[^>]*disabled/g)).toHaveLength(11);
+    expect(disabledHtml.match(/<input[^>]*disabled/g)).toHaveLength(5);
   });
 
   it("captures discard input values before React releases the change event", () => {
     const source = readFileSync("src/ui/TurnFlowPanel.tsx", "utf8");
 
     expect(source).toContain("const value = Number(event.currentTarget.value);");
-    expect(source).toContain("[resource]: value");
+    expect(source).toContain("setDiscardAmount(resource, value)");
     expect(source).not.toContain("[resource]: Number(event.currentTarget.value)");
   });
 

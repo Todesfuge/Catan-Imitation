@@ -2469,20 +2469,101 @@ button.primary {
   transform: translateX(-50%);
 }
 
+.turn-flow-panel--discard {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  max-height: calc(100dvh - 116px);
+  background: #0c1c2d;
+}
+
+.discard-progress {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: 0.9rem;
+}
+
+.discard-progress span:last-child {
+  color: #c3d6df;
+}
+
 .turn-flow-resources {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-.turn-flow-resources label {
+.discard-resource {
   display: grid;
-  gap: 4px;
-  text-transform: capitalize;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 5%);
 }
 
-.turn-flow-resources input {
-  width: 100%;
+.discard-resource-info {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 8px;
+}
+
+.discard-resource-info .resource-icon {
+  grid-row: span 2;
+}
+
+.discard-resource-name {
+  font-weight: 700;
+}
+
+.discard-owned {
+  color: #c3d6df;
+  font-size: 0.8rem;
+}
+
+.discard-stepper {
+  display: grid;
+  grid-template-columns: repeat(3, 44px);
+  align-items: center;
+  gap: 4px;
+}
+
+.discard-stepper button,
+.discard-stepper input {
+  width: 44px;
+  height: 44px;
+  min-width: 0;
+  padding: 0;
+  text-align: center;
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.discard-stepper input {
+  appearance: textfield;
+}
+
+.discard-stepper :focus-visible {
+  outline: 3px solid #9fd2bf;
+  outline-offset: 2px;
+}
+
+.discard-stepper input::-webkit-inner-spin-button,
+.discard-stepper input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+@media (max-height: 560px) {
+  .turn-flow-panel--discard {
+    bottom: max(12px, env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 24px - env(safe-area-inset-bottom));
+  }
 }
 
 .robber-victim-buttons {
