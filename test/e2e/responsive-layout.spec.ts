@@ -1,6 +1,61 @@
 import { expect, test } from "@playwright/test";
 import { openTrading } from "./tradeUiHelpers";
 
+for (const scenario of [
+  { width: 1280, height: 900, collapsed: false },
+  { width: 412, height: 915, collapsed: false },
+  { width: 412, height: 915, collapsed: true }
+]) {
+  test(`${scenario.width}px ${scenario.collapsed ? "focused" : "overview"} keeps hex badges inside terrain and clear of buildings`, async ({ page }) => {
+    await page.setViewportSize(scenario);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Play Local Game" }).click();
+    for (let placement = 0; placement < 8; placement += 1) {
+      await page.locator('[data-board-action-target="setupSettlement"]').first().press("Enter");
+      await page.locator('[data-board-action-target="setupRoad"]').first().press("Enter");
+    }
+    await page.evaluate(() => {
+      let call = 0;
+      const values = [0.5 / 6, 5.5 / 6];
+      Math.random = () => values[call++ % 2];
+    });
+    await page.locator('[data-action="roll-dice"]').click();
+    await page.locator("[data-robber-target]").first().press("Enter");
+    if (scenario.collapsed) {
+      const width = await page.locator(".board-svg").evaluate((element) => element.getBoundingClientRect().width);
+      await page.getByRole("button", { name: "Hide info and actions" }).click();
+      await expect.poll(() => page.locator(".board-svg").evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(width * 1.8);
+    }
+    const issues = await page.locator(".hex-tile").evaluateAll((tiles) => tiles.flatMap((tile, index) => {
+      const polygon = tile.querySelector("polygon")!;
+      const card = tile.querySelector(".dice-chip rect") as SVGRectElement | null;
+      const problems: string[] = [];
+      if (card) {
+        const { x, y, width, height } = card.getBBox();
+        const radius = card.rx.baseVal.value;
+        for (const [px, py] of [[x + radius, y], [x + width - radius, y], [x + width, y + radius],
+          [x + width, y + height - radius], [x + width - radius, y + height], [x + radius, y + height],
+          [x, y + height - radius], [x, y + radius]]) {
+          if (!polygon.isPointInFill(new DOMPoint(px, py))) problems.push(`hex ${index}: number badge crosses terrain edge`);
+        }
+      }
+      for (const content of tile.querySelectorAll(".dice-number, .dice-pips, .board-resource-icon, .robber-piece")) {
+        const box = content.getBoundingClientRect();
+        for (const building of document.querySelectorAll(".building-marker")) {
+          const marker = building.getBoundingClientRect();
+          const border = Number.parseFloat(getComputedStyle(building).strokeWidth) / 2;
+          if (box.left < marker.right + border && box.right > marker.left - border &&
+              box.top < marker.bottom + border && box.bottom > marker.top - border) {
+            problems.push(`hex ${index}: ${content.getAttribute("class")} overlaps building`);
+          }
+        }
+      }
+      return problems;
+    }));
+    expect(issues).toEqual([]);
+  });
+}
+
 for (const viewport of [{ width: 402, height: 874 }, { width: 412, height: 915 }, { width: 430, height: 932 }]) {
   test(`${viewport.width}px can hide information and click the enlarged board`, async ({ page }) => {
     await page.setViewportSize(viewport);

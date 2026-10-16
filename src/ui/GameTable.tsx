@@ -392,6 +392,7 @@ function BoardView({
               const center = hexCenterPoint(hex);
               const polygonPoints = hexPolygonPoints(hex);
               const hasRobber = state.game.robberHexId === hex.id;
+              const resourceIconSize = hasRobber ? 28 : 32;
               const canTargetHex = canPlaceRobber && state.decisionPolicy.robberHex.targets.includes(hex.id);
               const terrainLabel = t(`terrain.${hex.terrain}`);
               const accessibleLabel = hex.resource
@@ -428,30 +429,34 @@ function BoardView({
                     <foreignObject
                       className="board-resource-icon"
                       data-board-resource={hex.resource}
-                      height="36"
-                      width="36"
-                      x={center.x - (hasRobber ? 40 : 18)}
-                      y={center.y - 40}
+                      height={resourceIconSize}
+                      width={resourceIconSize}
+                      x={center.x - (hasRobber ? 16 : 0) - resourceIconSize / 2}
+                      y={center.y - 20 - resourceIconSize / 2}
                     >
-                      <ResourceIcon decorative resource={hex.resource} size={28} />
+                      <ResourceIcon decorative resource={hex.resource} size={resourceIconSize - 6} />
                     </foreignObject>
                   ) : null}
                   {hex.diceNumber ? (
                     <g className={`dice-chip ${hex.diceNumber === 6 || hex.diceNumber === 8 ? "hot" : ""}`}>
-                      <rect height="46" rx="9" width="50" x={center.x - 25} y={center.y + 8} />
-                      <text className="dice-number" x={center.x} y={center.y + 40}>
+                      <rect height="40" rx="9" width="50" x={center.x - 25} y={center.y - 2} />
+                      <text className="dice-number" x={center.x} y={center.y + 27}>
                         {hex.diceNumber}
                       </text>
                       <g className="dice-pips" aria-hidden="true">
                         {Array.from({ length: dicePipCounts[hex.diceNumber] ?? 0 }).map((_, index, pips) => {
                           const startX = center.x - ((pips.length - 1) * 5) / 2;
-                          return <circle cx={startX + index * 5} cy={center.y + 48} key={index} r="2" />;
+                          return <circle cx={startX + index * 5} cy={center.y + 34} key={index} r="2" />;
                         })}
                       </g>
                     </g>
                   ) : null}
                   {hasRobber ? (
-                    <RobberIcon x={center.x + (hex.resource ? 22 : 0) - 23} y={center.y + (hex.resource ? -18 : 0) - 23} />
+                    <RobberIcon
+                      size={hex.resource ? 28 : 46}
+                      x={center.x + (hex.resource ? 2 : -23)}
+                      y={center.y - (hex.resource ? 34 : 23)}
+                    />
                   ) : null}
                 </g>
               );
