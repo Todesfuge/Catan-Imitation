@@ -526,12 +526,16 @@ describe("online game projection adapter", () => {
   });
 
   it("projects only the caller private hand while retaining opponent public counts", () => {
-    const view = createOnlineGameTableView(state());
+    const view = createOnlineGameTableView(state(snapshotFor(0, {
+      game: { longestRoadOwnerId: "p2", largestArmyOwnerId: "p1" }
+    })));
     expect(view.controlledPlayers).toHaveLength(1);
     expect(view.controlledPlayers[0]).toMatchObject({ controlId: "seat-1", displayName: "Caller", resources: callerResources });
     expect(view.controlledPlayers[0]?.developmentCards.map((card) => card.id)).toEqual(["caller-knight"]);
     expect(view.game.players[1]).toMatchObject({ name: "North", resourceCardCount: 99, developmentCardCount: 3 });
     expect(JSON.stringify(view.game.players[1])).not.toContain("victoryPoint");
+    expect(view.game.longestRoadOwnerId).toBe("p2");
+    expect(view.game.largestArmyOwnerId).toBe("p1");
   });
 
   it("keeps all four caller projections isolated from every other seat secret", () => {
@@ -740,7 +744,7 @@ describe("online game projection adapter", () => {
     controller.dispatch({ type: "development.buy" });
     controller.dispatch({ type: "development.play", cardId: "caller-knight" });
     controller.dispatch({ type: "trade.maritime", give: "wood", receive: "ore" });
-    controller.dispatch({ type: "trade.publish", offered: callerResources, requested: { ...zero, ore: 1 } });
+    controller.dispatch({ type: "trade.publish", offered: callerResources, requested: { ...zero, ore: 1 }, offeredTokens: 1, requestedTokens: 2 });
     controller.dispatch({ type: "trade.respond", controlId: "seat-1", response: "accept" });
     controller.dispatch({ type: "trade.respond", controlId: "seat-1", response: "cancel" });
     controller.dispatch({ type: "decision.discard", controlId: "seat-1", resources: { ...zero, wood: 3 } });
@@ -750,13 +754,12 @@ describe("online game projection adapter", () => {
     controller.dispatch({ type: "development.chooseResource", choice: "monopoly", resource: "ore" });
     controller.dispatch({ type: "development.placeRoad", edgeId: "edge-1" });
     controller.dispatch({ type: "commerce.completeSlot", slotId: "slot-1" });
-    controller.dispatch({ type: "commerce.transfer", recipientId: "p2", amount: 1 });
     controller.dispatch({ type: "commerce.startGathering" });
     controller.dispatch({ type: "commerce.redeem", controlId: "seat-1", resources: { ore: 1 } });
     controller.dispatch({ type: "commerce.openAuction" });
     controller.dispatch({ type: "commerce.redeemPrize" });
     controller.dispatch({ type: "auction.submitBid", controlId: "seat-1", bid: 2 });
-    expect(sent).toHaveLength(26);
+    expect(sent).toHaveLength(25);
     expect(sent.every((message) => message.type === "auction.submitBid" || ("expectedVersion" in message && message.expectedVersion === 41))).toBe(true);
     expect(sent.map((message) => message.type === "match.command" ? message.command.type : message.type)).toEqual([
       "ROLL_DICE", "END_TURN", "BUILD_ROAD", "BUILD_SETTLEMENT", "BUILD_CITY", "PLACE_SETUP_SETTLEMENT",
@@ -764,15 +767,33 @@ describe("online game projection adapter", () => {
       "PUBLISH_PLAYER_TRADE", "ACCEPT_PLAYER_TRADE", "CANCEL_PLAYER_TRADE", "DISCARD_FOR_SEVEN",
       "PLACE_ROBBER", "STEAL_ROBBER_RESOURCE", "CHOOSE_YEAR_OF_PLENTY_RESOURCE",
       "CHOOSE_MONOPOLY_RESOURCE", "PLACE_FREE_ROAD",
-      "COMPLETE_TRADE_SLOT", "TRANSFER_TOKENS", "START_GATHERING", "REDEEM_GATHERING", "OPEN_AUCTION",
+      "COMPLETE_TRADE_SLOT", "START_GATHERING", "REDEEM_GATHERING", "OPEN_AUCTION",
       "REDEEM_PRIZE", "auction.submitBid"
     ]);
     expect(sent.every((message) => !JSON.stringify(message).includes("playerId"))).toBe(true);
+    expect(sent.find(message => message.type === "match.command" && message.command.type === "PUBLISH_PLAYER_TRADE"))
+      .toMatchObject({ command: { offeredTokens: 1, requestedTokens: 2 } });
     expect(sent.find((message) =>
       message.type === "match.command" && message.command.type === "START_GATHERING"
     )).toMatchObject({ command: { type: "START_GATHERING" } });
     expect(sent.every((message) => "commandId" in message && message.commandId === "11111111-1111-4111-8111-111111111111")).toBe(true);
     expect(getState().snapshot?.roomVersion).toBe(41);
+  });
+
+  it("reads public token offers while rejecting invalid token quantities", () => {
+    const offer = { proposerId: "p1", offered: zero, requested: { ...zero, ore: 1 }, offeredTokens: 2, requestedTokens: 1 };
+    const snapshot = snapshotFor(0, { game: { pendingPlayerTrade: offer } });
+    const view = createOnlineGameTableView(state(snapshot));
+    expect(view.pendingPlayerTrade).toEqual(offer);
+    expect(readOnlineGameProjection(snapshotFor(0, { game: {
+      pendingPlayerTrade: { ...offer, requestedTokens: Number.MAX_SAFE_INTEGER }
+    } }))).toBeTruthy();
+    for (const field of ["offeredTokens", "requestedTokens"] as const) {
+      for (const amount of [-1, 1.5, NaN, Number.MAX_SAFE_INTEGER + 1]) {
+        const invalid = snapshotFor(0, { game: { pendingPlayerTrade: { ...offer, [field]: amount } } });
+        expect(readOnlineGameProjection(invalid)).toBeUndefined();
+      }
+    }
   });
 
   it("refuses dispatch while offline, reconnecting, expired, incompatible, or finished", () => {

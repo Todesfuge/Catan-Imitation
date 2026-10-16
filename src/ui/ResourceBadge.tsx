@@ -3,6 +3,7 @@ import {
   BrickWall,
   Cloud,
   Gem,
+  Layers3,
   Trees,
   Wheat,
   type LucideIcon
@@ -22,6 +23,17 @@ const resourceIcons: Record<Resource, LucideIcon> = {
   grain: Wheat,
   ore: Gem
 };
+
+export function ResourceCardCount({ quantity }: { quantity: number }) {
+  const { t } = useI18n();
+  const label = t("online.resourceCardCount", { count: quantity });
+  return (
+    <span aria-label={label} className="resource-card-total" data-resource-card-total={quantity} role="img" title={label}>
+      <Layers3 aria-hidden="true" size={15} />
+      <span>{quantity}</span>
+    </span>
+  );
+}
 
 export function ResourceIcon({
   resource,

@@ -39,6 +39,74 @@ function createActionState(): AppState {
 }
 
 describe("public player resource trade", () => {
+  it.each([
+    { offered: bundle({}), requested: bundle({ grain: 1 }), offeredTokens: 2, requestedTokens: 0 },
+    { offered: bundle({ wood: 1 }), requested: bundle({}), offeredTokens: 0, requestedTokens: 2 },
+    { offered: bundle({ wood: 1 }), requested: bundle({ grain: 1 }), offeredTokens: 2, requestedTokens: 1 }
+  ])("settles resources and tokens together for $offeredTokens offered / $requestedTokens requested tokens", (assets) => {
+    const state = createActionState();
+    state.game.players[0].guildTokens = 4;
+    state.game.players[1].guildTokens = 3;
+    const published = executeMatchCommandForTest(state, {
+      type: "PUBLISH_PLAYER_TRADE", playerId: "p1", ...assets
+    });
+    expect(published.game.players.map(player => player.guildTokens)).toEqual([4, 3, 0, 0]);
+    const accepted = executeMatchCommandForTest(published, { type: "ACCEPT_PLAYER_TRADE", playerId: "p2" });
+
+    expect(accepted.pendingPlayerTrade).toBeUndefined();
+    expect(accepted.game.players[0].guildTokens).toBe(4 - assets.offeredTokens + assets.requestedTokens);
+    expect(accepted.game.players[1].guildTokens).toBe(3 - assets.requestedTokens + assets.offeredTokens);
+    expect(accepted.game.players.reduce((sum, player) => sum + player.guildTokens, 0)).toBe(7);
+    for (const resource of resources) {
+      expect(accepted.game.players[0].resources[resource]).toBe(
+        state.game.players[0].resources[resource] - assets.offered[resource] + assets.requested[resource]
+      );
+      expect(accepted.game.players[1].resources[resource]).toBe(
+        state.game.players[1].resources[resource] - assets.requested[resource] + assets.offered[resource]
+      );
+    }
+    expect(accepted.game.bank).toEqual(state.game.bank);
+    expect(state.game.players[0].guildTokens).toBe(4);
+  });
+
+  it("rejects invalid token quantities and offers beyond the proposer's balance", () => {
+    const { game } = createActionState();
+    game.players[0].guildTokens = 2;
+    for (const amount of [-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, null as unknown as number]) {
+      expect(() => createPlayerTradeOffer(game, "p1", bundle({ wood: 1 }), bundle({ grain: 1 }), amount)).toThrow(/whole numbers/);
+      expect(() => createPlayerTradeOffer(game, "p1", bundle({ wood: 1 }), bundle({ grain: 1 }), 0, amount)).toThrow(/whole numbers/);
+    }
+    expect(() => createPlayerTradeOffer(game, "p1", bundle({}), bundle({ grain: 1 }), 3)).toThrow(/cannot afford.*tokens/);
+  });
+
+  it("rechecks both token balances and leaves all assets intact when acceptance fails", () => {
+    const { game } = createActionState();
+    game.players[0].guildTokens = 2;
+    game.players[1].guildTokens = 1;
+    const offer = createPlayerTradeOffer(game, "p1", bundle({ wood: 1 }), bundle({ grain: 1 }), 2, 1);
+    for (const playerIndex of [0, 1]) {
+      const changed = structuredClone(game);
+      changed.players[playerIndex].guildTokens = 0;
+      const before = structuredClone(changed);
+      expect(() => acceptPlayerTrade(changed, offer, "p2")).toThrow(/afford.*tokens/);
+      expect(changed).toEqual(before);
+    }
+    const overflow = structuredClone(game);
+    overflow.players[1].guildTokens = Number.MAX_SAFE_INTEGER;
+    expect(() => acceptPlayerTrade(overflow, offer, "p2")).toThrow(/safe whole numbers/);
+  });
+
+  it("cancels a token offer without charging or moving assets", () => {
+    const state = createActionState();
+    state.game.players[0].guildTokens = 2;
+    const published = executeMatchCommandForTest(state, {
+      type: "PUBLISH_PLAYER_TRADE", playerId: "p1", offered: bundle({}), requested: bundle({ ore: 1 }), offeredTokens: 2
+    });
+    const cancelled = executeMatchCommandForTest(published, { type: "CANCEL_PLAYER_TRADE", playerId: "p1" });
+    expect(cancelled.pendingPlayerTrade).toBeUndefined();
+    expect(cancelled.game.players).toEqual(state.game.players);
+  });
+
   it("publishes one affordable multi-resource offer during the active action phase", () => {
     const state = createActionState();
     const offered = bundle({ wood: 2, brick: 1 });

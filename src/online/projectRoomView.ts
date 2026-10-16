@@ -7,7 +7,7 @@ import { getGatheringCooldownRemaining } from "../domain/expansion/commerceGuild
 import type { MatchState } from "../domain/match/types";
 import { parseMapSeed, type MapSeed } from "../domain/mapSeed";
 import { matchesBoardDataForSeed } from "../domain/randomBoard";
-import { calculatePlayerScore } from "../domain/rules/scoring";
+import { calculatePlayerScore, calculatePublicPlayerScore } from "../domain/rules/scoring";
 import {
   resources,
   type DevelopmentCardKind,
@@ -149,27 +149,19 @@ function resourceCount(player: Player): number {
   return resources.reduce((total, resource) => total + player.resources[resource], 0);
 }
 
-function hiddenVictoryPointCount(player: Player): number {
-  return player.developmentCards.filter((card) => card.kind === "victoryPoint").length;
-}
-
 function projectPlayer(
   game: GameState,
   player: Player,
-  viewerPlayerId: string | undefined,
   revealFinalScores: boolean
 ): PublicPlayerView {
-  const completeScore = calculatePlayerScore(game, player.id);
-  const visibleScore =
-    revealFinalScores || player.id === viewerPlayerId
-      ? completeScore
-      : completeScore - hiddenVictoryPointCount(player);
   return {
     playerId: player.id,
     color: player.color,
     resourceCardCount: resourceCount(player),
     developmentCardCount: player.developmentCards.length,
-    visibleScore,
+    visibleScore: revealFinalScores
+      ? calculatePlayerScore(game, player.id)
+      : calculatePublicPlayerScore(game, player.id),
     guildTokens: player.guildTokens,
     vouchers: player.vouchers,
     prizeCards: player.prizeCards,
@@ -377,7 +369,6 @@ function publicPlayerNames(
 
 function projectGame(
   match: MatchState,
-  viewerPlayerId: string | undefined,
   playerNameById: ReadonlyMap<string, string>,
   revealFinalScores: boolean
 ): PublicGameView {
@@ -397,7 +388,6 @@ function projectGame(
       projectPlayer(
         game,
         player,
-        viewerPlayerId,
         revealFinalScores
       )
     ),
@@ -422,7 +412,9 @@ function projectGame(
           pendingPlayerTrade: {
             proposerId: match.pendingPlayerTrade.proposerId,
             offered: copyResourceMap(match.pendingPlayerTrade.offered),
-            requested: copyResourceMap(match.pendingPlayerTrade.requested)
+            requested: copyResourceMap(match.pendingPlayerTrade.requested),
+            ...(match.pendingPlayerTrade.offeredTokens !== undefined ? { offeredTokens: match.pendingPlayerTrade.offeredTokens } : {}),
+            ...(match.pendingPlayerTrade.requestedTokens !== undefined ? { requestedTokens: match.pendingPlayerTrade.requestedTokens } : {})
           }
         }
       : {}),
@@ -519,7 +511,6 @@ export function projectRoomView(
   const game = room.matchState
     ? projectGame(
         room.matchState,
-        viewerSeat.playerId,
         playerNameById,
         room.lifecycle === "finished" || room.matchState.game.phase === "gameOver"
       )

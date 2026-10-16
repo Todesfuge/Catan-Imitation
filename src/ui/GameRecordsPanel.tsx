@@ -3,9 +3,11 @@ import { resources } from "../domain/types";
 import type { GameTableDispatch, GameTableView } from "./GameTable";
 import { ResourceBundle, ResourceIcon } from "./ResourceBadge";
 import { formatGameLogEntry, useI18n } from "./i18n";
+import { VictoryPointsPanel } from "./VictoryPointsPanel";
 
 type StatsMode = "player" | "dice" | "matrix";
-type RecordsTab = "log" | "statistics";
+const recordTabs = ["log", "statistics", "victory"] as const;
+type RecordsTab = (typeof recordTabs)[number];
 
 export function GameRecordsPanel({ state, dispatch }: {
   state: GameTableView;
@@ -15,25 +17,28 @@ export function GameRecordsPanel({ state, dispatch }: {
   const [tab, setTab] = useState<RecordsTab>("log");
   const logTabRef = useRef<HTMLButtonElement>(null);
   const statsTabRef = useRef<HTMLButtonElement>(null);
+  const victoryTabRef = useRef<HTMLButtonElement>(null);
+  const tabRefs = { log: logTabRef, statistics: statsTabRef, victory: victoryTabRef };
 
   function handleTabKey(event: React.KeyboardEvent<HTMLButtonElement>) {
     let nextTab: RecordsTab;
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-      nextTab = tab === "log" ? "statistics" : "log";
+      const index = recordTabs.indexOf(tab);
+      nextTab = recordTabs[(index + (event.key === "ArrowRight" ? 1 : recordTabs.length - 1)) % recordTabs.length];
     } else if (event.key === "Home" || event.key === "End") {
-      nextTab = event.key === "Home" ? "log" : "statistics";
+      nextTab = event.key === "Home" ? "log" : "victory";
     } else {
       return;
     }
     event.preventDefault();
     setTab(nextTab);
-    (nextTab === "log" ? logTabRef : statsTabRef).current?.focus();
+    tabRefs[nextTab].current?.focus();
   }
 
   return (
     <div className="game-records">
       <div aria-label={t("dialog.records")} className="records-tabs" role="tablist">
-        {(["log", "statistics"] as const).map((item) => (
+        {recordTabs.map((item) => (
           <button
             aria-controls={`records-panel-${item}`}
             aria-selected={tab === item}
@@ -41,12 +46,12 @@ export function GameRecordsPanel({ state, dispatch }: {
             key={item}
             onClick={() => setTab(item)}
             onKeyDown={handleTabKey}
-            ref={item === "log" ? logTabRef : statsTabRef}
+            ref={tabRefs[item]}
             role="tab"
             tabIndex={tab === item ? 0 : -1}
             type="button"
           >
-            {t(item === "log" ? "log.title" : "stats.title")}
+            {t(item === "log" ? "log.title" : item === "statistics" ? "stats.title" : "score.tab")}
           </button>
         ))}
       </div>
@@ -82,6 +87,15 @@ export function GameRecordsPanel({ state, dispatch }: {
         role="tabpanel"
       >
         <StatsPanel state={state} dispatch={dispatch} />
+      </div>
+      <div
+        aria-labelledby="records-tab-victory"
+        className="records-content"
+        hidden={tab !== "victory"}
+        id="records-panel-victory"
+        role="tabpanel"
+      >
+        <VictoryPointsPanel state={state} />
       </div>
     </div>
   );

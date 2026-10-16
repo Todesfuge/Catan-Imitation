@@ -462,7 +462,9 @@ function executeMatchCommand(
         state.game,
         command.playerId,
         command.offered,
-        command.requested
+        command.requested,
+        command.offeredTokens,
+        command.requestedTokens
       );
       const proposerName = getPlayerName(state.game, command.playerId);
       return {

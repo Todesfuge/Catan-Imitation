@@ -334,22 +334,23 @@ function commerceGuild(value: unknown, references: GameReferences): boolean {
 }
 
 function playerTrade(value: unknown, game: UnknownRecord, references: GameReferences): boolean {
-  if (!record(value) || !exactKeys(value, ["proposerId", "offered", "requested"]) ||
+  if (!record(value) || !exactKeys(value, ["proposerId", "offered", "requested"], ["offeredTokens", "requestedTokens"]) ||
     !references.playerIds.has(String(value.proposerId)) || value.proposerId !== game.activePlayerId ||
     !resourceMap(value.offered) || !resourceMap(value.requested) ||
+    !optional(value, "offeredTokens", safeInteger) || !optional(value, "requestedTokens", safeInteger) ||
     (game.phase !== "playing" && game.phase !== "gameOver") ||
     (game.turnState as UnknownRecord).phase !== "action") {
     return false;
   }
   const offered = value.offered as Record<(typeof resources)[number], number>;
   const requested = value.requested as Record<(typeof resources)[number], number>;
-  if (resources.every((resource) => offered[resource] === 0) ||
-    resources.every((resource) => requested[resource] === 0)) {
+  if (((value.offeredTokens ?? 0) === 0 && resources.every((resource) => offered[resource] === 0)) ||
+    ((value.requestedTokens ?? 0) === 0 && resources.every((resource) => requested[resource] === 0))) {
     return false;
   }
   const proposer = references.playerById.get(value.proposerId as string);
   const inventory = proposer?.resources as UnknownRecord | undefined;
-  return inventory !== undefined && resources.every((resource) =>
+  return inventory !== undefined && ((value.offeredTokens ?? 0) as number) <= (proposer!.guildTokens as number) && resources.every((resource) =>
     offered[resource] <= (inventory[resource] as number)
   );
 }

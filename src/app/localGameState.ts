@@ -8,7 +8,7 @@ import { formatM1MapSeed } from "../domain/mapSeed";
 import { createSetupMatch, defaultMatchSeats } from "../domain/match/createMatch";
 import type { MatchCommand, MatchExecutionContext, MatchState } from "../domain/match/types";
 import type { RandomSource } from "../domain/match/random";
-import { calculatePlayerScore } from "../domain/rules/scoring";
+import { calculatePlayerScore, calculatePublicPlayerScore } from "../domain/rules/scoring";
 import {
   getPlayerTradeAcceptanceReason
 } from "../domain/rules/playerTrade";
@@ -198,7 +198,9 @@ export function createLocalGameTableView(state: AppState): GameTableView {
         id: player.id,
         name: player.name,
         color: player.color,
-        visibleScore: calculatePlayerScore(state.game, player.id),
+        visibleScore: state.game.phase === "gameOver"
+          ? calculatePlayerScore(state.game, player.id)
+          : calculatePublicPlayerScore(state.game, player.id),
         resourceCardCount: Object.values(player.resources).reduce(
           (total, count) => total + count,
           0
@@ -246,7 +248,9 @@ export function createLocalGameTableView(state: AppState): GameTableView {
       log: state.game.log.map(projectLocalLog),
       developmentDeckCount: state.game.developmentDeck.length,
       ...(state.game.setup ? { setup: { stage: state.game.setup.stage } } : {}),
-      ...(state.game.winnerId ? { winnerId: state.game.winnerId } : {})
+      ...(state.game.winnerId ? { winnerId: state.game.winnerId } : {}),
+      ...(state.game.longestRoadOwnerId ? { longestRoadOwnerId: state.game.longestRoadOwnerId } : {}),
+      ...(state.game.largestArmyOwnerId ? { largestArmyOwnerId: state.game.largestArmyOwnerId } : {})
     },
     guild: {
       tradeSlots: state.guild.tradeSlots.map((slot) => ({ id: slot.id, requires: { ...slot.requires }, tokenReward: slot.tokenReward })),
@@ -306,7 +310,9 @@ export function createLocalGameTableView(state: AppState): GameTableView {
     ...(state.pendingPlayerTrade ? { pendingPlayerTrade: {
       proposerId: state.pendingPlayerTrade.proposerId,
       offered: cloneResources(state.pendingPlayerTrade.offered),
-      requested: cloneResources(state.pendingPlayerTrade.requested)
+      requested: cloneResources(state.pendingPlayerTrade.requested),
+      ...(state.pendingPlayerTrade.offeredTokens !== undefined ? { offeredTokens: state.pendingPlayerTrade.offeredTokens } : {}),
+      ...(state.pendingPlayerTrade.requestedTokens !== undefined ? { requestedTokens: state.pendingPlayerTrade.requestedTokens } : {})
     } } : {}),
     selectedDiceTotal: state.selectedDiceTotal,
     selectedPlayerId: state.selectedPlayerId,
@@ -415,10 +421,11 @@ export function createLocalGameTableController(
         case "development.chooseResource": dispatchCommand({ type: intent.choice === "yearOfPlenty" ? "CHOOSE_YEAR_OF_PLENTY_RESOURCE" : "CHOOSE_MONOPOLY_RESOURCE", playerId: active(), resource: intent.resource }); return;
         case "development.placeRoad": dispatchCommand({ type: "PLACE_FREE_ROAD", playerId: active(), edgeId: intent.edgeId }); return;
         case "trade.maritime": dispatchCommand({ type: "MARITIME_TRADE", playerId: active(), give: intent.give, receive: intent.receive }); return;
-        case "trade.publish": dispatchCommand({ type: "PUBLISH_PLAYER_TRADE", playerId: active(), offered: { ...intent.offered }, requested: { ...intent.requested } }); return;
+        case "trade.publish": dispatchCommand({ type: "PUBLISH_PLAYER_TRADE", playerId: active(), offered: { ...intent.offered }, requested: { ...intent.requested },
+          ...(intent.offeredTokens !== undefined ? { offeredTokens: intent.offeredTokens } : {}),
+          ...(intent.requestedTokens !== undefined ? { requestedTokens: intent.requestedTokens } : {}) }); return;
         case "trade.respond": dispatchCommand({ type: intent.response === "accept" ? "ACCEPT_PLAYER_TRADE" : "CANCEL_PLAYER_TRADE", playerId: actorForControl(intent.controlId) }); return;
         case "commerce.completeSlot": dispatchCommand({ type: "COMPLETE_TRADE_SLOT", playerId: active(), slotId: intent.slotId }); return;
-        case "commerce.transfer": dispatchCommand({ type: "TRANSFER_TOKENS", fromPlayerId: active(), toPlayerId: intent.recipientId, amount: intent.amount }); return;
         case "commerce.startGathering": dispatchCommand({ type: "START_GATHERING", playerId: active() }); return;
         case "commerce.redeem": dispatchCommand({ type: "REDEEM_GATHERING", playerId: actorForControl(intent.controlId), resources: { ...intent.resources } }); return;
         case "commerce.openAuction": dispatchCommand({ type: "OPEN_AUCTION" }); return;

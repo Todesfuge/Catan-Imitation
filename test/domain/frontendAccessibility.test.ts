@@ -14,14 +14,15 @@ function renderStatistics() {
 }
 
 describe("frontend accessibility and responsive contracts", () => {
-  it("gives statistics, transfer, and maritime controls programmatic names", () => {
+  it("gives statistics, player trade, and maritime controls programmatic names", () => {
     const html = renderToString(createElement(TradeHubPanel, {
       state: createLocalGameTableView(createInitialAppState()), dispatch: () => undefined
     }));
 
     expect(renderStatistics()).toContain('aria-label="Statistics player"');
-    expect(html).toContain('aria-label="Token recipient"');
-    expect(html).toContain('aria-label="Token amount"');
+    expect(html).toContain('aria-label="Offer Guild tokens"');
+    expect(html).toContain('aria-label="Request Guild tokens"');
+    expect(html).not.toContain('class="token-transfer"');
     expect(html).toContain('aria-label="Maritime give resource"');
     expect(html).toContain('aria-label="Maritime receive resource"');
     expect(html).toContain('class="resource-choice-group" role="group"');

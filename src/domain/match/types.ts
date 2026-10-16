@@ -60,6 +60,8 @@ export type MatchCommand =
       playerId: PlayerId;
       offered: ResourceMap;
       requested: ResourceMap;
+      offeredTokens?: number;
+      requestedTokens?: number;
     }
   | { type: "CANCEL_PLAYER_TRADE"; playerId: PlayerId }
   | { type: "ACCEPT_PLAYER_TRADE"; playerId: PlayerId }

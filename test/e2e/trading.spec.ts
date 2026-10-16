@@ -20,11 +20,13 @@ test("all trading opens in one dialog with keyboard tabs and returns focus on cl
   await expect(dialog.getByRole("button", { name: "Maritime", exact: true })).toBeDisabled();
   await page.keyboard.press("ArrowRight");
   await expect(commerce).toBeFocused();
-  await expect(dialog.getByLabel("Token recipient")).toBeVisible();
+  await expect(dialog.locator(".token-transfer")).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Start Gathering" })).toBeDisabled();
   await page.keyboard.press("ArrowRight");
   await expect(player).toBeFocused();
   await expect(dialog.getByLabel("Offer Wood")).toBeVisible();
+  await expect(dialog.getByLabel("Offer Guild tokens", { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel("Request Guild tokens", { exact: true })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Publish Public Offer" })).toBeDisabled();
   await page.keyboard.press("End");
   await expect(commerce).toBeFocused();
@@ -42,6 +44,8 @@ test("all trading opens in one dialog with keyboard tabs and returns focus on cl
   for (const name of ["玩家交易", "海上交易", "商业公会"]) {
     await expect(page.getByRole("tab", { name, exact: true })).toBeVisible();
   }
+  await expect(page.getByLabel("提供 公会代币", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("索取 公会代币", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "关闭工具面板" }).click();
   await expect(page.getByRole("button", { name: "打开交易", exact: true })).toBeFocused();
 });

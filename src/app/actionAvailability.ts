@@ -486,7 +486,8 @@ export function getActionAvailabilityFacts(
 
   const offer = state.pendingPlayerTrade;
   const canAffordRequested =
-    offer && resources.every((resource) => player.resources[resource] >= offer.requested[resource]);
+    offer && player.guildTokens >= (offer.requestedTokens ?? 0) &&
+    resources.every((resource) => player.resources[resource] >= offer.requested[resource]);
 
   return {
     roll:
@@ -749,7 +750,7 @@ const reasonMessages: Record<AvailabilityReasonCode, (params?: AvailabilityReaso
   PLAYER_TRADE_ALREADY_OPEN: () => "A player trade is already open.",
   PLAYER_TRADE_PROPOSER_NOT_ACTIVE: () => "The player who published this offer is no longer active.",
   CANNOT_ACCEPT_OWN_TRADE: () => "The active player cannot accept their own offer.",
-  CANNOT_AFFORD_PLAYER_TRADE: () => "The requested resources are not affordable.",
+  CANNOT_AFFORD_PLAYER_TRADE: () => "The requested trade is not affordable.",
   WAITING_FOR_REQUIRED_PLAYERS: () => "Waiting for required players.",
   WAITING_FOR_ACTIVE_PLAYER: () => "Waiting for the active player.",
   REQUIRED_PLAYER_OFFLINE: () => "A required player is offline.",

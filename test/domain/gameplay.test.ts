@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createScenarioAppState } from "../fixtures/createScenarioGame";
 import { buildCity, buildRoad, buildSettlement } from "../../src/domain/rules/building";
-import { calculatePlayerScore } from "../../src/domain/rules/scoring";
+import { calculatePlayerScore, calculatePublicPlayerScore, calculatePublicScoreBreakdown } from "../../src/domain/rules/scoring";
 import { executeMatchCommandForTest } from "./matchCommandTestUtils";
 
 describe("core gameplay rules", () => {
@@ -68,6 +68,23 @@ describe("core gameplay rules", () => {
     };
 
     expect(calculatePlayerScore(game, "p1")).toBe(6);
+  });
+
+  it("excludes only hidden development points from public score, retaining buildings, prizes and awards", () => {
+    const { game } = createScenarioAppState();
+    game.largestArmyOwnerId = "p1";
+    game.longestRoadOwnerId = "p1";
+    game.players[0].prizeCards = 2;
+    game.players[0].developmentCards = [1, 2].map(index => ({
+      id: `hidden-point-${index}`, kind: "victoryPoint", purchasedTurn: 1, revealed: false
+    }));
+
+    expect(calculatePlayerScore(game, "p1")).toBe(12);
+    expect(calculatePublicPlayerScore(game, "p1")).toBe(10);
+    expect(calculatePublicScoreBreakdown(game, "p1")).toEqual({
+      settlements: 0, cities: 2, longestRoad: 2, largestArmy: 2, prizeCards: 4, total: 10
+    });
+    expect(calculatePublicPlayerScore(game, "p2")).toBe(calculatePlayerScore(game, "p2"));
   });
 
   it("roll dice command applies production to player hands and records the roll", () => {

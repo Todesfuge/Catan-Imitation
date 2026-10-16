@@ -1418,9 +1418,9 @@ test("Local opens in an empty seeded setup and both restart modes rebuild atomic
   for (const inventory of await page.locator('[data-resource-inventory="private"] .resource-bundle').all()) {
     await expect(inventory).toHaveAccessibleName("Wood: 0, Brick: 0, Wool: 0, Grain: 0, Ore: 0");
   }
-  for (const card of await page.locator(".player-card").allTextContents()) {
-    expect(card).toContain("Resources: 0");
-    expect(card).toContain("Development: 0");
+  for (const card of await page.locator(".player-card").all()) {
+    await expect(card.getByLabel("Resources: 0", { exact: true })).toBeVisible();
+    await expect(card.getByLabel("Development: 0", { exact: true })).toBeVisible();
   }
   await closeTrading(page);
   await page.getByRole("button", { name: "Open records and statistics" }).click();
@@ -1554,7 +1554,7 @@ for (const seed of maritimeSeedCases) {
   });
 }
 
-test("Commerce controls keep valid named selections across turns", async ({ page }) => {
+test("Gathering controls keep valid named selections across turns", async ({ page }) => {
   await page.addInitScript(() => {
     Math.random = () => 0;
   });
@@ -1562,14 +1562,12 @@ test("Commerce controls keep valid named selections across turns", async ({ page
   await completeLocalSetup(page);
   await openTrading(page, "commerce");
 
-  await expect(page.getByLabel("Token recipient")).toHaveValue("p2");
-  await expect(page.getByLabel("Token amount")).toHaveValue("1");
+  await expect(page.locator(".token-transfer")).toHaveCount(0);
   await closeTrading(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
   await closeTrading(page);
   await page.getByRole("button", { name: "End Turn" }).click();
   await openTrading(page, "commerce");
-  await expect(page.getByLabel("Token recipient")).not.toHaveValue("p2");
 
   await advanceLocalGatheringCooldownToAction(page, 1);
   await openTrading(page, "commerce");

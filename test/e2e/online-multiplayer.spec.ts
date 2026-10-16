@@ -372,6 +372,10 @@ async function startThreeBrowserRoom(contexts: BrowserContext[]): Promise<{
   await expect(host.locator(".seat-card")).toHaveCount(3);
 
   for (let index = 0; index < pages.length; index += 1) {
+    for (const viewer of pages) {
+      await expect(viewer.locator(".presence-state--online")).toHaveCount(3);
+      await expect(viewer.locator(".seat-state--ready")).toHaveCount(index);
+    }
     await pages[index].getByRole("button", { name: "Set ready" }).click();
     await expect(pages[index].getByRole("button", { name: "Set not ready" })).toBeVisible();
     await expect(host.locator(".seat-state--ready")).toHaveCount(index + 1);
@@ -426,6 +430,104 @@ async function advanceOnlineCleanTurn(pages: Page[]): Promise<Snapshot[]> {
   return synchronized(pages);
 }
 
+test("players exchange guild tokens and resources through one public offer", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const contexts = await Promise.all([browser.newContext(), browser.newContext(), browser.newContext()]);
+  try {
+    const { pages } = await startThreeBrowserRoom(contexts);
+    let snapshots = await completeOnlineSetup(pages);
+    let ownerIndex = -1;
+    for (let turn = 0; turn < 24; turn += 1) {
+      const index = snapshots.findIndex(snapshot => snapshot.privateState.playerId === snapshot.publicState.game.activePlayerId);
+      if (snapshots[index].publicState.game.turnState.phase === "awaitingRoll") {
+        await command(pages[index], { type: "ROLL_DICE" });
+        await resolveSeven(pages);
+        snapshots = await synchronized(pages);
+      }
+      const slot = snapshots[index].allowedActions.commerce.tradeSlots.find((entry: any) => entry.enabled);
+      if (slot) {
+        await command(pages[index], { type: "COMPLETE_TRADE_SLOT", slotId: slot.id });
+        snapshots = await synchronized(pages);
+        ownerIndex = index;
+        break;
+      }
+      await command(pages[index], { type: "END_TURN" });
+      snapshots = await synchronized(pages);
+    }
+    expect(ownerIndex).toBeGreaterThanOrEqual(0);
+    const recipientIndex = snapshots.findIndex((snapshot, index) => index !== ownerIndex &&
+      Object.values(snapshot.privateState.resources as Record<string, number>).some(amount => amount > 0));
+    expect(recipientIndex).toBeGreaterThanOrEqual(0);
+    const owner = pages[ownerIndex];
+    const recipient = pages[recipientIndex];
+    await recipient.setViewportSize({ width: 412, height: 915 });
+    const resource = Object.entries(snapshots[recipientIndex].privateState.resources as Record<string, number>)
+      .find(([, amount]) => amount > 0)![0];
+    const resourceLabel = resource[0].toUpperCase() + resource.slice(1);
+    const ownerId = snapshots[ownerIndex].privateState.playerId;
+    const recipientId = snapshots[recipientIndex].privateState.playerId;
+    const tokens = (snapshot: Snapshot, id: string) => snapshot.publicState.game.players.find((player: any) => player.playerId === id).guildTokens as number;
+    const ownerTokens = tokens(snapshots[0], ownerId);
+    const recipientTokens = tokens(snapshots[0], recipientId);
+    const initialResources = snapshots.map(snapshot => ({ ...snapshot.privateState.resources }));
+    expect(recipientTokens).toBe(0);
+
+    async function publish(offeredTokens: number, requestedTokens: number, giveResource: boolean) {
+      await openTrading(owner, "player");
+      await owner.getByLabel("Offer Guild tokens", { exact: true }).fill(String(offeredTokens));
+      await owner.getByLabel("Request Guild tokens", { exact: true }).fill(String(requestedTokens));
+      await owner.getByLabel(`Offer ${resourceLabel}`, { exact: true }).fill(giveResource ? "1" : "0");
+      await owner.getByLabel(`Request ${resourceLabel}`, { exact: true }).fill(giveResource ? "0" : "1");
+      snapshots = await uiMutation(pages, owner, async () => {
+        await owner.getByRole("button", { name: "Publish Public Offer" }).click();
+      });
+    }
+
+    // A pending offer reserves nothing, and an insufficient token balance blocks acceptance.
+    await publish(1, 1, false);
+    for (const page of pages) {
+      await openTrading(page, "player");
+      await expect(page.locator('[data-trade-tokens="offered"]')).toContainText("1");
+      await expect(page.locator('[data-trade-tokens="requested"]')).toContainText("1");
+      await expect(page.locator(".token-transfer")).toHaveCount(0);
+    }
+    await expect(recipient.getByRole("button", { name: /^Accept as / })).toBeDisabled();
+    expect(tokens(snapshots[0], ownerId)).toBe(ownerTokens);
+    snapshots = await uiMutation(pages, owner, async () => {
+      await owner.getByRole("button", { name: "Cancel Offer" }).click();
+    });
+    expect(snapshots.map(snapshot => snapshot.privateState.resources)).toEqual(initialResources);
+    expect(tokens(snapshots[0], ownerId)).toBe(ownerTokens);
+
+    await openTrading(owner, "player");
+    await owner.getByLabel("Offer Guild tokens", { exact: true }).fill(String(ownerTokens + 10));
+    await expect(owner.getByLabel("Offer Guild tokens", { exact: true })).toHaveValue(String(ownerTokens));
+    await publish(1, 0, false);
+    expect(snapshots.every(snapshot => snapshot.publicState.game.pendingPlayerTrade.offeredTokens === 1)).toBe(true);
+    await openTrading(recipient, "player");
+    snapshots = await uiMutation(pages, recipient, async () => {
+      await recipient.getByRole("button", { name: /^Accept as / }).click();
+    });
+    expect(tokens(snapshots[0], ownerId)).toBe(ownerTokens - 1);
+    expect(tokens(snapshots[0], recipientId)).toBe(recipientTokens + 1);
+    expect(snapshots[ownerIndex].privateState.resources[resource]).toBe(initialResources[ownerIndex][resource] + 1);
+    expect(snapshots[recipientIndex].privateState.resources[resource]).toBe(initialResources[recipientIndex][resource] - 1);
+
+    await publish(0, 1, true);
+    await openTrading(recipient, "player");
+    snapshots = await uiMutation(pages, recipient, async () => {
+      await recipient.getByRole("button", { name: /^Accept as / }).click();
+    });
+    expect(tokens(snapshots[0], ownerId)).toBe(ownerTokens);
+    expect(tokens(snapshots[0], recipientId)).toBe(recipientTokens);
+    expect(snapshots.map(snapshot => snapshot.privateState.resources)).toEqual(initialResources);
+    expect(snapshots.every(snapshot => snapshot.publicState.game.pendingPlayerTrade === undefined)).toBe(true);
+    expect(await recipient.locator(".connection-badge").textContent()).toBe("Connected");
+  } finally {
+    await Promise.all(contexts.map(context => context.close()));
+  }
+});
+
 test("online records show only projected events and retain the statistics privacy boundary", async ({ browser }) => {
   const contexts = await Promise.all([browser.newContext(), browser.newContext(), browser.newContext()]);
   try {
@@ -459,6 +561,16 @@ test("online records show only projected events and retain the statistics privac
       await viewer.getByRole("tab", { name: "Yield Statistics", exact: true }).click();
       await expect(viewer.getByRole("dialog").getByText("Yield statistics are unavailable in privacy-safe online views.")).toBeVisible();
       await expect(viewer.getByRole("dialog").getByRole("table")).toHaveCount(0);
+      await viewer.getByRole("tab", { name: "Victory Points", exact: true }).click();
+      const ownId = snapshots[index].privateState.playerId;
+      const hiddenPoints = snapshots[index].privateState.developmentCards.filter((card: any) => card.kind === "victoryPoint").length;
+      for (const player of snapshots[index].publicState.game.players) {
+        const score = viewer.locator(`[data-score-player="${player.playerId}"]`);
+        await expect(score.locator('[data-score-source="settlements"]')).toContainText("2 pt");
+        await expect(score.locator('[data-score-source="hiddenVictoryPoints"]')).toContainText(
+          player.playerId === ownId ? `${hiddenPoints} pt` : "Hidden"
+        );
+      }
       await viewer.getByRole("button", { name: "Close utility panel" }).click();
       await expect(opener).toBeFocused();
     }

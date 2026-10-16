@@ -5,7 +5,6 @@ import {
   ChevronUp,
   Coins,
   Gift,
-  Landmark,
   Maximize,
   ScrollText,
   Settings,
@@ -32,7 +31,7 @@ import { BoardActionTargets } from "./BoardActionTargets";
 import { BoardViewport } from "./BoardViewport";
 import { HandSummary } from "./HandSummary";
 import { UtilityDialog, type UtilityPanel } from "./UtilityDialog";
-import { ResourceBundle, ResourceIcon } from "./ResourceBadge";
+import { ResourceBundle, ResourceCardCount, ResourceIcon } from "./ResourceBadge";
 import { translateRuleText, useI18n } from "./i18n";
 
 export type GameTableResource = (typeof resources)[number];
@@ -107,6 +106,8 @@ export interface GameTableGameView {
     readonly stage: "settlement" | "road";
   };
   readonly winnerId?: string;
+  readonly longestRoadOwnerId?: string;
+  readonly largestArmyOwnerId?: string;
 }
 
 export interface GameTableBoardHex {
@@ -174,7 +175,7 @@ export interface GameTableView {
   };
   readonly controlledPlayers: readonly GameTablePrivateControl[];
   readonly lastDice: { readonly first: number; readonly second: number; readonly total: number } | null;
-  readonly pendingPlayerTrade?: { readonly proposerId: string; readonly offered: GameTableResourceMap; readonly requested: GameTableResourceMap };
+  readonly pendingPlayerTrade?: { readonly proposerId: string; readonly offered: GameTableResourceMap; readonly requested: GameTableResourceMap; readonly offeredTokens?: number; readonly requestedTokens?: number };
   readonly selectedDiceTotal: number;
   readonly selectedPlayerId: string;
   readonly notice: string | null;
@@ -226,10 +227,9 @@ export type GameTableIntent =
   | { readonly type: "development.chooseResource"; readonly choice: "yearOfPlenty" | "monopoly"; readonly resource: GameTableResource }
   | { readonly type: "development.placeRoad"; readonly edgeId: string }
   | { readonly type: "trade.maritime"; readonly give: GameTableResource; readonly receive: GameTableResource }
-  | { readonly type: "trade.publish"; readonly offered: GameTableResourceMap; readonly requested: GameTableResourceMap }
+  | { readonly type: "trade.publish"; readonly offered: GameTableResourceMap; readonly requested: GameTableResourceMap; readonly offeredTokens?: number; readonly requestedTokens?: number }
   | { readonly type: "trade.respond"; readonly controlId: string; readonly response: "accept" | "cancel" }
   | { readonly type: "commerce.completeSlot"; readonly slotId: string }
-  | { readonly type: "commerce.transfer"; readonly recipientId: string; readonly amount: number }
   | { readonly type: "commerce.startGathering" }
   | { readonly type: "commerce.redeem"; readonly controlId: string; readonly resources: Partial<GameTableResourceMap> }
   | { readonly type: "commerce.openAuction" }
@@ -549,6 +549,9 @@ function PlayerPanel({ state }: { state: GameTableView }) {
         const privatePresentation = state.controlledPlayers.find(
           (control) => control.displaySlot === displaySlot
         );
+        const scoreLabel = t(state.game.phase === "gameOver" ? "board.finalScore" : "board.publicScore", {
+          count: player.visibleScore
+        });
         return (
           <article className={`player-card ${active ? "active" : ""}`} key={player.id}>
             <div className="player-main">
@@ -561,8 +564,8 @@ function PlayerPanel({ state }: { state: GameTableView }) {
               </div>
             </div>
             <div className="player-metrics">
-              <span>
-                <Trophy size={15} /> {player.visibleScore}
+              <span aria-label={scoreLabel} title={scoreLabel}>
+                <Trophy aria-hidden="true" size={15} /> {player.visibleScore}
               </span>
               <span>
                 <Coins size={15} /> {player.guildTokens}
@@ -570,13 +573,13 @@ function PlayerPanel({ state }: { state: GameTableView }) {
               <span>
                 <Gift size={15} /> {player.vouchers}
               </span>
-              <span>
-                <Landmark size={15} /> {player.prizeCards}
+              <span aria-label={t("online.developmentCardCount", { count: player.developmentCardCount })}
+                title={t("online.developmentCardCount", { count: player.developmentCardCount })}>
+                <ScrollText aria-hidden="true" size={15} /> {player.developmentCardCount}
               </span>
-              <span>{t("online.resourceCardCount", { count: player.resourceCardCount })}</span>
-              <span>{t("online.developmentCardCount", { count: player.developmentCardCount })}</span>
             </div>
-            <div className="resource-strip compact" data-resource-inventory={privatePresentation ? "private" : undefined}>
+            <div className="resource-strip compact player-resource-row" data-resource-inventory={privatePresentation ? "private" : undefined}>
+              <ResourceCardCount quantity={player.resourceCardCount} />
               {privatePresentation ? (
                 <ResourceBundle
                   className="player-resource-inventory"

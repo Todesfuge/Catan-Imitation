@@ -110,7 +110,9 @@ export function createOnlineGameTableView(state: OnlineClientState, locale: Loca
       log: game.log.map((entry) => ({ id: entry.id, fallbackText: "Game activity updated.",
         ...(entry.messageKey ? { messageKey: entry.messageKey } : {}), ...(entry.params ? { params: { ...entry.params } } : {}) })),
       developmentDeckCount: game.developmentDeckCount,
-      ...(game.setup ? { setup: { stage: game.setup.stage } } : {}), ...(game.winnerId ? { winnerId: game.winnerId } : {})
+      ...(game.setup ? { setup: { stage: game.setup.stage } } : {}), ...(game.winnerId ? { winnerId: game.winnerId } : {}),
+      ...(game.longestRoadOwnerId ? { longestRoadOwnerId: game.longestRoadOwnerId } : {}),
+      ...(game.largestArmyOwnerId ? { largestArmyOwnerId: game.largestArmyOwnerId } : {})
     },
     guild: {
       tradeSlots: guild.tradeSlots.map((slot) => ({ id: slot.id, requires: { ...slot.requires }, tokenReward: slot.tokenReward })),
@@ -136,7 +138,9 @@ export function createOnlineGameTableView(state: OnlineClientState, locale: Loca
     }],
     lastDice: game.lastDice ? { ...game.lastDice } : null,
     ...(game.pendingPlayerTrade ? { pendingPlayerTrade: { proposerId: game.pendingPlayerTrade.proposerId,
-      offered: { ...game.pendingPlayerTrade.offered }, requested: { ...game.pendingPlayerTrade.requested } } } : {}),
+      offered: { ...game.pendingPlayerTrade.offered }, requested: { ...game.pendingPlayerTrade.requested },
+      ...(game.pendingPlayerTrade.offeredTokens !== undefined ? { offeredTokens: game.pendingPlayerTrade.offeredTokens } : {}),
+      ...(game.pendingPlayerTrade.requestedTokens !== undefined ? { requestedTokens: game.pendingPlayerTrade.requestedTokens } : {}) } } : {}),
     selectedDiceTotal: 8, selectedPlayerId: privateState.playerId!,
     notice: state.notice ? translate(locale, protocolNoticeKey(state.notice.code)) : null,
     legality: {
@@ -192,11 +196,12 @@ function matchCommand(intent: GameTableIntent): OnlineMatchCommand | undefined {
     case "development.chooseResource": return { type: intent.choice === "yearOfPlenty" ? "CHOOSE_YEAR_OF_PLENTY_RESOURCE" : "CHOOSE_MONOPOLY_RESOURCE", resource: intent.resource };
     case "development.placeRoad": return { type: "PLACE_FREE_ROAD", edgeId: intent.edgeId };
     case "trade.maritime": return { type: "MARITIME_TRADE", give: intent.give, receive: intent.receive };
-    case "trade.publish": return { type: "PUBLISH_PLAYER_TRADE", offered: { ...intent.offered }, requested: { ...intent.requested } };
+    case "trade.publish": return { type: "PUBLISH_PLAYER_TRADE", offered: { ...intent.offered }, requested: { ...intent.requested },
+      ...(intent.offeredTokens !== undefined ? { offeredTokens: intent.offeredTokens } : {}),
+      ...(intent.requestedTokens !== undefined ? { requestedTokens: intent.requestedTokens } : {}) };
     case "trade.respond": return { type: intent.response === "accept" ? "ACCEPT_PLAYER_TRADE" : "CANCEL_PLAYER_TRADE" };
     case "decision.discard": return { type: "DISCARD_FOR_SEVEN", resources: { ...intent.resources } };
     case "commerce.completeSlot": return { type: "COMPLETE_TRADE_SLOT", slotId: intent.slotId };
-    case "commerce.transfer": return { type: "TRANSFER_TOKENS", toPlayerId: intent.recipientId, amount: intent.amount };
     case "commerce.startGathering": return { type: "START_GATHERING" };
     case "commerce.redeem": return { type: "REDEEM_GATHERING", resources: { ...intent.resources } };
     case "commerce.openAuction": return { type: "OPEN_AUCTION" };

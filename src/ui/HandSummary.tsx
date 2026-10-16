@@ -1,6 +1,6 @@
 import React from "react";
 import type { GameTableView } from "./GameTable";
-import { ResourceBundle } from "./ResourceBadge";
+import { ResourceBundle, ResourceCardCount } from "./ResourceBadge";
 import { useI18n } from "./i18n";
 
 export function HandSummary({ state }: { state: GameTableView }) {
@@ -13,7 +13,10 @@ export function HandSummary({ state }: { state: GameTableView }) {
   return (
     <section aria-label={label} className="hand-summary" data-hand-summary>
       <strong>{label}</strong>
-      <ResourceBundle compact includeZero resources={control.resources} />
+      <span className="player-resource-row">
+        <ResourceCardCount quantity={Object.values(control.resources).reduce((sum, quantity) => sum + quantity, 0)} />
+        <ResourceBundle compact includeZero resources={control.resources} />
+      </span>
     </section>
   );
 }

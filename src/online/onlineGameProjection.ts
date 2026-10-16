@@ -243,8 +243,10 @@ function publicGame(value: unknown, mapSeed: MapSeed, boardIds: BoardIds): value
   }
   if (!Array.isArray(value.log) || value.log.length > 6 ||
       !value.log.every((entry) => publicLogEntry(entry, boardIds))) return false;
-  if (value.pendingPlayerTrade !== undefined && (!object(value.pendingPlayerTrade) || !exact(value.pendingPlayerTrade, ["proposerId", "offered", "requested"]) ||
-      !playerIds.has(value.pendingPlayerTrade.proposerId as string) || !resourceMap(value.pendingPlayerTrade.offered) || !resourceMap(value.pendingPlayerTrade.requested))) return false;
+  if (value.pendingPlayerTrade !== undefined && (!object(value.pendingPlayerTrade) || !exact(value.pendingPlayerTrade, ["proposerId", "offered", "requested"], ["offeredTokens", "requestedTokens"]) ||
+      !playerIds.has(value.pendingPlayerTrade.proposerId as string) || !resourceMap(value.pendingPlayerTrade.offered) || !resourceMap(value.pendingPlayerTrade.requested) ||
+      (value.pendingPlayerTrade.offeredTokens !== undefined && !nonNegativeInt(value.pendingPlayerTrade.offeredTokens, Number.MAX_SAFE_INTEGER)) ||
+      (value.pendingPlayerTrade.requestedTokens !== undefined && !nonNegativeInt(value.pendingPlayerTrade.requestedTokens, Number.MAX_SAFE_INTEGER)))) return false;
   return [value.winnerId, value.largestArmyOwnerId, value.longestRoadOwnerId].every((id) => id === undefined || playerIds.has(id as string));
 }
 

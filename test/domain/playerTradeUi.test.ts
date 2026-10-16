@@ -49,7 +49,7 @@ describe("player trade UI", () => {
         dispatch: () => undefined
       })
     );
-    for (const resource of ["Wood", "Brick", "Wool", "Grain", "Ore"]) {
+    for (const resource of ["Wood", "Brick", "Wool", "Grain", "Ore", "Guild tokens"]) {
       expect(draftHtml).toContain(`aria-label="Offer ${resource}"`);
       expect(draftHtml).toContain(`aria-label="Request ${resource}"`);
     }
@@ -92,6 +92,31 @@ describe("player trade UI", () => {
     expect(offerHtml.match(/<button[^>]*>Accept as Kay<\/button>/)?.[0] ?? "").toContain("disabled");
     expect(offerHtml).toContain("Kay cannot afford the requested resources");
     expect(offerHtml).toContain("Cancel Offer");
+  });
+
+  it("shows tokens in the public offer and disables acceptance for an insufficient token balance", () => {
+    const state = createTradeState();
+    state.game.players[0].guildTokens = 3;
+    state.game.players[1].guildTokens = 0;
+    state.game.players[2].guildTokens = 2;
+    state.game.players[2].resources = { ...emptyResources(), grain: 1, ore: 1 };
+    state.pendingPlayerTrade = { ...state.pendingPlayerTrade!, offeredTokens: 1, requestedTokens: 2 };
+    const view = createLocalGameTableView(state);
+    const html = renderToString(createElement(PlayerTradePanel, { state: view, dispatch: () => undefined }))
+      .replaceAll("<!-- -->", "");
+
+    expect(html).toContain("1 guild token for 1 Grain, 1 Ore, 2 guild tokens");
+    expect(html).toContain('data-trade-tokens="offered"');
+    expect(html).toContain('data-trade-tokens="requested"');
+    expect(view.controlledPlayers[1].tradeResponse?.enabled).toBe(false);
+    expect(view.controlledPlayers[2].tradeResponse?.enabled).toBe(true);
+    expect(html).toContain("Loss cannot afford the requested tokens.");
+    const { pendingPlayerTrade: _offer, ...draft } = state;
+    const draftHtml = renderToString(createElement(PlayerTradePanel, {
+      state: createLocalGameTableView(draft), dispatch: () => undefined
+    })).replaceAll("<!-- -->", "");
+    expect(draftHtml).toContain("3 available");
+    expect(draftHtml).toMatch(/aria-label="Offer Guild tokens"[^>]*max="3"/);
   });
 
   it("hosts all three trade types as separate tab panels", () => {

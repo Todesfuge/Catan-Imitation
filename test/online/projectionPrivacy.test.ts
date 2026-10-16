@@ -658,13 +658,19 @@ describe("caller-specific room projection privacy", () => {
     }
   });
 
-  it("excludes opponents' hidden victory points while playing, then shows final score", () => {
+  it("excludes hidden victory points from every public score while playing, then shows final scores", () => {
     const playingRoom = createRoom("playing");
-    const playingView = projectRoomView(playingRoom, "seat-1");
-    const playingOpponent = playingView.publicState.game!.players.find(({ playerId }) => playerId === "p2")!;
     const completeScore = calculatePlayerScore(playingRoom.matchState!.game, "p2");
 
-    expect(playingOpponent.visibleScore).toBe(completeScore - 1);
+    for (const seat of playingRoom.seats) {
+      const view = projectRoomView(playingRoom, seat.seatId);
+      const player = view.publicState.game!.players.find(({ playerId }) => playerId === "p2")!;
+      expect(player.visibleScore).toBe(completeScore - 1);
+      expect(JSON.stringify(view.publicState)).not.toContain("opponent-hidden-vp-id");
+      if (seat.playerId === "p2") {
+        expect(view.privateState.developmentCards).toContainEqual(opponentCards[1]);
+      }
+    }
 
     const lifecycleFinishedRoom = createRoom("playing");
     lifecycleFinishedRoom.lifecycle = "finished";
@@ -1010,5 +1016,22 @@ describe("caller-specific room projection privacy", () => {
         playerId: "p2"
       })
     ).toThrow(/proposer.*afford/i);
+  });
+
+  it("publishes token quantities to every seat and checks the accepting caller's token balance", () => {
+    const room = createRoom("playing");
+    room.matchState!.game.turnState = { phase: "action", pendingDiscards: {} };
+    room.matchState!.game.players[0].guildTokens = 3;
+    room.matchState!.game.players[1].guildTokens = 0;
+    room.matchState!.pendingPlayerTrade = {
+      proposerId: "p1", offered: emptyResources(), requested: emptyResources(), offeredTokens: 2, requestedTokens: 1
+    };
+    for (const seat of room.seats) {
+      const view = projectRoomView(room, seat.seatId);
+      expect(view.publicState.game!.pendingPlayerTrade).toEqual(room.matchState!.pendingPlayerTrade);
+    }
+    expect(projectRoomView(room, "seat-2").allowedActions!.publicTrade.accept.enabled).toBe(false);
+    room.matchState!.game.players[1].guildTokens = 1;
+    expect(projectRoomView(room, "seat-2").allowedActions!.publicTrade.accept.enabled).toBe(true);
   });
 });

@@ -157,6 +157,14 @@ describe("client WebSocket messages", () => {
       requested: { wood: 0, brick: 1, wool: 0, grain: 0, ore: 0 }
     },
     { type: "CANCEL_PLAYER_TRADE" },
+    {
+      type: "PUBLISH_PLAYER_TRADE", offered: { wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 },
+      requested: { wood: 0, brick: 1, wool: 0, grain: 0, ore: 0 }, offeredTokens: 2
+    },
+    {
+      type: "PUBLISH_PLAYER_TRADE", offered: { wood: 1, brick: 0, wool: 0, grain: 0, ore: 0 },
+      requested: { wood: 0, brick: 1, wool: 0, grain: 0, ore: 0 }, offeredTokens: 2, requestedTokens: 1
+    },
     { type: "ACCEPT_PLAYER_TRADE" },
     { type: "DISCARD_FOR_SEVEN", resources: { wood: 1, brick: 0, wool: 0, grain: 0, ore: 0 } },
     { type: "PLACE_ROBBER", hexId: "hex-1" },
@@ -170,6 +178,15 @@ describe("client WebSocket messages", () => {
   ])("parses actorless match command $type", (command) => {
     const message = { type: "match.command", commandId, expectedVersion: 0, command };
     expect(parseClientWebSocketMessage(wire(message))).toEqual(message);
+  });
+
+  it.each([-1, 0.5, null, "2", Number.MAX_SAFE_INTEGER + 1])("rejects invalid player-trade token quantity %s", amount => {
+    for (const field of ["offeredTokens", "requestedTokens"]) {
+      const command = { type: "PUBLISH_PLAYER_TRADE", offered: { wood: 1, brick: 0, wool: 0, grain: 0, ore: 0 },
+        requested: { wood: 0, brick: 1, wool: 0, grain: 0, ore: 0 }, [field]: amount };
+      expect(() => parseClientWebSocketMessage(wire({ type: "match.command", commandId, expectedVersion: 0, command })))
+        .toThrow(ProtocolValidationError);
+    }
   });
 
   it.each([

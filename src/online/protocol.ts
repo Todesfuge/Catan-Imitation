@@ -85,7 +85,7 @@ export type OnlineMatchCommand =
   | { type: "CHOOSE_YEAR_OF_PLENTY_RESOURCE"; resource: Resource }
   | { type: "CHOOSE_MONOPOLY_RESOURCE"; resource: Resource }
   | { type: "MARITIME_TRADE"; give: Resource; receive: Resource }
-  | { type: "PUBLISH_PLAYER_TRADE"; offered: ResourceMap; requested: ResourceMap }
+  | { type: "PUBLISH_PLAYER_TRADE"; offered: ResourceMap; requested: ResourceMap; offeredTokens?: number; requestedTokens?: number }
   | { type: "CANCEL_PLAYER_TRADE" }
   | { type: "ACCEPT_PLAYER_TRADE" }
   | { type: "DISCARD_FOR_SEVEN"; resources: ResourceMap }
@@ -365,11 +365,13 @@ function parseOnlineMatchCommand(value: unknown): OnlineMatchCommand {
       };
     }
     case "PUBLISH_PLAYER_TRADE": {
-      exactObject(object, "message.command", ["type", "offered", "requested"]);
+      exactObject(object, "message.command", ["type", "offered", "requested"], ["offeredTokens", "requestedTokens"]);
       return {
         type,
         offered: resourceMapAt(object.offered, "message.command.offered"),
-        requested: resourceMapAt(object.requested, "message.command.requested")
+        requested: resourceMapAt(object.requested, "message.command.requested"),
+        ...(Object.hasOwn(object, "offeredTokens") ? { offeredTokens: integerAt(object.offeredTokens, "message.command.offeredTokens") } : {}),
+        ...(Object.hasOwn(object, "requestedTokens") ? { requestedTokens: integerAt(object.requestedTokens, "message.command.requestedTokens") } : {})
       };
     }
     case "DISCARD_FOR_SEVEN": {

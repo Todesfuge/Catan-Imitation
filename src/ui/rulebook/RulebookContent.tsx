@@ -1,5 +1,5 @@
 import React, { type ReactNode } from "react";
-import { Coins, Gift, Landmark, Trophy } from "lucide-react";
+import { Coins, Gift, Layers3, ScrollText, Trophy } from "lucide-react";
 import { buildCosts } from "../../domain/rules/building";
 import { type Resource } from "../../domain/types";
 import { useI18n, type MessageKey } from "../i18n";
@@ -105,7 +105,8 @@ function IconLegend() {
     { id: "score", icon: <Trophy aria-hidden="true" size={28} /> },
     { id: "tokens", icon: <Coins aria-hidden="true" size={28} /> },
     { id: "vouchers", icon: <Gift aria-hidden="true" size={28} /> },
-    { id: "prizes", icon: <Landmark aria-hidden="true" size={28} /> },
+    { id: "development", icon: <ScrollText aria-hidden="true" size={28} /> },
+    { id: "resources", icon: <Layers3 aria-hidden="true" size={28} /> },
     { id: "robber", icon: <RobberIcon size={36} /> }
   ] as const;
   return (

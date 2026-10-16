@@ -9,6 +9,8 @@ import {
   createLocalGameTableView
 } from "../../src/app/localGameState";
 import { parseMapSeed } from "../../src/domain/mapSeed";
+import { createDevelopmentDeck } from "../../src/domain/rules/developmentCards";
+import { calculatePlayerScore } from "../../src/domain/rules/scoring";
 import { GameTable, type GameTableView } from "../../src/ui/GameTable";
 import { createScenarioAppState } from "../fixtures/createScenarioGame";
 
@@ -211,6 +213,37 @@ describe("shared game-table presentation boundary", () => {
     expect(html).not.toContain('style="border-color:');
     expect(html).toContain('aria-label="Catan board"');
     expect(html).toContain('data-action="roll-dice"');
+  });
+
+  it.each([
+    { targetScore: 10, phase: "playing", visibleScore: 2 },
+    { targetScore: 3, phase: "gameOver", visibleScore: 3 }
+  ] as const)("projects the $phase score after buying a hidden victory point", ({ targetScore, phase, visibleScore }) => {
+    const initial = createScenarioAppState();
+    const state = {
+      ...initial,
+      game: {
+        ...initial.game,
+        targetScore,
+        turnState: { phase: "action" as const, pendingDiscards: {} },
+        developmentDeck: createDevelopmentDeck(["victoryPoint"]),
+        players: initial.game.players.map(player => player.id === "p1"
+          ? { ...player, resources: { ...noResources, wool: 1, grain: 1, ore: 1 } }
+          : player)
+      }
+    };
+    const bought = gameReducer(state, { type: "BUY_DEVELOPMENT_CARD", playerId: "p1" });
+    const view = createLocalGameTableView(bought);
+
+    expect(bought.game.phase).toBe(phase);
+    expect(calculatePlayerScore(bought.game, "p1")).toBe(3);
+    expect(view.game.players[0].visibleScore).toBe(visibleScore);
+    expect(view.controlledPlayers[0].developmentCards).toContainEqual(
+      expect.objectContaining({ kind: "victoryPoint", revealed: false })
+    );
+    const html = renderToString(createElement(GameTable, { view, dispatch: () => undefined }));
+    expect(html).toContain(`aria-label="${phase === "gameOver" ? "Final" : "Public"} victory points: ${visibleScore}"`);
+    if (phase === "gameOver") expect(bought.game.winnerId).toBe("p1");
   });
 
   it("maps actorless and opaque-control intents only in the local adapter", () => {

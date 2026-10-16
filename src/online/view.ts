@@ -42,6 +42,8 @@ export interface PublicPlayerTradeView {
   proposerId: PlayerId;
   offered: ResourceMap;
   requested: ResourceMap;
+  offeredTokens?: number;
+  requestedTokens?: number;
 }
 
 export interface PublicTurnView {

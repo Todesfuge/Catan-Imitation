@@ -418,7 +418,8 @@ describe("product polish UI", () => {
     expect(css).toContain(".road-building-target");
     expect(css).toContain(".resource-bundle");
     expect(css).toContain(".board-resource-icon");
-    expect(css).toMatch(/\.player-metrics span:nth-last-child\(-n \+ 2\)[\s\S]*grid-column:\s*span 2/);
+    expect(css).toMatch(/\.player-metrics\s*{[^}]*grid-template-columns:\s*repeat\(4,/);
+    expect(css).toContain(".player-resource-row");
     expect(css).toMatch(/\.maritime-selectors\s*{[^}]*grid-template-columns:\s*1fr/);
     expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
   });

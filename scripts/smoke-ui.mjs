@@ -85,6 +85,7 @@ try {
     "Player Trade",
     "Commerce Guild",
     "Records & Statistics",
+    "Victory point sources",
     "Submit Discard",
     "Move the robber to a different hex",
     "Choose a player to steal from",
@@ -92,11 +93,12 @@ try {
     "Year of Plenty",
     "Monopoly",
     "Effective maritime trade ratios",
-    "Token recipient",
+    "Guild tokens",
     "Gathering player",
     "New Random Map",
     "Standard maritime ports",
-    "data-port-resource"
+    "data-port-resource",
+    "data-resource-card-total"
     ,"Publish Public Offer"
     ,"Simplified Chinese"
     ,"游戏日志"
@@ -121,6 +123,9 @@ try {
     ".board-action-target",
     ".utility-modal"
     ,".player-trade-panel"
+    ,".player-trade-tokens"
+    ,".score-source-list"
+    ,".resource-card-total"
     ,".trade-hub-panel"
     ,".dice-income-list"
     ,".log-list"

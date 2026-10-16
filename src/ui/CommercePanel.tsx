@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ArrowRightLeft, Landmark, Layers3, TimerReset } from "lucide-react";
 import { resources } from "../domain/types";
 import type { GameTableDispatch, GameTableView } from "./GameTable";
@@ -17,15 +17,6 @@ export function CommercePanel({
     (player) => player.id === state.game.activePlayerId
   );
   const availability = state.legality.actions;
-  const validRecipients = useMemo(
-    () =>
-      state.game.players.filter((player) =>
-        availability.commerce.transfer.recipientIds.includes(player.id)
-      ),
-    [availability.commerce.transfer.recipientIds, state.game.players]
-  );
-  const [recipientId, setRecipientId] = useState(validRecipients[0]?.id ?? "");
-  const [tokenAmount, setTokenAmount] = useState(1);
   const [gatheringControlId, setGatheringControlId] = useState(
     state.controlledPlayers.find((control) => control.isActive)?.controlId ?? state.controlledPlayers[0]?.controlId ?? ""
   );
@@ -36,26 +27,12 @@ export function CommercePanel({
     sealedBid <= (state.sealedAuction?.maxAmount ?? 0);
 
   useEffect(() => {
-    if (!validRecipients.some((player) => player.id === recipientId)) {
-      setRecipientId(validRecipients[0]?.id ?? "");
-    }
-  }, [recipientId, validRecipients]);
-
-  useEffect(() => {
     if (!state.controlledPlayers.some((control) => control.controlId === gatheringControlId)) {
       setGatheringControlId(state.controlledPlayers.find((control) => control.isActive)?.controlId ?? state.controlledPlayers[0]?.controlId ?? "");
     }
   }, [gatheringControlId, state.controlledPlayers]);
 
   const gatheringControl = state.controlledPlayers.find((control) => control.controlId === gatheringControlId);
-  const recipientIsValid = validRecipients.some((player) => player.id === recipientId);
-  const canSendTokens =
-    availability.commerce.transfer.enabled &&
-    Boolean(activePlayer) &&
-    recipientIsValid &&
-    Number.isInteger(tokenAmount) &&
-    tokenAmount > 0 &&
-    tokenAmount <= availability.commerce.transfer.maxAmount;
   const gatheringCooldownStatus = state.guild.gathering.cooldownRemaining === 0
     ? t("commerce.gatheringReady")
     : t(
@@ -99,41 +76,6 @@ export function CommercePanel({
             </button>
           </article>
         ))}
-      </div>
-      <div className="token-transfer">
-        <select
-          aria-label={t("commerce.tokenRecipient")}
-          onChange={(event) => setRecipientId(event.currentTarget.value)}
-          value={recipientId}
-        >
-          {validRecipients.map((player) => (
-            <option key={player.id} value={player.id}>
-              {player.name}
-            </option>
-          ))}
-        </select>
-        <input
-          aria-label={t("commerce.tokenAmount")}
-          min={1}
-          type="number"
-          value={tokenAmount}
-          onChange={(event) => setTokenAmount(Number(event.currentTarget.value))}
-        />
-        <button
-          aria-describedby="transfer-unavailable-reason"
-          disabled={!canSendTokens}
-          onClick={() =>
-            activePlayer &&
-            dispatch({
-              type: "commerce.transfer",
-              recipientId,
-              amount: tokenAmount
-            })
-          }
-          type="button"
-        >
-          {t("commerce.send")}
-        </button>
       </div>
       <div className="gathering">
         <div className="phase-line">
@@ -353,9 +295,6 @@ export function CommercePanel({
               {translateRuleText(locale, slot.reason)}
             </span>
           ))}
-          <span id="transfer-unavailable-reason">
-            {translateRuleText(locale, availability.commerce.transfer.reason)}
-          </span>
           <span id="gathering-start-unavailable-reason">
             {translateRuleText(locale, availability.commerce.startGathering.reason)}
           </span>
