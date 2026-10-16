@@ -94,7 +94,7 @@ describe("player trade UI", () => {
     expect(offerHtml).toContain("Cancel Offer");
   });
 
-  it("hosts Player Trade and Commerce Guild as separate tab panels", () => {
+  it("hosts all three trade types as separate tab panels", () => {
     const html = renderToString(
       createElement(TradeHubPanel, {
         state: createLocalGameTableView(createScenarioAppState()),
@@ -106,6 +106,8 @@ describe("player trade UI", () => {
     expect(html).toContain('aria-labelledby="trade-tab-commerce"');
     expect(html).toContain("Player Trade");
     expect(html).toContain("Commerce Guild");
+    expect(html).toContain("Maritime Trade");
+    expect(html).toMatch(/data-trade-hub-panel="maritime"[^>]*hidden/);
     expect(html).toContain('data-trade-hub-panel="player"');
     expect(html).toMatch(/data-trade-hub-panel="commerce"[^>]*hidden/);
   });

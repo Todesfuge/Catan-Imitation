@@ -1,10 +1,12 @@
 import React, { useRef, useState } from "react";
 import { CommercePanel } from "./CommercePanel";
 import type { GameTableDispatch, GameTableView } from "./GameTable";
+import { MaritimeTradePanel } from "./MaritimeTradePanel";
 import { PlayerTradePanel } from "./PlayerTradePanel";
 import { useI18n } from "./i18n";
 
-type TradeHubTab = "player" | "commerce";
+const tabs = ["player", "maritime", "commerce"] as const;
+type TradeHubTab = (typeof tabs)[number];
 
 export function TradeHubPanel({
   state,
@@ -14,46 +16,45 @@ export function TradeHubPanel({
   dispatch: GameTableDispatch;
 }) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<TradeHubTab>("player");
+  const [tab, setTab] = useState<TradeHubTab>(() =>
+    state.guild.gathering.phase === "redemption" || state.guild.gathering.phase === "auction"
+      ? "commerce" : "player"
+  );
   const playerTabRef = useRef<HTMLButtonElement>(null);
+  const maritimeTabRef = useRef<HTMLButtonElement>(null);
   const commerceTabRef = useRef<HTMLButtonElement>(null);
-  const selectTab = (nextTab: TradeHubTab) => {
+  const tabRefs = { player: playerTabRef, maritime: maritimeTabRef, commerce: commerceTabRef };
+  function handleTabKey(event: React.KeyboardEvent<HTMLButtonElement>) {
+    const index = tabs.indexOf(tab);
+    let nextTab: TradeHubTab;
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      nextTab = tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+    } else if (event.key === "Home" || event.key === "End") {
+      nextTab = event.key === "Home" ? "player" : "commerce";
+    } else return;
+    event.preventDefault();
     setTab(nextTab);
-    (nextTab === "player" ? playerTabRef : commerceTabRef).current?.focus();
-  };
+    tabRefs[nextTab].current?.focus();
+  }
   return (
     <section className="tool-panel trade-hub-panel">
       <div aria-label={t("trade.panelsLabel")} className="trade-hub-tabs" role="tablist">
-        <button
-          aria-controls="trade-panel-player"
-          aria-selected={tab === "player"}
-          id="trade-tab-player"
-          onClick={() => setTab("player")}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowRight" || event.key === "ArrowLeft") selectTab("commerce");
-          }}
-          ref={playerTabRef}
-          role="tab"
-          tabIndex={tab === "player" ? 0 : -1}
-          type="button"
-        >
-          {t("trade.playerTab")}
-        </button>
-        <button
-          aria-controls="trade-panel-commerce"
-          aria-selected={tab === "commerce"}
-          id="trade-tab-commerce"
-          onClick={() => setTab("commerce")}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowRight" || event.key === "ArrowLeft") selectTab("player");
-          }}
-          ref={commerceTabRef}
-          role="tab"
-          tabIndex={tab === "commerce" ? 0 : -1}
-          type="button"
-        >
-          {t("trade.commerceTab")}
-        </button>
+        {tabs.map((item) => (
+          <button
+            aria-controls={`trade-panel-${item}`}
+            aria-selected={tab === item}
+            id={`trade-tab-${item}`}
+            key={item}
+            onClick={() => setTab(item)}
+            onKeyDown={handleTabKey}
+            ref={tabRefs[item]}
+            role="tab"
+            tabIndex={tab === item ? 0 : -1}
+            type="button"
+          >
+            {t(`trade.${item === "player" ? "playerTab" : item === "maritime" ? "maritimeTab" : "commerceTab"}`)}
+          </button>
+        ))}
       </div>
       <div
         className="trade-hub-content"
@@ -64,6 +65,16 @@ export function TradeHubPanel({
         role="tabpanel"
       >
         <PlayerTradePanel dispatch={dispatch} state={state} />
+      </div>
+      <div
+        className="trade-hub-content"
+        data-trade-hub-panel="maritime"
+        hidden={tab !== "maritime"}
+        id="trade-panel-maritime"
+        aria-labelledby="trade-tab-maritime"
+        role="tabpanel"
+      >
+        <MaritimeTradePanel dispatch={dispatch} state={state} />
       </div>
       <div
         className="trade-hub-content"

@@ -84,7 +84,7 @@ try {
     "Yield Statistics",
     "Player Trade",
     "Commerce Guild",
-    "Activity",
+    "Records & Statistics",
     "Submit Discard",
     "Move the robber to a different hex",
     "Choose a player to steal from",
@@ -107,7 +107,7 @@ try {
 
   for (const text of [
     ".board-zone",
-    ".activity-shell",
+    ".modal-card--records",
     ".board-resource-icon",
     ".resource-bundle",
     ".board-hex",

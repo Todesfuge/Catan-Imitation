@@ -1,18 +1,26 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React from "react";
 import {
   ArrowRightLeft,
   Castle,
+  Dice1,
+  Dice2,
+  Dice3,
+  Dice4,
+  Dice5,
+  Dice6,
   Dices,
   Hammer,
   Home,
   ScrollText,
+  Square,
   Timer
 } from "lucide-react";
-import { resources, type Resource } from "../domain/types";
 import { DevelopmentCardPanel } from "./DevelopmentCardPanel";
 import type { GameTableDispatch, GameTableView } from "./GameTable";
 import { translate, translateRuleText, useI18n, type Locale } from "./i18n";
-import { ResourceBadge, ResourceBundle } from "./ResourceBadge";
+import { ResourceBundle } from "./ResourceBadge";
+
+const diceFaces = [Dice1, Dice2, Dice3, Dice4, Dice5, Dice6] as const;
 
 export type BoardInteractionMode =
   | { kind: "road" }
@@ -69,34 +77,28 @@ export function ActionDock({
   state,
   dispatch,
   interactionMode,
-  onInteractionModeChange
+  onInteractionModeChange,
+  onTradeOpen
 }: {
   state: GameTableView;
   dispatch: GameTableDispatch;
   interactionMode: BoardInteractionMode;
   onInteractionModeChange: (mode: BoardInteractionMode) => void;
+  onTradeOpen: () => void;
 }) {
   const { locale, t } = useI18n();
   const activePlayer = state.game.players.find(
     (player) => player.id === state.game.activePlayerId
   );
   const availability = state.legality.actions;
-  const [maritimeGive, setMaritimeGive] = useState<Resource | "">("");
-  const [maritimeReceive, setMaritimeReceive] = useState<Resource | "">("");
-
-  useEffect(() => {
-    setMaritimeGive("");
-    setMaritimeReceive("");
-  }, [state.game.activePlayerId, state.game.turn, state.game.turnState.phase]);
-
-  const selectedTrade = availability.maritime.trades.find(
-    (trade) => trade.give === maritimeGive
-  );
-  const canSubmitMaritime =
-    availability.maritime.enabled &&
-    Boolean(selectedTrade) &&
-    Boolean(maritimeReceive) &&
-    selectedTrade!.receives.includes(maritimeReceive as Resource);
+  const diceLabel = state.lastDice
+    ? t("action.diceResult", { ...state.lastDice })
+    : t("action.noRoll");
+  const tradeStatus = state.pendingPlayerTrade
+    ? t("trade.offerPending")
+    : state.guild.gathering.phase === "redemption" || state.guild.gathering.phase === "auction"
+      ? t(`commerce.phase.${state.guild.gathering.phase}`)
+      : null;
 
   const toggleMode = (kind: "road" | "settlement" | "city") => {
     onInteractionModeChange(interactionMode?.kind === kind ? null : { kind });
@@ -112,15 +114,24 @@ export function ActionDock({
           <span className="phase-guidance">{phaseGuidance(state, locale)}</span>
         </div>
       </div>
-      <button
-        aria-describedby="roll-unavailable-reason"
-        data-action="roll-dice"
-        disabled={!availability.roll.enabled}
-        onClick={() => activePlayer && dispatch({ type: "turn.roll" })}
-        type="button"
-      >
-        <Dices size={20} /> {t("action.rollDice")}
-      </button>
+      <div className="roll-action-group">
+        <button
+          aria-describedby="roll-unavailable-reason"
+          data-action="roll-dice"
+          disabled={!availability.roll.enabled}
+          onClick={() => activePlayer && dispatch({ type: "turn.roll" })}
+          type="button"
+        >
+          <Dices size={20} /> {t("action.rollDice")}
+        </button>
+        <div aria-label={diceLabel} className="dice-readout" role="img" title={diceLabel}>
+          {[state.lastDice?.first, state.lastDice?.second].map((value, index) => {
+            const Face = value ? diceFaces[value - 1] : Square;
+            return <Face aria-hidden="true" focusable="false" key={index} size={24} />;
+          })}
+          <strong aria-hidden="true">{state.lastDice?.total ?? t("action.noRoll")}</strong>
+        </div>
+      </div>
       <button
         aria-describedby="road-unavailable-reason"
         aria-pressed={interactionMode?.kind === "road"}
@@ -173,96 +184,17 @@ export function ActionDock({
         <span data-action-cost="development-card"><ResourceBundle className="action-cost" compact resources={availability.buyDevelopmentCard.cost} /></span>
       </button>
       <DevelopmentCardPanel state={state} dispatch={dispatch} />
-      <div className="maritime-action-group">
-        <div className="maritime-ratio-guide" aria-label={t("action.maritimeRatiosLabel")}>
-          {resources.map((resource) => (
-            <span
-              aria-label={`${t(`resource.${resource}`)} ${availability.maritime.ratios[resource]}:1`}
-              key={resource}
-            >
-              <ResourceBadge compact decorative quantity={availability.maritime.ratios[resource]} resource={resource} />
-              <span aria-hidden="true">:1</span>
-            </span>
-          ))}
-        </div>
-        <div className="maritime-selectors">
-          <div
-            aria-label={t("action.maritimeGiveLabel")}
-            className="resource-choice-group"
-            role="group"
-          >
-            {resources.map((resource) => {
-              const trade = availability.maritime.trades.find(
-                (candidate) => candidate.give === resource
-              );
-              const label = `${t("action.giveResource")}: ${t(`resource.${resource}`)} ${availability.maritime.ratios[resource]}:1`;
-              return (
-                <button
-                  aria-describedby="maritime-unavailable-reason"
-                  aria-label={label}
-                  aria-pressed={maritimeGive === resource}
-                  data-maritime-give={resource}
-                  disabled={!trade}
-                  key={resource}
-                  onClick={() => {
-                    setMaritimeGive(resource);
-                    setMaritimeReceive("");
-                  }}
-                  title={label}
-                  type="button"
-                >
-                  <ResourceBadge compact decorative quantity={availability.maritime.ratios[resource]} resource={resource} />
-                  <span aria-hidden="true">:1</span>
-                </button>
-              );
-            })}
-          </div>
-          <div
-            aria-label={t("action.maritimeReceiveLabel")}
-            className="resource-choice-group"
-            role="group"
-          >
-            {resources.map((resource) => {
-              const label = `${t("action.receiveResource")}: ${t(`resource.${resource}`)} (${t("commerce.bank", { count: state.game.bank.resources[resource] })})`;
-              return (
-                <button
-                  aria-describedby="maritime-unavailable-reason"
-                  aria-label={label}
-                  aria-pressed={maritimeReceive === resource}
-                  data-maritime-receive={resource}
-                  disabled={!selectedTrade?.receives.includes(resource)}
-                  key={resource}
-                  onClick={() => setMaritimeReceive(resource)}
-                  title={label}
-                  type="button"
-                >
-                  <ResourceBadge compact decorative quantity={state.game.bank.resources[resource]} resource={resource} />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <button
-          aria-describedby="maritime-unavailable-reason"
-          data-action="maritime"
-          disabled={!canSubmitMaritime}
-          onClick={() => {
-            if (activePlayer && maritimeGive && maritimeReceive) {
-              dispatch({
-                type: "trade.maritime",
-                give: maritimeGive,
-                receive: maritimeReceive
-              });
-              setMaritimeGive("");
-              setMaritimeReceive("");
-            }
-          }}
-          title={translateRuleText(locale, availability.maritime.reason)}
-          type="button"
-        >
-          <ArrowRightLeft size={20} /> {t("action.maritime")}
-        </button>
-      </div>
+      <button
+        aria-describedby={tradeStatus ? "trade-status" : undefined}
+        aria-haspopup="dialog"
+        aria-label={t("nav.openTrade")}
+        data-action="open-trade"
+        onClick={onTradeOpen}
+        type="button"
+      >
+        <ArrowRightLeft size={20} /> {t("action.trade")}
+        {tradeStatus ? <span aria-live="polite" className="trade-attention" id="trade-status">{tradeStatus}</span> : null}
+      </button>
       <button
         aria-describedby="end-turn-unavailable-reason"
         className="primary"
@@ -273,11 +205,6 @@ export function ActionDock({
       >
         {t("action.endTurn")}
       </button>
-      <div className="dice-readout">
-        {state.lastDice
-          ? `${state.lastDice.first} + ${state.lastDice.second} = ${state.lastDice.total}`
-          : t("action.noRoll")}
-      </div>
       <div className="sr-only">
         <span id="roll-unavailable-reason">{translateRuleText(locale, availability.roll.reason)}</span>
         <span id="road-unavailable-reason">{translateRuleText(locale, availability.road.reason)}</span>
@@ -286,7 +213,6 @@ export function ActionDock({
         <span id="development-buy-unavailable-reason">
           {translateRuleText(locale, availability.buyDevelopmentCard.reason)}
         </span>
-        <span id="maritime-unavailable-reason">{translateRuleText(locale, availability.maritime.reason)}</span>
         <span id="end-turn-unavailable-reason">{translateRuleText(locale, availability.endTurn.reason)}</span>
       </div>
     </footer>

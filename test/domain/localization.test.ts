@@ -3,6 +3,9 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import App from "../../src/App";
+import { createInitialAppState, createLocalGameTableView } from "../../src/app/localGameState";
+import { TradeHubPanel } from "../../src/ui/TradeHubPanel";
+import { GameRecordsPanel } from "../../src/ui/GameRecordsPanel";
 import {
   I18nProvider,
   formatAuctionSummary,
@@ -40,15 +43,29 @@ describe("English and Simplified Chinese localization", () => {
 
   it("renders English by default and the approved core surfaces in Chinese", () => {
     const english = renderToString(createElement(App));
-    expect(english).toContain("Game Log");
-    expect(english).toContain("Yield Statistics");
+    expect(english).toContain('aria-label="Open records and statistics"');
     expect(english).toContain("Roll Dice");
 
     const chinese = renderToString(
       createElement(I18nProvider, { initialLocale: "zh-CN" }, createElement(App))
     );
-    for (const text of ["游戏日志", "产出统计", "掷骰子", "玩家交易", "发布公开报价"]) {
+    for (const text of ["记录与统计", "掷骰子", "打开交易"]) {
       expect(chinese).toContain(text);
+    }
+    const view = createLocalGameTableView(createInitialAppState());
+    for (const locale of ["en", "zh-CN"] as const) {
+      const records = renderToString(createElement(I18nProvider, { initialLocale: locale },
+        createElement(GameRecordsPanel, { state: view, dispatch: () => undefined })
+      ));
+      const trading = renderToString(createElement(I18nProvider, { initialLocale: locale },
+        createElement(TradeHubPanel, { state: view, dispatch: () => undefined })
+      ));
+      for (const key of ["trade.playerTab", "trade.maritimeTab", "trade.commerceTab", "trade.publish"] as const) {
+        expect(trading).toContain(translate(locale, key));
+      }
+      expect(records).toContain(translate(locale, "log.title"));
+      expect(records).toContain(translate(locale, "stats.title"));
+      expect(records).toContain(translate(locale, "log.count", { count: view.game.log.length }));
     }
   });
 

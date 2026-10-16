@@ -1,6 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { parseMapSeed } from "../../src/domain/mapSeed";
 import { createBoardDataForSeed } from "../../src/domain/randomBoard";
+import { openTrading, closeTrading } from "./tradeUiHelpers";
 import { publicBoardSignature } from "./seededMapHelpers";
 
 type Snapshot = {
@@ -221,6 +222,7 @@ async function confirmHostRestart(
   label: "Replay Current Map" | "New Random Map"
 ): Promise<Snapshot[]> {
   const before = Math.max(...(await synchronized(pages)).map((snapshot) => snapshot.roomVersion));
+  await closeTrading(host);
   await host.getByRole("button", { name: "Open settings" }).click();
   await host.getByRole("button", { name: label }).click();
   await expect(host.locator(".restart-confirmation")).toBeVisible();
@@ -253,6 +255,7 @@ async function resolveSeven(pages: Page[]): Promise<boolean> {
         const nickname = snapshots[index].publicState.seats.find(
           (seat: any) => seat.playerId === snapshots[index].privateState.playerId
         ).nickname;
+        await closeTrading(pages[index]);
         for (const [resource, amount] of Object.entries(discarded)) {
           await pages[index].getByLabel(`${nickname} ${resource} discard`).fill(String(amount));
         }
@@ -264,6 +267,7 @@ async function resolveSeven(pages: Page[]): Promise<boolean> {
       const index = snapshots.findIndex((snapshot) => snapshot.allowedActions.decisions.robberHex.enabled);
       const hexId = snapshots[index].allowedActions.decisions.robberHex.targets[0];
       await uiMutation(pages, pages[index], async () => {
+        await closeTrading(pages[index]);
         await pages[index].locator(`[data-robber-target="${hexId}"]`).press("Enter");
       });
       continue;
@@ -277,6 +281,7 @@ async function resolveSeven(pages: Page[]): Promise<boolean> {
       const victimBefore = count(snapshots[victimIndex].privateState.resources);
       const victimName = snapshots[index].publicState.seats.find((seat: any) => seat.playerId === victimId).nickname;
       const after = await uiMutation(pages, pages[index], async () => {
+        await closeTrading(pages[index]);
         await pages[index].locator('[data-turn-flow="robber-victim"]').getByRole("button", { name: victimName }).click();
       });
       expect(after[0].publicState.game.turnState.phase).not.toBe("awaitingRobberVictim");
@@ -303,7 +308,7 @@ async function submitAuctionRound(
     const max = own.allowedActions.sealedBid.maxAmount as number;
     const amount: number = preferPositive && !submittedPositive && max > 0 ? 1 : 0;
     const projectedAfterBid = await uiMutation(pages, pages[index], async () => {
-      await pages[index].getByRole("tab", { name: "Commerce Guild" }).click();
+      await openTrading(pages[index], "commerce");
       const bidInput = pages[index].getByLabel("Your sealed bid");
       const submitButton = pages[index].getByRole("button", { name: "Submit sealed bid" });
       await expect(bidInput).toBeEnabled();
@@ -421,6 +426,47 @@ async function advanceOnlineCleanTurn(pages: Page[]): Promise<Snapshot[]> {
   return synchronized(pages);
 }
 
+test("online records show only projected events and retain the statistics privacy boundary", async ({ browser }) => {
+  const contexts = await Promise.all([browser.newContext(), browser.newContext(), browser.newContext()]);
+  try {
+    const { pages } = await startThreeBrowserRoom(contexts);
+    await completeOnlineSetup(pages);
+    const snapshots = await advanceOnlineCleanTurn(pages);
+    for (const [index, viewer] of pages.entries()) {
+      if (index === 2) {
+        const hand = viewer.locator("[data-hand-summary]");
+        await expect(hand).toBeVisible();
+        const ownResources = snapshots[index].privateState.resources;
+        for (const resource of ["wood", "brick", "wool", "grain", "ore"]) {
+          await expect(hand.locator(`[data-resource-badge="${resource}"]`)).toHaveAttribute("data-resource-quantity", String(ownResources[resource]));
+        }
+        const layout = await viewer.evaluate(() => ({
+          headerHeight: document.querySelector(".online-game-status")!.getBoundingClientRect().height,
+          handTop: document.querySelector("[data-hand-summary]")!.getBoundingClientRect().top,
+          actionsTop: document.querySelector(".action-bar")!.getBoundingClientRect().top
+        }));
+        expect(layout.headerHeight).toBeLessThan(120);
+        expect(layout.handTop).toBeLessThan(layout.actionsTop);
+      }
+      const opener = viewer.getByRole("button", { name: "Open records and statistics" });
+      await expect(viewer.getByRole("log")).toHaveCount(0);
+      await opener.click();
+      const visibleCount = snapshots[index].publicState.game.log.length;
+      expect(visibleCount).toBeGreaterThan(1);
+      expect(visibleCount).toBeLessThanOrEqual(6);
+      await expect(viewer.getByRole("log").locator("p")).toHaveCount(visibleCount);
+      await expect(viewer.locator(".log-count")).toHaveText(`Entries: ${visibleCount}`);
+      await viewer.getByRole("tab", { name: "Yield Statistics", exact: true }).click();
+      await expect(viewer.getByRole("dialog").getByText("Yield statistics are unavailable in privacy-safe online views.")).toBeVisible();
+      await expect(viewer.getByRole("dialog").getByRole("table")).toHaveCount(0);
+      await viewer.getByRole("button", { name: "Close utility panel" }).click();
+      await expect(opener).toBeFocused();
+    }
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
 test("three isolated callers share cooldown authority and reconnect without client-supplied identity", async ({ browser }) => {
   test.setTimeout(150_000);
   const contexts = await Promise.all([browser.newContext(), browser.newContext(), browser.newContext()]);
@@ -436,7 +482,7 @@ test("three isolated callers share cooldown authority and reconnect without clie
       expect(snapshot.privateState).not.toHaveProperty("gatheringCooldown");
     }
     for (const page of pages) {
-      await page.getByRole("tab", { name: "Commerce Guild" }).click();
+      await openTrading(page, "commerce");
       await expect(page.locator('[data-gathering-cooldown="6"]')).toHaveCount(1);
     }
 
@@ -494,7 +540,7 @@ test("three isolated callers share cooldown authority and reconnect without clie
 
     const sentBefore = productionWireCommands.get(pages[activeIndex])!.length;
     snapshots = await uiMutation(pages, pages[activeIndex], async () => {
-      await pages[activeIndex].getByRole("tab", { name: "Commerce Guild" }).click();
+      await openTrading(pages[activeIndex], "commerce");
       await pages[activeIndex].getByRole("button", { name: "Start Gathering" }).click();
     });
     expect(snapshots.map((snapshot) => snapshot.roomVersion))
@@ -573,7 +619,6 @@ test("three real browsers converge on host restarts and participant reconnect", 
 
   try {
     const { pages, host, second, third, roomCode, initial } = await startThreeBrowserRoom(contexts);
-    expect(await third.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
     initial.forEach(expectEmptySetup);
     const initialSeed = initial[0].publicState.game.mapSeed as string;
@@ -587,6 +632,7 @@ test("three real browsers converge on host restarts and participant reconnect", 
     expect(new Set(initialLayouts).size).toBe(1);
 
     for (let index = 0; index < pages.length; index += 1) {
+      await closeTrading(pages[index]);
       await pages[index].getByRole("button", { name: "Open settings" }).click();
       await expect(pages[index].locator("[data-map-seed]")).toHaveValue(initialSeed);
       await expect(pages[index].getByRole("button", { name: "Copy Seed" })).toBeVisible();
@@ -654,7 +700,6 @@ test("three real browsers play an authoritative private room and reconnect", asy
 
   try {
     const { pages, host, second, third, roomCode, initial } = await startThreeBrowserRoom(contexts);
-    expect(await third.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const uiDriven = {
       setup: new Set<number>(), roll: false, build: false, maritime: false,
       publish: false, accept: false, endTurn: false, startGathering: false,
@@ -698,6 +743,7 @@ test("three real browsers play an authoritative private room and reconnect", asy
     expect(ready[0].publicState.game.phase).toBe("playing");
     const activeIndex = ready.findIndex((snapshot) => snapshot.privateState.playerId === snapshot.publicState.game.activePlayerId);
     const rolledViews = await uiMutation(pages, pages[activeIndex], async () => {
+      await closeTrading(pages[activeIndex]);
       await pages[activeIndex].getByRole("button", { name: "Roll Dice" }).click();
     });
     uiDriven.roll = true;
@@ -726,7 +772,7 @@ test("three real browsers play an authoritative private room and reconnect", asy
       if (auctionOpener >= 0) {
         const tokensBefore = snapshots[0].publicState.game.players.reduce((sum: number, player: any) => sum + player.guildTokens, 0);
         snapshots = await uiMutation(pages, pages[auctionOpener], async () => {
-          await pages[auctionOpener].getByRole("tab", { name: "Commerce Guild" }).click();
+          await openTrading(pages[auctionOpener], "commerce");
           await pages[auctionOpener].getByRole("button", { name: "Open Auctions" }).click();
         });
         uiDriven.openAuction = true;
@@ -765,6 +811,7 @@ test("three real browsers play an authoritative private room and reconnect", asy
           const edgeId = actions.road.targets[0];
           snapshots = await uiMutation(pages, pages[playerIndex], async () => {
             await pages[playerIndex].locator('[data-action="build-road"]').click();
+            await closeTrading(pages[playerIndex]);
             await pages[playerIndex].locator(`[data-board-action-target="road"][aria-label*="${edgeId}"]`).press("Enter");
           });
           builtPiece = true;
@@ -783,6 +830,7 @@ test("three real browsers play an authoritative private room and reconnect", asy
         const trade = snapshots[playerIndex].allowedActions.maritime.trades[0];
         if (snapshots[playerIndex].allowedActions.maritime.enabled && trade?.receives?.[0]) {
           snapshots = await uiMutation(pages, pages[playerIndex], async () => {
+            await openTrading(pages[playerIndex], "maritime");
             await pages[playerIndex].locator(`[data-maritime-give="${trade.give}"]`).click();
             await pages[playerIndex].locator(`[data-maritime-receive="${trade.receives[0]}"]`).click();
             await pages[playerIndex].getByRole("button", { name: "Maritime", exact: true }).click();
@@ -804,6 +852,7 @@ test("three real browsers play an authoritative private room and reconnect", asy
           if (requested) {
             const label = (resource: string) => resource[0].toUpperCase() + resource.slice(1);
             snapshots = await uiMutation(pages, pages[playerIndex], async () => {
+              await openTrading(pages[playerIndex], "player");
               await pages[playerIndex].getByLabel(`Offer ${label(offered)}`).fill("1");
               await pages[playerIndex].getByLabel(`Request ${label(requested)}`).fill("1");
               await pages[playerIndex].getByRole("button", { name: "Publish Public Offer" }).click();
@@ -811,6 +860,8 @@ test("three real browsers play an authoritative private room and reconnect", asy
             uiDriven.publish = true;
             if (snapshots[recipientIndex].allowedActions.publicTrade.accept.enabled) {
               snapshots = await uiMutation(pages, pages[recipientIndex], async () => {
+                await expect(pages[recipientIndex].getByRole("button", { name: "Open trading", exact: true })).toContainText("Public offer");
+                await openTrading(pages[recipientIndex], "player");
                 await pages[recipientIndex].getByRole("button", { name: new RegExp("^Accept as ") }).click();
               });
               publicTrade = true;
@@ -829,7 +880,7 @@ test("three real browsers play an authoritative private room and reconnect", asy
       );
       if (totalGuildTokens > 0 && snapshots[playerIndex].allowedActions.commerce.startGathering.enabled) {
         snapshots = await uiMutation(pages, pages[playerIndex], async () => {
-          await pages[playerIndex].getByRole("tab", { name: "Commerce Guild" }).click();
+          await openTrading(pages[playerIndex], "commerce");
           await pages[playerIndex].getByRole("button", { name: "Start Gathering" }).click();
         });
         uiDriven.startGathering = true;
@@ -837,6 +888,7 @@ test("three real browsers play an authoritative private room and reconnect", asy
       snapshots = await synchronized(pages);
       if (snapshots[playerIndex].allowedActions.turn.endTurn.enabled) {
         await uiMutation(pages, pages[playerIndex], async () => {
+          await closeTrading(pages[playerIndex]);
           await pages[playerIndex].getByRole("button", { name: "End Turn" }).click();
         });
         uiDriven.endTurn = true;

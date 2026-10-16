@@ -3,12 +3,23 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import App from "../../src/App";
+import { createInitialAppState, createLocalGameTableView } from "../../src/app/localGameState";
+import { TradeHubPanel } from "../../src/ui/TradeHubPanel";
+import { StatsPanel } from "../../src/ui/GameRecordsPanel";
+
+function renderStatistics() {
+  return renderToString(createElement(StatsPanel, {
+    state: createLocalGameTableView(createInitialAppState()), dispatch: () => undefined
+  }));
+}
 
 describe("frontend accessibility and responsive contracts", () => {
   it("gives statistics, transfer, and maritime controls programmatic names", () => {
-    const html = renderToString(createElement(App));
+    const html = renderToString(createElement(TradeHubPanel, {
+      state: createLocalGameTableView(createInitialAppState()), dispatch: () => undefined
+    }));
 
-    expect(html).toContain('aria-label="Statistics player"');
+    expect(renderStatistics()).toContain('aria-label="Statistics player"');
     expect(html).toContain('aria-label="Token recipient"');
     expect(html).toContain('aria-label="Token amount"');
     expect(html).toContain('aria-label="Maritime give resource"');
@@ -23,7 +34,7 @@ describe("frontend accessibility and responsive contracts", () => {
     const html = renderToString(createElement(App));
     const source = readFileSync("src/ui/GameTable.tsx", "utf8");
 
-    expect(html).toContain('aria-pressed="true"');
+    expect(renderStatistics()).toContain('aria-pressed="true"');
     expect(source).toContain('role="status"');
     expect(source).toContain('aria-live="polite"');
     expect(html).toContain('aria-label="Wood: 0, Brick: 0, Wool: 0, Grain: 0, Ore: 0"');
@@ -36,6 +47,6 @@ describe("frontend accessibility and responsive contracts", () => {
 
     expect(css).toContain("button:disabled");
     expect(css).toContain("min-height: 44px");
-    expect(css).toMatch(/@media \(max-width: 1180px\)[\s\S]*grid-template-rows:\s*520px auto auto auto/);
+    expect(css).toMatch(/@media \(max-width: 1180px\)[\s\S]*grid-template-rows:\s*520px auto auto/);
   });
 });

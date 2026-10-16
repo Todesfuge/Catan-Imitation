@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { MapRestartMode } from "../domain/match/types";
-import type { GameTableView } from "./GameTable";
+import type { GameTableDispatch, GameTableView } from "./GameTable";
+import { GameRecordsPanel } from "./GameRecordsPanel";
+import { TradeHubPanel } from "./TradeHubPanel";
 import { useI18n } from "./i18n";
 import { RulebookPanel } from "./rulebook/RulebookPanel";
 
-export type UtilityPanel = "settings" | "rulebook" | "info" | null;
+export type UtilityPanel = "settings" | "rulebook" | "records" | "trade" | null;
 
 type SeedClipboard = Pick<Clipboard, "writeText">;
 
@@ -25,11 +27,13 @@ async function copyMapSeed(
 export function UtilityDialog({
   panel,
   state,
+  dispatch,
   onRestart,
   onClose
 }: {
   panel: UtilityPanel;
   state: GameTableView;
+  dispatch: GameTableDispatch;
   onRestart: (mode: MapRestartMode) => void;
   onClose: () => void;
 }) {
@@ -83,8 +87,7 @@ export function UtilityDialog({
     return null;
   }
 
-  const title =
-    panel === "settings" ? t("dialog.settings") : panel === "rulebook" ? t("dialog.rulebook") : t("dialog.info");
+  const title = t(`dialog.${panel}`);
   const activePlayer = state.game.players.find(
     (player) => player.id === state.game.activePlayerId
   );
@@ -145,7 +148,7 @@ export function UtilityDialog({
       }}
       ref={dialogRef}
     >
-      <section className={`modal-card${panel === "rulebook" ? " modal-card--rulebook" : ""}`}>
+      <section className={`modal-card${panel === "rulebook" ? " modal-card--rulebook" : panel === "records" ? " modal-card--records" : panel === "trade" ? " modal-card--trade" : ""}`}>
         <div className="modal-header">
           <h2 id="utility-dialog-title">{title}</h2>
           <button
@@ -272,15 +275,11 @@ export function UtilityDialog({
         {panel === "rulebook" ? (
           <RulebookPanel />
         ) : null}
-        {panel === "info" ? (
-          <div className="modal-stack">
-            <p>
-              {t("dialog.info1")}
-            </p>
-            <p>
-              {t("dialog.info2")}
-            </p>
-          </div>
+        {panel === "records" ? (
+          <GameRecordsPanel state={state} dispatch={dispatch} />
+        ) : null}
+        {panel === "trade" ? (
+          <TradeHubPanel state={state} dispatch={dispatch} />
         ) : null}
       </section>
     </dialog>

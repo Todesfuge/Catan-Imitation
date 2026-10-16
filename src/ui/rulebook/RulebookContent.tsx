@@ -1,8 +1,10 @@
 import React, { type ReactNode } from "react";
+import { Coins, Gift, Landmark, Trophy } from "lucide-react";
 import { buildCosts } from "../../domain/rules/building";
 import { type Resource } from "../../domain/types";
 import { useI18n, type MessageKey } from "../i18n";
 import { ResourceBundle, ResourceIcon } from "../ResourceBadge";
+import { RobberIcon } from "../RobberIcon";
 
 export const rulebookChapterIds = [
   "quickStart",
@@ -97,6 +99,29 @@ function CostRows() {
   );
 }
 
+function IconLegend() {
+  const { t } = useI18n();
+  const entries = [
+    { id: "score", icon: <Trophy aria-hidden="true" size={28} /> },
+    { id: "tokens", icon: <Coins aria-hidden="true" size={28} /> },
+    { id: "vouchers", icon: <Gift aria-hidden="true" size={28} /> },
+    { id: "prizes", icon: <Landmark aria-hidden="true" size={28} /> },
+    { id: "robber", icon: <RobberIcon size={36} /> }
+  ] as const;
+  return (
+    <TopicSection topic="icon-legend" title={t("rulebook.icons.title")}>
+      <dl className="rulebook-icon-legend">
+        {entries.map(({ id, icon }) => (
+          <div className="rulebook-icon-entry" data-rulebook-icon={id} key={id}>
+            <dt><span aria-hidden="true" className="rulebook-icon-sample">{icon}</span>{t(`rulebook.icons.${id}.name`)}</dt>
+            <dd>{t(`rulebook.icons.${id}.body`)}</dd>
+          </div>
+        ))}
+      </dl>
+    </TopicSection>
+  );
+}
+
 function QuickStartChapter() {
   const { t } = useI18n();
   return (
@@ -112,6 +137,8 @@ function QuickStartChapter() {
         <p>{t("rulebook.quick.resourcesIntro")}</p>
         <TerrainResourceRows />
       </TopicSection>
+
+      <IconLegend />
 
       <TopicSection topic="setup" title={t("rulebook.quick.setupTitle")}>
         <MessageList ordered keys={[
@@ -280,6 +307,8 @@ function QuickReferenceChapter() {
     <article className="rulebook-chapter" data-rulebook-chapter="quickReference">
       <h3>{t("rulebook.reference.title")}</h3>
       <p className="rulebook-lead">{t("rulebook.reference.intro")}</p>
+
+      <IconLegend />
 
       <TopicSection topic="turn-checklist" title={t("rulebook.reference.turnTitle")}>
         <MessageList keys={[

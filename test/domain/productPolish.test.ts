@@ -3,13 +3,16 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import App from "../../src/App";
-import { createLocalGameTableView } from "../../src/app/localGameState";
+import { createInitialAppState, createLocalGameTableView } from "../../src/app/localGameState";
 import { getLegalRoadEdgeIds } from "../../src/domain/rules/building";
 import {
   DevelopmentCardPanel,
   RoadBuildingTargets
 } from "../../src/ui/DevelopmentCardPanel";
+import { TradeHubPanel } from "../../src/ui/TradeHubPanel";
+import { MaritimeTradePanel } from "../../src/ui/MaritimeTradePanel";
 import { GameTable } from "../../src/ui/GameTable";
+import { GameRecordsPanel, StatsPanel } from "../../src/ui/GameRecordsPanel";
 import { TurnFlowPanel } from "../../src/ui/TurnFlowPanel";
 import { UtilityDialog } from "../../src/ui/UtilityDialog";
 import {
@@ -37,7 +40,11 @@ describe("product polish UI", () => {
       html.match(new RegExp(`<button[^>]*data-action="${action}"[^>]*>`))?.[0] ?? "";
 
     expect(actionTag("roll-dice")).not.toContain("disabled");
-    for (const action of ["build-road", "build-settlement", "build-city", "buy-development", "maritime", "end-turn"]) {
+    const maritime = renderToString(createElement(MaritimeTradePanel, {
+      state: tableViewForGame(createScenarioGame()), dispatch: () => undefined
+    }));
+    expect(maritime.match(/<button[^>]*data-action="maritime"[^>]*>/)?.[0]).toContain("disabled");
+    for (const action of ["build-road", "build-settlement", "build-city", "buy-development", "end-turn"]) {
       expect(actionTag(action), action).toContain("disabled");
     }
   });
@@ -262,7 +269,9 @@ describe("product polish UI", () => {
   });
 
   it("renders standard ports and effective maritime ratios", () => {
-    const html = renderToString(createElement(App)).replaceAll("<!-- -->", "");
+    const html = (renderToString(createElement(App)) + renderToString(createElement(TradeHubPanel, {
+      state: createLocalGameTableView(createInitialAppState()), dispatch: () => undefined
+    }))).replaceAll("<!-- -->", "");
     const css = readFileSync("src/styles/app.css", "utf8");
 
     expect(html.match(/data-port-id=/g)).toHaveLength(9);
@@ -289,15 +298,17 @@ describe("product polish UI", () => {
     expect(source).toContain("state.decisionPolicy.robberHex.targets.includes(hex.id)");
   });
 
-  it("renders connected utility actions, phase guidance, and activity instead of fake chat", () => {
+  it("keeps records behind a named button and removes permanent activity and statistics panels", () => {
     const html = renderScenarioTable();
 
     expect(html).toContain('aria-label="Open settings"');
     expect(html).toContain('aria-label="Open rulebook"');
     expect(html).toContain('aria-label="Toggle fullscreen"');
-    expect(html).toContain('aria-label="Open info"');
     expect(html).toContain("must roll or play a development card");
-    expect(html).toContain("Activity");
+    expect(html).toContain('aria-label="Open records and statistics"');
+    expect(html).not.toContain('class="activity-shell"');
+    expect(html).not.toContain('role="log"');
+    expect(html).not.toContain('class="tool-panel stats-panel"');
     expect(html).not.toContain(">Chat<");
     expect(html).not.toContain("Local hot-seat demo");
   });
@@ -340,7 +351,9 @@ describe("product polish UI", () => {
   });
 
   it("formats fractional yield values for readable tables", () => {
-    const html = renderScenarioTable();
+    const html = renderToString(createElement(StatsPanel, {
+      state: tableViewForGame(createScenarioGame()), dispatch: () => undefined
+    }));
 
     expect(html).toContain('aria-label="Grain: 0.11"');
     expect(html).toContain('aria-label="Wool: 0.28"');
@@ -387,7 +400,7 @@ describe("product polish UI", () => {
     expect(css).toContain("@media (max-width: 640px)");
     expect(css).toContain(".utility-modal");
     expect(css).toContain(".phase-guidance");
-    expect(css).toContain(".activity-shell");
+    expect(css).toContain(".modal-card--records");
     expect(css).toContain(".development-card-controls");
     expect(css).toContain(".development-resource-buttons");
     expect(css).toContain(".road-building-target");
@@ -398,13 +411,14 @@ describe("product polish UI", () => {
     expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
   });
 
-  it("keeps turn overlays readable and activity lists independently scrollable", () => {
+  it("keeps turn overlays readable and records independently scrollable", () => {
     const css = readFileSync("src/styles/app.css", "utf8");
-    const appSource = readFileSync("src/ui/GameTable.tsx", "utf8");
+    const appSource = readFileSync("src/ui/GameRecordsPanel.tsx", "utf8");
     const turnFlowRule = css.match(/\.turn-flow-panel\s*{([^}]*)}/)?.[1] ?? "";
     const logListRule = css.match(/\.log-list\s*{([^}]*)}/)?.[1] ?? "";
     const diceListRule = css.match(/\.dice-income-list\s*{([^}]*)}/)?.[1] ?? "";
-    const html = renderToString(createElement(App));
+    const view = tableViewForGame(createScenarioGame());
+    const html = renderToString(createElement(GameRecordsPanel, { state: view, dispatch: () => undefined }));
 
     expect(turnFlowRule).toMatch(/color:\s*#(?:f{3}|fffdf7|f7f3e8)/i);
     expect(logListRule).toMatch(/overflow-y:\s*auto/);
@@ -414,6 +428,7 @@ describe("product polish UI", () => {
     expect(diceListRule).toMatch(/min-height:\s*0/);
     expect(diceListRule).toMatch(/touch-action:\s*pan-y/);
     expect(html).toContain('class="log-list" role="log" tabindex="0"');
+    expect(html).toContain(`Entries: ${view.game.log.length}`);
     expect(appSource).not.toContain("game.log.slice(0, 8)");
   });
 });

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createLocalGameTableView } from "../../src/app/localGameState";
 import { emptyResources } from "../../src/domain/types";
 import { ActionDock } from "../../src/ui/ActionDock";
+import { MaritimeTradePanel } from "../../src/ui/MaritimeTradePanel";
 import { BoardActionTargets } from "../../src/ui/BoardActionTargets";
 import { executeMatchCommandForTest } from "./matchCommandTestUtils";
 import { createScenarioAppState } from "../fixtures/createScenarioGame";
@@ -39,14 +40,20 @@ describe("explicit action interaction", () => {
         dispatch: () => undefined,
         interactionMode: null,
         onInteractionModeChange: () => undefined,
+        onTradeOpen: () => undefined,
         state: createLocalGameTableView(state)
       })
     );
 
     expect(html).toContain('data-action-mode="road"');
     expect(html).toContain('aria-pressed="false"');
-    expect(html).toContain('aria-label="Maritime give resource"');
-    expect(html).toContain('aria-label="Maritime receive resource"');
+    expect(html).toContain('aria-label="Open trading"');
+    expect(html).not.toContain('data-maritime-give=');
+    const maritime = renderToString(createElement(MaritimeTradePanel, {
+      state: createLocalGameTableView(state), dispatch: () => undefined
+    }));
+    expect(maritime).toContain('aria-label="Maritime give resource"');
+    expect(maritime).toContain('aria-label="Maritime receive resource"');
   });
 
   it("renders every legal road as a keyboard-accessible board target", () => {

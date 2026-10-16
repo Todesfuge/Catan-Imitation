@@ -11,6 +11,18 @@ export const rulebookMessages = {
   "rulebook.navigationLabel": { en: "Rulebook chapters", "zh-CN": "规则说明章节" },
   "rulebook.languageLabel": { en: "Rulebook language", "zh-CN": "规则说明语言" },
 
+  "rulebook.icons.title": { en: "Interface icons", "zh-CN": "界面图标说明" },
+  "rulebook.icons.score.name": { en: "Victory points", "zh-CN": "胜利点" },
+  "rulebook.icons.score.body": { en: "The player's displayed score. Reach the target score to win. In Online play, opponents' hidden Victory Point cards are excluded until the game ends.", "zh-CN": "玩家当前显示的分数，达到目标分数即可获胜。联机时，其他玩家的隐藏胜利点卡在游戏结束前不计入此处。" },
+  "rulebook.icons.tokens.name": { en: "Guild tokens", "zh-CN": "公会代币" },
+  "rulebook.icons.tokens.body": { en: "The number of guild tokens held. Earn them through Commerce Guild trades and spend them at gatherings to redeem resources or bid for blind boxes.", "zh-CN": "玩家持有的公会代币数量。通过商业公会交易获得，可在集会中用于兑换资源或参与盲盒拍卖。" },
+  "rulebook.icons.vouchers.name": { en: "Vouchers", "zh-CN": "兑换券" },
+  "rulebook.icons.vouchers.body": { en: "The number of vouchers held. A blind box may award a voucher; three vouchers can be redeemed for one Commerce Guild prize card.", "zh-CN": "玩家持有的兑换券张数。盲盒可能发放兑换券；每三张可兑换一张商业公会奖品卡。" },
+  "rulebook.icons.prizes.name": { en: "Prize cards", "zh-CN": "奖品卡" },
+  "rulebook.icons.prizes.body": { en: "The number of Commerce Guild prize cards held. Each card adds 2 victory points, already included in the trophy score. This number counts cards, not points.", "zh-CN": "玩家持有的商业公会奖品卡张数。每张提供 2 胜利点，已计入奖杯显示的分数。此处显示张数，不是分数。" },
+  "rulebook.icons.robber.name": { en: "Robber", "zh-CN": "强盗" },
+  "rulebook.icons.robber.body": { en: "The masked icon marks the robber's current hex, which produces no resources. A 7 or a Knight card requires moving the robber to a different hex. If any eligible victims exist, choose one and steal a random resource.", "zh-CN": "蒙面图标标记强盗当前所在的地块，该格停止产出资源。掷出 7 或使用骑士卡时需移动至其他地块；有符合条件的玩家时，选择一人并随机夺取其一份资源。" },
+
   "rulebook.quick.title": { en: "Learn your first game", "zh-CN": "学会第一局游戏" },
   "rulebook.quick.intro": {
     en: "Follow this chapter from top to bottom once. It covers the objective, setup, a normal turn, the robber, and how the game ends.",

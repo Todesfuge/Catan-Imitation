@@ -3,6 +3,7 @@ import { createInitialAppState } from "../../src/app/localGameState";
 import { parseMapSeed } from "../../src/domain/mapSeed";
 import { createBoardDataForSeed } from "../../src/domain/randomBoard";
 import { projectRoomView } from "../../src/online/projectRoomView";
+import { openTrading, closeTrading } from "./tradeUiHelpers";
 import { publicBoardSignature } from "./seededMapHelpers";
 
 async function openLocal(page: Page) {
@@ -29,6 +30,7 @@ async function installLocalMapSeed(page: Page, seed: string): Promise<void> {
 async function openLocalAtSeed(page: Page, seed: string): Promise<void> {
   await installLocalMapSeed(page, seed);
   await openLocal(page);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await expect(page.locator("[data-map-seed]")).toHaveValue(seed);
   await page.getByRole("button", { name: "Close utility panel" }).click();
@@ -519,6 +521,7 @@ test("online Settings confirms each restart mode through the shared table before
   );
 
   for (const [label, mode] of [["New Random Map", "fresh"], ["Replay Current Map", "sameMap"]] as const) {
+    await closeTrading(page);
     await page.getByRole("button", { name: "Open settings" }).click();
     const restart = page.getByRole("button", { name: label });
     await restart.click();
@@ -597,6 +600,7 @@ test("Settings clears stale confirmation and copy state across close, policy, co
 test("Settings clears pending restart when the host connection becomes unavailable", async ({ page }) => {
   await installOnlineGameMock(page);
   await openMockOnlineGame(page);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "New Random Map" }).click();
   await expect(page.locator(".restart-confirmation")).toBeVisible();
@@ -614,6 +618,7 @@ test("Settings clears pending restart when the host connection becomes unavailab
 test("seed copy failure remains localized, selectable, and retryable through the real Settings UI", async ({ page }) => {
   await installOnlineGameMock(page);
   await openMockOnlineGame(page);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   const seed = page.locator("[data-map-seed]");
   const status = page.locator(".map-seed-copy-status");
@@ -660,11 +665,13 @@ test("late clipboard completion cannot restore status after Settings or seed inv
     (window as unknown as { __onlineGameMock: { resolveClipboard(): void } }).__onlineGameMock.resolveClipboard();
   });
 
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await deferCopy();
   await page.getByRole("button", { name: "Copy Seed" }).click();
   await page.getByRole("button", { name: "Close utility panel" }).click();
   await resolveCopy();
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await expect(status).toHaveText("");
 
@@ -689,6 +696,7 @@ for (const visual of [
     await installOnlineGameMock(page);
     await page.setViewportSize({ width: visual.width, height: visual.height });
     await openMockOnlineGame(page);
+    await closeTrading(page);
     await page.getByRole("button", { name: "Open settings" }).click();
     if (visual.locale === "zh-CN") await page.locator("[data-language-select]").selectOption("zh-CN");
     await page.getByRole("button", { name: visual.label }).click();
@@ -732,9 +740,12 @@ for (const visual of [
 }
 
 async function advanceBackToFirstPlayer(page: Page) {
+  await closeTrading(page);
   await page.getByRole("button", { name: "End Turn" }).click();
   for (let otherPlayer = 0; otherPlayer < 3; otherPlayer += 1) {
+    await closeTrading(page);
     await page.getByRole("button", { name: "Roll Dice" }).click();
+    await closeTrading(page);
     await page.getByRole("button", { name: "End Turn" }).click();
   }
 }
@@ -758,10 +769,13 @@ async function advanceLocalGatheringCooldownToAction(
 ): Promise<void> {
   for (let completedTurn = alreadyCompletedTurns; completedTurn < 8; completedTurn += 1) {
     await setDeterministicTotal(page, 2);
+    await closeTrading(page);
     await page.locator('[data-action="roll-dice"]').click();
+    await closeTrading(page);
     await page.locator('[data-action="end-turn"]').click();
   }
   await setDeterministicTotal(page, 2);
+  await closeTrading(page);
   await page.locator('[data-action="roll-dice"]').click();
 }
 
@@ -887,53 +901,58 @@ async function completeRequiredMaritimeTrade(
   receiveResource: BuildResource,
   targetAction: Locator
 ): Promise<boolean | undefined> {
-  const give = page.getByLabel("Maritime give resource");
-  const receive = page.getByLabel("Maritime receive resource");
-  const before = toResourceAmounts(await readPlayerResources(page, 0));
-  expect(missingCostResources(before, fundingCost)).toContain(receiveResource);
-  expect(canCoverCost(before, fundingCost)).toBe(false);
-  const targetWasUnaffordable = !canCoverCost(before, targetCost);
-  if (targetWasUnaffordable) await expect(targetAction).toBeDisabled();
+  await openTrading(page, "maritime");
+  try {
+    const give = page.getByLabel("Maritime give resource");
+    const receive = page.getByLabel("Maritime receive resource");
+    const before = toResourceAmounts(await readPlayerResources(page, 0));
+    expect(missingCostResources(before, fundingCost)).toContain(receiveResource);
+    expect(canCoverCost(before, fundingCost)).toBe(false);
+    const targetWasUnaffordable = !canCoverCost(before, targetCost);
+    if (targetWasUnaffordable) await expect(targetAction).toBeDisabled();
 
-  const options = await give.locator("button:not([disabled])").evaluateAll((entries) => entries
-    .map((entry) => ({
-      value: entry.getAttribute("data-maritime-give") ?? "",
-      ratio: Number(entry.querySelector("[data-resource-quantity]")?.getAttribute("data-resource-quantity"))
-    }))
-    .filter((entry) => entry.value));
-  const candidate = options.find((option) => {
-    const resource = option.value as BuildResource;
-    return resource !== receiveResource && Number.isInteger(option.ratio) &&
-      before[resource] - option.ratio >= fundingCost[resource];
-  });
-  if (!candidate) return undefined;
+    const options = await give.locator("button:not([disabled])").evaluateAll((entries) => entries
+      .map((entry) => ({
+        value: entry.getAttribute("data-maritime-give") ?? "",
+        ratio: Number(entry.querySelector("[data-resource-quantity]")?.getAttribute("data-resource-quantity"))
+      }))
+      .filter((entry) => entry.value));
+    const candidate = options.find((option) => {
+      const resource = option.value as BuildResource;
+      return resource !== receiveResource && Number.isInteger(option.ratio) &&
+        before[resource] - option.ratio >= fundingCost[resource];
+    });
+    if (!candidate) return undefined;
 
-  const giveButton = give.locator(`[data-maritime-give="${candidate.value}"]`);
-  await giveButton.focus();
-  await expect(giveButton).toBeFocused();
-  await giveButton.press("Enter");
-  await expect(giveButton).toHaveAttribute("aria-pressed", "true");
-  const receiveOptions = await receive.locator("button:not([disabled])").evaluateAll((entries) => entries
-    .map((entry) => entry.getAttribute("data-maritime-receive"))
-    .filter((value): value is string => value !== null));
-  if (!receiveOptions.includes(receiveResource)) {
-    return undefined;
+    const giveButton = give.locator(`[data-maritime-give="${candidate.value}"]`);
+    await giveButton.focus();
+    await expect(giveButton).toBeFocused();
+    await giveButton.press("Enter");
+    await expect(giveButton).toHaveAttribute("aria-pressed", "true");
+    const receiveOptions = await receive.locator("button:not([disabled])").evaluateAll((entries) => entries
+      .map((entry) => entry.getAttribute("data-maritime-receive"))
+      .filter((value): value is string => value !== null));
+    if (!receiveOptions.includes(receiveResource)) {
+      return undefined;
+    }
+
+    const receiveButton = receive.locator(`[data-maritime-receive="${receiveResource}"]`);
+    await receiveButton.focus();
+    await expect(receiveButton).toBeFocused();
+    await receiveButton.press("Enter");
+    await expect(receiveButton).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Maritime" }).click();
+    const after = toResourceAmounts(await readPlayerResources(page, 0));
+    const giveResource = candidate.value as BuildResource;
+    expect(after[receiveResource]).toBe(before[receiveResource] + 1);
+    expect(after[giveResource]).toBe(before[giveResource] - candidate.ratio);
+    for (const { key } of playerTradeResources) {
+      if (key !== receiveResource && key !== giveResource) expect(after[key]).toBe(before[key]);
+    }
+    return targetWasUnaffordable && canCoverCost(after, targetCost);
+  } finally {
+    await closeTrading(page);
   }
-
-  const receiveButton = receive.locator(`[data-maritime-receive="${receiveResource}"]`);
-  await receiveButton.focus();
-  await expect(receiveButton).toBeFocused();
-  await receiveButton.press("Enter");
-  await expect(receiveButton).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Maritime" }).click();
-  const after = toResourceAmounts(await readPlayerResources(page, 0));
-  const giveResource = candidate.value as BuildResource;
-  expect(after[receiveResource]).toBe(before[receiveResource] + 1);
-  expect(after[giveResource]).toBe(before[giveResource] - candidate.ratio);
-  for (const { key } of playerTradeResources) {
-    if (key !== receiveResource && key !== giveResource) expect(after[key]).toBe(before[key]);
-  }
-  return targetWasUnaffordable && canCoverCost(after, targetCost);
 }
 
 async function chooseRoadExtensionTarget(page: Page) {
@@ -1024,6 +1043,7 @@ async function readProductionMatrix(page: Page): Promise<ProductionMatrixRow[]> 
 }
 
 async function advanceBackToFirstPlayerWithoutProduction(page: Page, seed: string): Promise<void> {
+  await closeTrading(page);
   await page.getByRole("button", { name: "End Turn" }).click();
   for (let otherPlayer = 0; otherPlayer < 3; otherPlayer += 1) {
     const matrix = await readProductionMatrix(page);
@@ -1032,7 +1052,9 @@ async function advanceBackToFirstPlayerWithoutProduction(page: Page, seed: strin
       throw new Error(`No globally zero-production roll while advancing ${seed}: ${JSON.stringify(matrix)}`);
     }
     await setDeterministicTotal(page, noProduction.total);
+    await closeTrading(page);
     await page.getByRole("button", { name: "Roll Dice" }).click();
+    await closeTrading(page);
     await page.getByRole("button", { name: "End Turn" }).click();
   }
 }
@@ -1101,6 +1123,7 @@ async function fundAndBuildWithMaritime(
     } else {
       const plan = await chooseProtectedProductionPlan(page, targetCost, seed);
       await setDeterministicTotal(page, plan.total);
+      await closeTrading(page);
       await page.getByRole("button", { name: "Roll Dice" }).click();
       const afterRoll = toResourceAmounts(await readPlayerResources(page, 0));
       expect(afterRoll[plan.receive], `${seed} total ${plan.total} must preserve bank stock for ${plan.receive}`).toBe(beforeRoll[plan.receive]);
@@ -1175,6 +1198,7 @@ async function fundAndBuildSettlementWithMaritime(page: Page, seed: string): Pro
     if (!canCoverCost(beforeRoll, fundingCost)) {
       const plan = await chooseProtectedProductionPlan(page, fundingCost, seed);
       await setDeterministicTotal(page, plan.total);
+      await closeTrading(page);
       await page.getByRole("button", { name: "Roll Dice" }).click();
       const afterRoll = toResourceAmounts(await readPlayerResources(page, 0));
       expect(afterRoll[plan.receive], `${seed} total ${plan.total} must preserve bank stock for ${plan.receive}`).toBe(beforeRoll[plan.receive]);
@@ -1254,14 +1278,17 @@ async function prepareAffordablePublicTrade(page: Page): Promise<{
     }
     if (offered && requested && acceptingPlayer) {
       const proposerName = (await cards.nth(activeIndex).locator("strong").textContent())!.trim();
+      await openTrading(page, "player");
       await page.getByLabel(`Offer ${offered.label}`).fill("1");
       await page.getByLabel(`Request ${requested.label}`).fill("1");
       await expect(page.getByRole("button", { name: "Publish Public Offer" })).toBeEnabled();
       return { acceptingPlayer, offerLabel: offered.label, proposerName, requestLabel: requested.label };
     }
 
+    await closeTrading(page);
     await page.getByRole("button", { name: "End Turn" }).click();
     await setDeterministicTotal(page, productiveTotals[attempt % productiveTotals.length]);
+    await closeTrading(page);
     await page.getByRole("button", { name: "Roll Dice" }).click();
   }
   throw new Error("no affordable Local public trade converged across a full deterministic roll cycle");
@@ -1307,53 +1334,71 @@ test("Local setup grants each second settlement's adjacent resources exactly onc
 test("four-player Local gathering cooldown honors action phase and turn boundaries", async ({ page }) => {
   await openLocalAtSeed(page, "M1-1111111111111111");
   await completeLocalSetup(page);
-  await page.getByRole("tab", { name: "Commerce Guild" }).click();
+  await openTrading(page, "commerce");
 
   const cooldown = page.locator("[data-gathering-cooldown]");
   const start = page.getByRole("button", { name: "Start Gathering" });
+  await openTrading(page, "commerce");
   await expect(cooldown).toHaveCount(1);
+  await openTrading(page, "commerce");
   await expect(cooldown).toHaveAttribute("data-gathering-cooldown", "8");
+  await openTrading(page, "commerce");
   await expect(start).toBeDisabled();
   await expect(page.locator("#gathering-start-unavailable-reason")).toContainText("Roll the dice");
 
   await setDeterministicTotal(page, 2);
+  await closeTrading(page);
   await page.locator('[data-action="roll-dice"]').click();
+  await openTrading(page, "commerce");
   await expect(start).toBeDisabled();
   await expect(page.locator("#gathering-start-unavailable-reason")).toContainText("8 turns");
 
   for (let completedTurn = 1; completedTurn <= 8; completedTurn += 1) {
+    await closeTrading(page);
     await page.locator('[data-action="end-turn"]').click();
+    await openTrading(page, "commerce");
     await expect(cooldown).toHaveAttribute(
       "data-gathering-cooldown",
       String(8 - completedTurn)
     );
     if (completedTurn < 8) {
       await setDeterministicTotal(page, 2);
+      await closeTrading(page);
       await page.locator('[data-action="roll-dice"]').click();
     }
   }
 
+  await openTrading(page, "commerce");
   await expect(start).toBeDisabled();
   await expect(page.locator("#gathering-start-unavailable-reason")).toContainText("Roll the dice");
   await setDeterministicTotal(page, 2);
+  await closeTrading(page);
   await page.locator('[data-action="roll-dice"]').click();
+  await openTrading(page, "commerce");
   await expect(start).toBeEnabled();
   await start.click();
   await page.getByRole("button", { name: "Open Auctions" }).click();
   await expect(page.getByRole("button", { name: "Resolve Blind Box" })).toHaveCount(0);
+  await closeTrading(page);
   await page.locator('[data-action="end-turn"]').click();
+  await openTrading(page, "commerce");
   await expect(cooldown).toHaveAttribute("data-gathering-cooldown", "4");
 
   for (let subsequentTurn = 1; subsequentTurn <= 4; subsequentTurn += 1) {
     await setDeterministicTotal(page, 2);
+    await closeTrading(page);
     await page.locator('[data-action="roll-dice"]').click();
+    await closeTrading(page);
     await page.locator('[data-action="end-turn"]').click();
+    await openTrading(page, "commerce");
     await expect(cooldown).toHaveAttribute(
       "data-gathering-cooldown",
       String(4 - subsequentTurn)
     );
   }
+  await openTrading(page, "commerce");
   await expect(cooldown).toHaveClass(/\bready\b/);
+  await openTrading(page, "commerce");
   await expect(cooldown).toContainText("Ready");
 });
 
@@ -1377,11 +1422,15 @@ test("Local opens in an empty seeded setup and both restart modes rebuild atomic
     expect(card).toContain("Resources: 0");
     expect(card).toContain("Development: 0");
   }
+  await closeTrading(page);
+  await page.getByRole("button", { name: "Open records and statistics" }).click();
   await expect(page.getByRole("log").locator("p")).toHaveCount(1);
   await expect(page.getByRole("log")).toHaveText("Setup started. Place settlements and roads in snake order.");
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Roll Dice" })).toBeDisabled();
 
   const initialLayout = await publicBoardSignature(page);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   const initialSeed = await page.locator("[data-map-seed]").inputValue();
   expect(initialSeed).toMatch(/^M1-[0-9A-F]{16}$/);
@@ -1394,17 +1443,20 @@ test("Local opens in an empty seeded setup and both restart modes rebuild atomic
   await expect(page.locator(".building-marker")).toHaveCount(1);
   await expect(page.locator(".road-marker")).toHaveCount(1);
 
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "Replay Current Map" }).click();
   await expect(page.getByText("Place the next settlement")).toBeVisible();
   await expect(page.locator(".building-marker")).toHaveCount(0);
   await expect(page.locator(".road-marker")).toHaveCount(0);
   expect(await publicBoardSignature(page)).toBe(initialLayout);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await expect(page.locator("[data-map-seed]")).toHaveValue(initialSeed);
   await page.getByRole("button", { name: "New Random Map" }).click();
   await expect(page.getByText("Place the next settlement")).toBeVisible();
   expect(await publicBoardSignature(page)).not.toBe(initialLayout);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   const freshSeed = await page.locator("[data-map-seed]").inputValue();
   expect(freshSeed).toMatch(/^M1-[0-9A-F]{16}$/);
@@ -1417,16 +1469,25 @@ test("a zero-token gathering completes without entering an unwinnable auction", 
   await openLocal(page);
   await completeLocalSetup(page);
   await advanceLocalGatheringCooldownToAction(page);
-  await page.getByRole("tab", { name: "Commerce Guild" }).click();
+  await openTrading(page, "commerce");
   await page.getByRole("button", { name: "Start Gathering" }).click();
+  await closeTrading(page);
+  await expect(page.getByRole("button", { name: "Open trading", exact: true })).toContainText("redemption");
+  await page.getByRole("button", { name: "Open trading", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Commerce Guild", exact: true })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "Open Auctions" }).click();
   await expect(page.locator("#root .game-shell")).toBeVisible();
+  await closeTrading(page);
+  await page.getByRole("button", { name: "Open records and statistics" }).click();
   await expect(page.getByRole("log")).toContainText(
     "The Commerce Guild auction ended because no player has guild tokens."
   );
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Resolve Blind Box" })).toHaveCount(0);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "New Random Map" }).click();
+  await openTrading(page, "commerce");
   await expect(page.locator('[data-gathering-cooldown="8"]')).toBeVisible();
 });
 
@@ -1436,15 +1497,18 @@ test("unaffordable actions stay disabled and maritime choices are explicit", asy
   });
   await openLocal(page);
   await completeLocalSetup(page);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
 
   await expect(page.locator('[data-action="build-city"]')).toBeDisabled();
+  await openTrading(page, "maritime");
   await expect(page.getByLabel("Maritime give resource")).toBeVisible();
   await expect(page.getByLabel("Maritime receive resource")).toBeVisible();
 });
 
 test("New Random Map enters interactive snake-order setup", async ({ page }) => {
   await openLocal(page);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "New Random Map" }).click();
 
@@ -1454,6 +1518,7 @@ test("New Random Map enters interactive snake-order setup", async ({ page }) => 
 
 test("New Random Map completes all setup pairs and enters normal play", async ({ page }) => {
   await openLocal(page);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "New Random Map" }).click();
 
@@ -1495,15 +1560,19 @@ test("Commerce controls keep valid named selections across turns", async ({ page
   });
   await openLocal(page);
   await completeLocalSetup(page);
-  await page.getByRole("tab", { name: "Commerce Guild" }).click();
+  await openTrading(page, "commerce");
 
   await expect(page.getByLabel("Token recipient")).toHaveValue("p2");
   await expect(page.getByLabel("Token amount")).toHaveValue("1");
+  await closeTrading(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
+  await closeTrading(page);
   await page.getByRole("button", { name: "End Turn" }).click();
+  await openTrading(page, "commerce");
   await expect(page.getByLabel("Token recipient")).not.toHaveValue("p2");
 
   await advanceLocalGatheringCooldownToAction(page, 1);
+  await openTrading(page, "commerce");
   await page.getByRole("button", { name: "Start Gathering" }).click();
   await expect(page.getByLabel("Gathering player")).toHaveCount(1);
   await page.getByLabel("Gathering player").selectOption({ label: "Kay (0 tokens)" });
@@ -1529,6 +1598,7 @@ test("post-roll guidance describes the current action phase", async ({ page }) =
   });
   await openLocal(page);
   await completeLocalSetup(page);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
 
   await expect(page.locator(".phase-guidance")).toHaveText("Choose an action or end the turn");
@@ -1556,6 +1626,7 @@ for (const visual of [
     await page.setViewportSize({ width: visual.width, height: visual.height });
     await openLocalAtSeed(page, "M1-FEDCBA9876543210");
     if (visual.locale === "zh-CN") {
+      await closeTrading(page);
       await page.getByRole("button", { name: "Open settings" }).click();
       await page.locator("[data-language-select]").selectOption("zh-CN");
       await page.locator("[data-dialog-close]").click();
@@ -1605,7 +1676,7 @@ for (const visual of [
     expect(badgeColors.every((color) => color !== "rgba(0, 0, 0, 0)" && color !== "transparent")).toBe(true);
     expect(new Set(badgeColors).size).toBe(5);
 
-    await page.getByRole("tab", { name: visual.locale === "en" ? "Commerce Guild" : "商业公会" }).click();
+    await openTrading(page, "commerce");
     await expect(page.locator("[data-gathering-cooldown]")).toHaveCount(1);
     const containment = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
@@ -1626,6 +1697,7 @@ for (const viewport of [
   test(`${viewport.name} keeps actions contained and board-adjacent`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await openLocal(page);
+    await openTrading(page);
 
     const measurements = await page.evaluate(() => {
       const action = document.querySelector(".action-bar")!.getBoundingClientRect();
@@ -1679,6 +1751,7 @@ for (const viewport of [
 test("mobile setup board targets retain a 44px non-scaling hit stroke", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openLocal(page);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "New Random Map" }).click();
 
@@ -1698,10 +1771,13 @@ test("robber guidance stays readable and log/statistics lists reach their final 
   await completeLocalSetup(page);
   for (let completedTurn = 0; completedTurn < 8; completedTurn += 1) {
     await setDeterministicTotal(page, 2);
+    await closeTrading(page);
     await page.getByRole("button", { name: "Roll Dice" }).click();
+    await closeTrading(page);
     await page.getByRole("button", { name: "End Turn" }).click();
   }
   await setDeterministicTotal(page, 7);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
   await completePendingLocalDiscards(page);
 
@@ -1725,6 +1801,8 @@ test("robber guidance stays readable and log/statistics lists reach their final 
   });
   expect(contrast).toBeGreaterThanOrEqual(4.5);
 
+  await closeTrading(page);
+  await page.getByRole("button", { name: /Open records and statistics|打开记录与统计/ }).click();
   const log = page.getByRole("log");
   const logScroll = await log.evaluate((element) => ({
     clientHeight: element.clientHeight,
@@ -1743,16 +1821,10 @@ test("robber guidance stays readable and log/statistics lists reach their final 
   await expect(log.locator("p").last()).toHaveText("Setup started. Place settlements and roads in snake order.");
   await expect(log.locator("p").last()).toBeInViewport();
 
+  await page.getByRole("tab", { name: "Yield Statistics", exact: true }).click();
   await page.getByRole("button", { name: "dice", exact: true }).click();
   const diceList = page.getByLabel("Income by player for selected dice total");
-  const diceScroll = await diceList.evaluate((element) => ({
-    clientHeight: element.clientHeight,
-    scrollHeight: element.scrollHeight
-  }));
-  expect(diceScroll.scrollHeight).toBeGreaterThan(diceScroll.clientHeight);
-  await diceList.hover();
-  await page.mouse.wheel(0, 600);
-  await expect.poll(() => diceList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect(diceList.locator("p")).toHaveCount(4);
   await expect(diceList.locator("p").last()).toBeInViewport();
 });
 
@@ -1760,20 +1832,27 @@ test("a public multi-resource offer is visible to every opponent and accepts ato
   await openLocal(page);
   await completeLocalSetup(page);
   await setDeterministicTotal(page, 8);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
 
   const trade = await prepareAffordablePublicTrade(page);
   await page.getByRole("button", { name: "Publish Public Offer" }).click();
 
   await expect(page.getByText(`${trade.proposerName} offers 1 ${trade.offerLabel} for 1 ${trade.requestLabel}`)).toBeVisible();
+  await closeTrading(page);
+  await expect(page.getByRole("button", { name: "Open trading", exact: true })).toContainText("Public offer");
+  await openTrading(page, "player");
   await expect(page.getByRole("button", { name: /^Accept as / })).toHaveCount(3);
   await expect(page.getByRole("button", { name: `Accept as ${trade.acceptingPlayer}` })).toBeEnabled();
 
   await page.getByRole("button", { name: `Accept as ${trade.acceptingPlayer}` }).click();
   await expect(page.getByText("No public offer is active.")).toBeVisible();
+  await closeTrading(page);
+  await page.getByRole("button", { name: "Open records and statistics" }).click();
   await expect(page.getByRole("log")).toContainText(`${trade.acceptingPlayer} accepted ${trade.proposerName}'s public player trade`);
+  await page.keyboard.press("Escape");
 
-  await page.getByRole("tab", { name: "Commerce Guild" }).click();
+  await openTrading(page, "commerce");
   await expect(page.locator('[data-trade-hub-panel="commerce"]')).toBeVisible();
   await expect(page.getByRole("heading", { name: "Commerce Guild" })).toBeVisible();
 });
@@ -1782,6 +1861,7 @@ test("public offers cancel explicitly and clear when the proposer ends the turn"
   await openLocal(page);
   await completeLocalSetup(page);
   await setDeterministicTotal(page, 8);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
   const trade = await prepareAffordablePublicTrade(page);
   await page.getByRole("button", { name: "Publish Public Offer" }).click();
@@ -1790,7 +1870,9 @@ test("public offers cancel explicitly and clear when the proposer ends the turn"
 
   await prepareAffordablePublicTrade(page);
   await page.getByRole("button", { name: "Publish Public Offer" }).click();
+  await closeTrading(page);
   await page.getByRole("button", { name: "End Turn" }).click();
+  await openTrading(page, "player");
   await expect(page.getByText("No public offer is active.")).toBeVisible();
   await expect(page.locator(".turn-status strong")).not.toHaveText(trade.proposerName);
 });
@@ -1798,55 +1880,75 @@ test("public offers cancel explicitly and clear when the proposer ends the turn"
 test("English defaults, Chinese retranslates history, and the locale survives reload", async ({ page }) => {
   await openLocal(page);
   await completeLocalSetup(page);
-  await expect(page.getByRole("heading", { name: "Game Log" })).toBeVisible();
   await setDeterministicTotal(page, 8);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
+  await closeTrading(page);
+  await page.getByRole("button", { name: "Open records and statistics" }).click();
+  await expect(page.getByRole("heading", { name: "Game Log" })).toBeVisible();
   await expect(page.getByRole("log")).toContainText("Earnest rolled 8");
+  await page.keyboard.press("Escape");
 
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   const language = page.locator("[data-language-select]");
   await expect(language).toHaveValue("en");
   await language.selectOption("zh-CN");
-  await expect(page.getByRole("button", { name: "掷骰子" })).toBeVisible();
   await page.locator("[data-dialog-close]").click();
+  await expect(page.getByRole("button", { name: "掷骰子" })).toBeVisible();
 
+  await closeTrading(page);
+  await page.getByRole("button", { name: "打开记录与统计" }).click();
   await expect(page.getByRole("heading", { name: "游戏日志" })).toBeVisible();
   await expect(page.getByRole("log")).toContainText("Earnest 掷出了 8");
-  await expect(page.getByText("产出统计")).toBeVisible();
+  await page.getByRole("tab", { name: "产出统计" }).click();
+  await expect(page.getByRole("heading", { name: "产出统计" })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await page.reload();
   await page.getByRole("button", { name: "开始本地游戏" }).click();
   await completeLocalSetup(page);
-  await expect(page.getByRole("heading", { name: "游戏日志" })).toBeVisible();
   await expect(page.getByRole("button", { name: "掷骰子" })).toBeVisible();
+  await closeTrading(page);
+  await page.getByRole("button", { name: "打开记录与统计" }).click();
+  await expect(page.getByRole("heading", { name: "游戏日志" })).toBeVisible();
   await expect(page.getByRole("log")).toContainText("初始设置已开始，请按蛇形顺序放置村庄和道路。");
+  await page.keyboard.press("Escape");
 
   await advanceLocalGatheringCooldownToAction(page);
-  await page.getByRole("tab", { name: "商业公会" }).click();
+  await openTrading(page, "commerce");
   await page.getByRole("button", { name: "开始集会" }).click();
   await page.getByRole("button", { name: "开启拍卖" }).click();
+  await closeTrading(page);
+  await page.getByRole("button", { name: "打开记录与统计" }).click();
   await expect(page.getByRole("log")).toContainText(
     "没有玩家持有公会代币，商业公会拍卖已结束。"
   );
-  await expect(page.getByLabel("Earnest")).toHaveCount(0);
+  await expect(page.getByRole("spinbutton", { name: "Earnest", exact: true })).toHaveCount(0);
 });
 
-test("Chinese mobile keeps log and dice statistics internally scrollable", async ({ page }) => {
+test("Chinese mobile can browse game logs and dice statistics", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openLocal(page);
   await completeLocalSetup(page);
   for (let completedTurn = 0; completedTurn < 8; completedTurn += 1) {
     await setDeterministicTotal(page, 2);
+    await closeTrading(page);
     await page.getByRole("button", { name: "Roll Dice" }).click();
+    await closeTrading(page);
     await page.getByRole("button", { name: "End Turn" }).click();
   }
   await setDeterministicTotal(page, 7);
+  await closeTrading(page);
   await page.getByRole("button", { name: "Roll Dice" }).click();
 
+  await closeTrading(page);
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.locator("[data-language-select]").selectOption("zh-CN");
   await page.locator("[data-dialog-close]").click();
 
+  await closeTrading(page);
+  await page.getByRole("button", { name: /Open records and statistics|打开记录与统计/ }).click();
   const log = page.getByRole("log");
   expect(await log.evaluate((element) => element.scrollHeight)).toBeGreaterThan(
     await log.evaluate((element) => element.clientHeight)
@@ -1855,12 +1957,9 @@ test("Chinese mobile keeps log and dice statistics internally scrollable", async
   await page.keyboard.press("End");
   await expect.poll(() => log.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 
+  await page.getByRole("tab", { name: "产出统计", exact: true }).click();
   await page.getByRole("button", { name: "骰点", exact: true }).click();
   const diceList = page.getByLabel("所选骰点下各玩家的产出");
-  expect(await diceList.evaluate((element) => element.scrollHeight)).toBeGreaterThan(
-    await diceList.evaluate((element) => element.clientHeight)
-  );
-  await diceList.focus();
-  await page.keyboard.press("End");
-  await expect.poll(() => diceList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect(diceList.locator("p")).toHaveCount(4);
+  await expect(diceList.locator("p").last()).toBeVisible();
 });

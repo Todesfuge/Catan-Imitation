@@ -326,7 +326,6 @@ describe("comprehensive in-game rulebook content", () => {
     expect(utility).toContain("<RulebookPanel />");
     expect(utility).toMatch(/className=\{[^}]*modal-card--rulebook[^}]*\}/s);
     expect(utility).toContain('panel === "settings"');
-    expect(utility).toContain('panel === "info"');
     expect(utility).not.toMatch(/dialog\.rule[1-4]/);
     expect(i18n).not.toMatch(/"dialog\.rule[1-4]"/);
 

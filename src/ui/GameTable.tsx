@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import {
   BookOpen,
+  ChevronDown,
+  ChevronUp,
   Coins,
   Gift,
-  Info,
   Landmark,
   Maximize,
   ScrollText,
@@ -12,6 +13,7 @@ import {
   Warehouse
 } from "lucide-react";
 import { resources } from "../domain/types";
+import { RobberIcon } from "./RobberIcon";
 import type { MapSeed } from "../domain/mapSeed";
 import type { MapRestartMode } from "../domain/match/types";
 import {
@@ -27,10 +29,11 @@ import { TurnFlowPanel } from "./TurnFlowPanel";
 import { RoadBuildingTargets } from "./DevelopmentCardPanel";
 import { ActionDock, type BoardInteractionMode } from "./ActionDock";
 import { BoardActionTargets } from "./BoardActionTargets";
-import { TradeHubPanel } from "./TradeHubPanel";
+import { BoardViewport } from "./BoardViewport";
+import { HandSummary } from "./HandSummary";
 import { UtilityDialog, type UtilityPanel } from "./UtilityDialog";
 import { ResourceBundle, ResourceIcon } from "./ResourceBadge";
-import { formatGameLogEntry, translateRuleText, useI18n } from "./i18n";
+import { translateRuleText, useI18n } from "./i18n";
 
 export type GameTableResource = (typeof resources)[number];
 export type GameTableResourceMap = Readonly<Record<GameTableResource, number>>;
@@ -236,8 +239,6 @@ export type GameTableIntent =
 
 export type GameTableDispatch = (intent: GameTableIntent) => void;
 
-type StatsMode = "player" | "dice" | "matrix";
-
 const dicePipCounts: Record<number, number> = {
   2: 1,
   3: 2,
@@ -284,7 +285,10 @@ function BoardView({
   interactionMode,
   onTargetSelected,
   onUtilityOpen,
-  onFullscreen
+  onFullscreen,
+  infoCollapsed,
+  onInfoToggle,
+  infoToggleDisabled
 }: {
   state: GameTableView;
   dispatch: GameTableDispatch;
@@ -292,6 +296,9 @@ function BoardView({
   onTargetSelected: () => void;
   onUtilityOpen: (panel: Exclude<UtilityPanel, null>) => void;
   onFullscreen: () => void;
+  infoCollapsed: boolean;
+  onInfoToggle: () => void;
+  infoToggleDisabled: boolean;
 }) {
   const { t } = useI18n();
   const canPlaceRobber = state.game.turnState.phase === "awaitingRobberPlacement" && state.decisionPolicy.robberHex.enabled;
@@ -299,21 +306,31 @@ function BoardView({
 
   return (
     <section className="board-zone" aria-label={t("board.label")}>
-      <div className="utility-rail" aria-label={t("board.utilityControls")}>
-        <button aria-label={t("nav.openSettings")} onClick={() => onUtilityOpen("settings")} title={t("dialog.settings")} type="button">
-          <Settings size={26} />
-        </button>
-        <button aria-label={t("nav.openRulebook")} onClick={() => onUtilityOpen("rulebook")} title={t("dialog.rulebook")} type="button">
-          <BookOpen size={26} />
-        </button>
-        <button aria-label={t("nav.toggleFullscreen")} onClick={onFullscreen} title={t("nav.toggleFullscreen")} type="button">
-          <Maximize size={26} />
-        </button>
-        <button aria-label={t("nav.openInfo")} onClick={() => onUtilityOpen("info")} title={t("dialog.info")} type="button">
-          <Info size={26} />
+      <div className="board-toolbar">
+        <div className="utility-rail" aria-label={t("board.utilityControls")}>
+          <button aria-label={t("nav.openSettings")} onClick={() => onUtilityOpen("settings")} title={t("dialog.settings")} type="button">
+            <Settings size={26} />
+          </button>
+          <button aria-label={t("nav.openRulebook")} onClick={() => onUtilityOpen("rulebook")} title={t("dialog.rulebook")} type="button">
+            <BookOpen size={26} />
+          </button>
+          <button aria-label={t("nav.toggleFullscreen")} onClick={onFullscreen} title={t("nav.toggleFullscreen")} type="button">
+            <Maximize size={26} />
+          </button>
+        </div>
+        <button
+          aria-haspopup="dialog"
+          aria-label={t("nav.openRecords")}
+          className="records-toggle"
+          onClick={() => onUtilityOpen("records")}
+          type="button"
+        >
+          <ScrollText size={20} />
+          <span className="records-label">{t("dialog.records")}</span>
+          <span className="records-label-short">{t("board.recordsShort")}</span>
         </button>
       </div>
-      <div className="island">
+      <BoardViewport focusBoard={infoCollapsed}>
         <svg
           aria-label={t("board.map")}
           className="board-svg"
@@ -374,6 +391,7 @@ function BoardView({
             {state.game.board.map((hex) => {
               const center = hexCenterPoint(hex);
               const polygonPoints = hexPolygonPoints(hex);
+              const hasRobber = state.game.robberHexId === hex.id;
               const canTargetHex = canPlaceRobber && state.decisionPolicy.robberHex.targets.includes(hex.id);
               const terrainLabel = t(`terrain.${hex.terrain}`);
               const accessibleLabel = hex.resource
@@ -412,7 +430,7 @@ function BoardView({
                       data-board-resource={hex.resource}
                       height="36"
                       width="36"
-                      x={center.x - 18}
+                      x={center.x - (hasRobber ? 40 : 18)}
                       y={center.y - 40}
                     >
                       <ResourceIcon decorative resource={hex.resource} size={28} />
@@ -431,13 +449,9 @@ function BoardView({
                         })}
                       </g>
                     </g>
-                  ) : (
-                    <text className="robber-label" x={center.x} y={center.y + 38}>
-                      {t("board.robber")}
-                    </text>
-                  )}
-                  {state.game.robberHexId === hex.id ? (
-                    <rect className="robber-piece" height="44" rx="14" width="28" x={center.x + 18} y={center.y + 8} />
+                  ) : null}
+                  {hasRobber ? (
+                    <RobberIcon x={center.x + (hex.resource ? 22 : 0) - 23} y={center.y + (hex.resource ? -18 : 0) - 23} />
                   ) : null}
                 </g>
               );
@@ -505,7 +519,18 @@ function BoardView({
             onTargetSelected={onTargetSelected}
           />
         </svg>
-      </div>
+      </BoardViewport>
+      <button
+        aria-controls="game-info"
+        aria-expanded={!infoCollapsed}
+        className="game-info-toggle"
+        disabled={infoToggleDisabled}
+        onClick={onInfoToggle}
+        type="button"
+      >
+        {infoCollapsed ? <ChevronDown aria-hidden="true" size={20} /> : <ChevronUp aria-hidden="true" size={20} />}
+        {t(infoCollapsed ? "board.showInfo" : "board.hideInfo")}
+      </button>
     </section>
   );
 }
@@ -564,28 +589,8 @@ function PlayerPanel({ state }: { state: GameTableView }) {
 }
 
 function RightRail({ state }: { state: GameTableView }) {
-  const { locale, t } = useI18n();
   return (
     <aside className="right-rail">
-      <section className="log-panel">
-        <h2>
-          <ScrollText size={18} /> {t("log.title")}
-        </h2>
-        <div aria-live="polite" className="log-list" role="log" tabIndex={0}>
-          {state.game.log.map((entry) => (
-            <p key={entry.id}>{formatGameLogEntry({
-              id: entry.id,
-              message: entry.fallbackText,
-              ...(entry.messageKey ? { messageKey: entry.messageKey as never } : {}),
-              ...(entry.params ? { params: { ...entry.params } } : {})
-            }, locale)}</p>
-          ))}
-        </div>
-      </section>
-      <section className="activity-shell" aria-label={t("activity.title")}>
-        <strong>{t("activity.title")}</strong>
-        <span>{state.game.phase === "gameOver" ? t("activity.complete") : t("activity.events", { count: state.game.log.length })}</span>
-      </section>
       <section className="bank-panel">
         <Warehouse size={28} />
         <div className="resource-strip" data-resource-inventory="bank">
@@ -601,161 +606,6 @@ function RightRail({ state }: { state: GameTableView }) {
   );
 }
 
-function StatsPanel({
-  state,
-  dispatch
-}: {
-  state: GameTableView;
-  dispatch: GameTableDispatch;
-}) {
-  const { t } = useI18n();
-  const [mode, setMode] = useState<StatsMode>("player");
-  if (!state.statistics) {
-    return (
-      <section className="tool-panel stats-panel">
-        <div className="panel-header"><h2>{t("stats.title")}</h2></div>
-        <p>{t("online.statisticsUnavailable")}</p>
-      </section>
-    );
-  }
-  const playerRows = state.statistics.playerRows[state.selectedPlayerId] ?? [];
-  const diceIncome = state.statistics.diceIncome[state.selectedDiceTotal];
-  const matrix = state.statistics.matrix;
-
-  return (
-    <section className="tool-panel stats-panel">
-      <div className="panel-header">
-        <h2>{t("stats.title")}</h2>
-        <div className="segmented">
-          {(["player", "dice", "matrix"] as const).map((nextMode) => (
-            <button
-              aria-pressed={mode === nextMode}
-              className={mode === nextMode ? "selected" : ""}
-              key={nextMode}
-              onClick={() => setMode(nextMode)}
-              type="button"
-            >
-              {t(`stats.${nextMode}`)}
-            </button>
-          ))}
-        </div>
-      </div>
-      {mode === "player" ? (
-        <>
-          <select
-            aria-label={t("stats.playerLabel")}
-            value={state.selectedPlayerId}
-            onChange={(event) =>
-              dispatch({ type: "ui.selectPlayer", playerId: event.currentTarget.value })
-            }
-          >
-            {state.game.players.map((player) => (
-              <option key={player.id} value={player.id}>
-                {player.name}
-              </option>
-            ))}
-          </select>
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t("stats.diceHeader")}</th>
-                  <th>{t("stats.chance")}</th>
-                  <th>{t("stats.gainNow")}</th>
-                  <th>{t("stats.expected")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {playerRows.map((row) => (
-                  <tr key={row.diceTotal}>
-                    <td>{row.diceTotal}</td>
-                    <td>{Math.round(row.probability * 1000) / 10}%</td>
-                    <td data-stat-resource-bundle="gain">
-                      {resources.some((resource) => row.resources[resource] > 0)
-                        ? <ResourceBundle compact resources={row.resources} />
-                        : t("stats.noGain")}
-                    </td>
-                    <td data-stat-resource-bundle="expected">
-                      {resources.some((resource) => row.expected[resource] > 0)
-                        ? <ResourceBundle compact resources={row.expected} />
-                        : t("stats.noGain")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : null}
-      {mode === "dice" ? (
-        <>
-          <select
-            aria-label={t("stats.diceLabel")}
-            value={state.selectedDiceTotal}
-            onChange={(event) =>
-              dispatch({ type: "ui.selectDiceTotal", diceTotal: Number(event.currentTarget.value) })
-            }
-          >
-            {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((diceTotal) => (
-              <option key={diceTotal} value={diceTotal}>
-                {diceTotal}
-              </option>
-            ))}
-          </select>
-          <div
-            aria-label={t("stats.incomeList")}
-            className="dice-income-list"
-            tabIndex={0}
-          >
-            {state.game.players.map((player) => (
-              <p key={player.id}>
-                <strong>{player.name}</strong>
-                <span data-stat-resource-bundle="dice">
-                  {resources.some((resource) => (diceIncome?.players[player.id]?.[resource] ?? 0) > 0)
-                    ? <ResourceBundle compact resources={diceIncome?.players[player.id] ?? {}} />
-                    : t("stats.noGain")}
-                </span>
-              </p>
-            ))}
-          </div>
-        </>
-      ) : null}
-      {mode === "matrix" ? (
-        <div className="table-scroll matrix">
-          <table>
-            <thead>
-              <tr>
-                <th>{t("stats.player")}</th>
-                {resources.map((resource) => (
-                  <th key={resource} scope="col">
-                    <ResourceIcon resource={resource} size={17} />
-                  </th>
-                ))}
-                <th>{t("stats.totalEv")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.game.players.map((player) => {
-                const totals = matrix.totals[player.id];
-                const totalExpected = resources.reduce((sum, resource) => sum + totals[resource], 0);
-                return (
-                  <tr key={player.id}>
-                    <td>{player.name}</td>
-                    {resources.map((resource) => (
-                      <td key={resource}>{totals[resource].toFixed(2)}</td>
-                    ))}
-                    <td>{totalExpected.toFixed(2)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
 export function GameTable({
   view: state,
   dispatch: dispatchBase
@@ -767,6 +617,10 @@ export function GameTable({
   const [browserNotice, setBrowserNotice] = useState<string | null>(null);
   const [interactionMode, setInteractionMode] = useState<BoardInteractionMode>(null);
   const [utilityPanel, setUtilityPanel] = useState<UtilityPanel>(null);
+  const [infoCollapsed, setInfoCollapsed] = useState(false);
+  const needsResourceChoice = state.game.turnState.phase === "awaitingDevelopmentEffect" &&
+    state.game.turnState.pendingDevelopmentEffect?.kind !== "roadBuilding";
+  const collapseInfo = infoCollapsed && !needsResourceChoice;
   const boardInteractionMode: BoardInteractionMode =
     state.game.phase === "setup"
       ? { kind: state.game.setup?.stage === "road" ? "setupRoad" : "setupSettlement" }
@@ -815,7 +669,7 @@ export function GameTable({
   }
 
   return (
-    <main className="game-shell">
+    <main className={`game-shell${collapseInfo ? " game-shell--info-collapsed" : ""}`}>
       <BoardView
         state={state}
         dispatch={dispatch}
@@ -823,22 +677,26 @@ export function GameTable({
         onTargetSelected={() => setInteractionMode(null)}
         onUtilityOpen={setUtilityPanel}
         onFullscreen={toggleFullscreen}
+        infoCollapsed={collapseInfo}
+        infoToggleDisabled={needsResourceChoice}
+        onInfoToggle={() => setInfoCollapsed((current) => !current)}
       />
-      <RightRail state={state} />
-      <div className="bottom-dock">
-        <StatsPanel state={state} dispatch={dispatch} />
-        <TradeHubPanel state={state} dispatch={dispatch} />
-      </div>
       <TurnFlowPanel game={state.game} gameControls={state.controlledPlayers} decisionPolicy={state.decisionPolicy} dispatch={dispatch} />
-      <ActionDock
-        state={state}
-        dispatch={dispatch}
-        interactionMode={interactionMode}
-        onInteractionModeChange={setInteractionMode}
-      />
+      <div className="game-info" id="game-info">
+        <RightRail state={state} />
+        <HandSummary state={state} />
+        <ActionDock
+          state={state}
+          dispatch={dispatch}
+          interactionMode={interactionMode}
+          onInteractionModeChange={setInteractionMode}
+          onTradeOpen={() => setUtilityPanel("trade")}
+        />
+      </div>
       <UtilityDialog
         panel={utilityPanel}
         state={state}
+        dispatch={dispatch}
         onClose={() => setUtilityPanel(null)}
         onRestart={(mode) => {
           dispatch({ type: "game.restart", mode });

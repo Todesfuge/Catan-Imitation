@@ -4,7 +4,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { createLocalGameTableView } from "../../src/app/localGameState";
 import { resources } from "../../src/domain/types";
+import { TradeHubPanel } from "../../src/ui/TradeHubPanel";
+import { MaritimeTradePanel } from "../../src/ui/MaritimeTradePanel";
 import { GameTable } from "../../src/ui/GameTable";
+import { StatsPanel } from "../../src/ui/GameRecordsPanel";
 import { CommercePanel } from "../../src/ui/CommercePanel";
 import { DevelopmentCardPanel } from "../../src/ui/DevelopmentCardPanel";
 import {
@@ -164,7 +167,7 @@ describe("shared resource presentation", () => {
     });
     const html = renderWithLocale(
       createElement(GameTable, { view, dispatch: () => undefined })
-    );
+    ) + renderWithLocale(createElement(TradeHubPanel, { state: view, dispatch: () => undefined }));
 
     expect(view.legality.actions.road).toHaveProperty("cost");
     expect(view.legality.actions.settlement).toHaveProperty("cost");
@@ -212,7 +215,7 @@ describe("shared resource presentation", () => {
     (locale) => {
       const view = createLocalGameTableView(createScenarioAppState());
       const html = renderWithLocale(
-        createElement(GameTable, { view, dispatch: () => undefined }),
+        createElement(MaritimeTradePanel, { state: view, dispatch: () => undefined }),
         locale
       );
 
@@ -303,12 +306,12 @@ describe("shared resource presentation", () => {
 
   it("renders statistics with icon bundles, decimal quantities, and semantic matrix headers", () => {
     const html = renderWithLocale(
-      createElement(GameTable, {
-        view: createLocalGameTableView(createScenarioAppState()),
+      createElement(StatsPanel, {
+        state: createLocalGameTableView(createScenarioAppState()),
         dispatch: () => undefined
       })
     );
-    const source = readFileSync("src/ui/GameTable.tsx", "utf8");
+    const source = readFileSync("src/ui/GameRecordsPanel.tsx", "utf8");
 
     expect(html).toContain('data-stat-resource-bundle="gain"');
     expect(html).toContain('data-resource-quantity="0.11"');

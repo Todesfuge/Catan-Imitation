@@ -19,6 +19,7 @@ import { MAX_WIRE_BYTES, parseServerWebSocketMessage, type ClientWebSocketMessag
 import type { PrivateSeatState, PublicGameView, PublicGuildView, PublicRoomState } from "../../src/online/view";
 import { projectRoomView } from "../../src/online/projectRoomView";
 import { I18nProvider } from "../../src/ui/i18n";
+import { TradeHubPanel } from "../../src/ui/TradeHubPanel";
 import { UtilityDialog } from "../../src/ui/UtilityDialog";
 import { createScenarioAppState } from "../fixtures/createScenarioGame";
 
@@ -209,6 +210,12 @@ function expectIncompatibleProjection(snapshot: RoomSnapshotMessage) {
   expect(html).toContain("This game view is incompatible");
 }
 
+function renderTrade(clientState: OnlineClientState) {
+  return renderToStaticMarkup(React.createElement(I18nProvider, null,
+    React.createElement(TradeHubPanel, { state: createOnlineGameTableView(clientState), dispatch: vi.fn() })
+  ));
+}
+
 describe("online game projection adapter", () => {
   it("passes the authoritative public cooldown to the shared game table view", () => {
     const snapshot = snapshotFor();
@@ -232,7 +239,7 @@ describe("online game projection adapter", () => {
     const html = renderToStaticMarkup(React.createElement(I18nProvider, null,
       React.createElement(OnlineGame, { roomCode: "234567", state: state(snapshot), dispatch: vi.fn(), reconnect: vi.fn(), onExit: vi.fn(), createCommandId: crypto.randomUUID })
     ));
-    expect(html).toContain('data-gathering-cooldown="3"');
+    expect(renderTrade(state(snapshot))).toContain('data-gathering-cooldown="3"');
     expect(html).toContain('data-action-cost="road"');
   });
 
@@ -640,10 +647,7 @@ describe("online game projection adapter", () => {
   it("disables resource redemption buttons while reconnecting", () => {
     const redemption = snapshotFor();
     (redemption.publicState as unknown as PublicRoomState).guild!.gathering.phase = "redemption";
-    const html = renderToStaticMarkup(React.createElement(I18nProvider, null,
-      React.createElement(OnlineGame, { roomCode: "234567", state: state(redemption, "reconnecting"),
-        dispatch: vi.fn(), reconnect: vi.fn(), onExit: vi.fn(), createCommandId: crypto.randomUUID })
-    ));
+    const html = renderTrade(state(redemption, "reconnecting"));
     const buttons = [...html.matchAll(/<button[^>]*aria-label="Redeem[^"]*"[^>]*>/g)];
     expect(buttons).toHaveLength(5);
     expect(buttons.every(([button]) => button.includes('disabled=""'))).toBe(true);
@@ -804,9 +808,10 @@ describe("online game projection adapter", () => {
     expect(html).toContain("Connected");
     expect(html).toContain("East is offline");
     expect(html).toContain("Only you can see your cards and resource types");
-    expect(html).toContain("Your sealed bid: 2");
-    expect(html).toContain("North submitted");
-    expect(html).not.toContain("North bid");
+    const trading = renderTrade(state(snapshot));
+    expect(trading).toContain("Your sealed bid: 2");
+    expect(trading).toContain("North submitted");
+    expect(trading).not.toContain("North bid");
     expect(html).toContain("Caller won the game");
     expect(createOnlineGameTableView(state(snapshot)).restart).toEqual({ enabled: true, requiresConfirmation: true });
     const waitingSnapshot = snapshotFor(0, { game: { turnState: { phase: "awaitingDiscards", awaitedPlayerIds: ["p3"] } } });
@@ -823,9 +828,7 @@ describe("online game projection adapter", () => {
     const snapshot = snapshotFor();
     const room = snapshot.publicState as unknown as PublicRoomState;
     room.guild!.gathering.lastAuctionResult = { winnerId: "p2", winnerName: "North", round: 1, winningBid: 2, outcome: { kind: "developmentCard" } };
-    const html = renderToStaticMarkup(React.createElement(I18nProvider, null,
-      React.createElement(OnlineGame, { roomCode: "234567", state: state(snapshot), dispatch: vi.fn(), reconnect: vi.fn(), onExit: vi.fn(), createCommandId: crypto.randomUUID })
-    ));
+    const html = renderTrade(state(snapshot));
     expect(html).toContain("one development card");
     expect(html).not.toContain("private-card-seat-2");
     expect(html).not.toContain("victoryPoint");
